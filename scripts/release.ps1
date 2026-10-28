@@ -36,12 +36,13 @@ Get-Content $versionFile | Where-Object { $_ -match '=' } | ForEach-Object {
     $props[$k.Trim()] = $v.Trim()
 }
 $oldName = $props["VERSION_NAME"]
-$parts = $oldName.Split('.') | ForEach-Object { [int]$_ }
+$parts = @($oldName.Split('.') | Select-Object -First 3 | ForEach-Object { [int]$_ })
 while ($parts.Count -lt 3) { $parts += 0 }
 switch ($Bump) {
-    "major" { $parts = @($parts[0] + 1, 0, 0) }
-    "minor" { $parts = @($parts[0], $parts[1] + 1, 0) }
-    default { $parts = @($parts[0], $parts[1], $parts[2] + 1) }
+    # Parentheses matter: "a, b + 1" would append 1 to the array instead of adding.
+    "major" { $parts = @(($parts[0] + 1), 0, 0) }
+    "minor" { $parts = @($parts[0], ($parts[1] + 1), 0) }
+    default { $parts = @($parts[0], $parts[1], ($parts[2] + 1)) }
 }
 $newName = $parts -join '.'
 $newCode = [int]$props["VERSION_CODE"] + 1
