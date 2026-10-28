@@ -3,6 +3,9 @@ package com.money.app.ui.home
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -132,135 +135,138 @@ fun HomeScreen(
             .fillMaxSize()
             .backdropBlobs(listOf(c.accent, c.income, Color(Palette.ROSE)), alpha = if (c.isDark) 0.10f else 0.22f)
     ) {
-        LazyColumn(
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 140.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
-                Row(
-                    Modifier.fillMaxWidth().statusBarsPadding().padding(top = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Money", style = Ui.type.label, color = c.accentText)
-                        MonthSwitcher(month, vm::setMonth)
-                    }
-                    RoundIconButton(Icons.Rounded.AutoAwesome, onOpenChat, contentDescription = "Chiedi a Money")
-                    Spacer(Modifier.width(8.dp))
-                    RoundIconButton(Icons.Rounded.Settings, onOpenSettings, contentDescription = "Impostazioni")
-                }
+        val list = rememberLazyListState()
+        // The divider under the fixed bar shows up only once content scrolls beneath it.
+        val dividerAlpha by animateFloatAsState(if (list.canScrollBackward) 1f else 0f, label = "barDivider")
+        Column(Modifier.fillMaxSize()) {
+            Row(
+                Modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MonthSwitcher(month, vm::setMonth, Modifier.weight(1f))
+                RoundIconButton(Icons.Rounded.AutoAwesome, onOpenChat, contentDescription = "Chiedi a Money")
+                Spacer(Modifier.width(8.dp))
+                RoundIconButton(Icons.Rounded.Settings, onOpenSettings, contentDescription = "Impostazioni")
             }
-            item(key = "update") { UpdateBanner(updateState, updates, Modifier.animateItem()) }
-            val s = state ?: return@LazyColumn
-            val r = s.report
+            Box(Modifier.fillMaxWidth().height(1.dp).graphicsLayer { alpha = dividerAlpha }.background(c.line))
+            LazyColumn(
+                state = list,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 140.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                item(key = "update") { UpdateBanner(updateState, updates, Modifier.animateItem()) }
+                val s = state ?: return@LazyColumn
+                val r = s.report
 
-            item { Hero(r, onAdd, Modifier.staggered(0)) }
+                item { Hero(r, onAdd, Modifier.staggered(0)) }
 
-            item { SpendGauge(r, Modifier.staggered(1)) }
+                item { SpendGauge(r, Modifier.staggered(1)) }
 
-            if (r.budgets.isNotEmpty()) {
-                item {
-                    Column(Modifier.staggered(2)) {
-                        SectionTitle("Budget")
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(r.budgets, key = { it.category.id }) { line ->
-                                SoftCard(Modifier.width(150.dp), padding = 16.dp) {
-                                    CategoryBadge(line.category.icon, Color(line.category.color), size = 36.dp)
-                                    Spacer(Modifier.height(10.dp))
-                                    Text(line.category.name, style = Ui.type.label, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(
-                                        "${Money.short(line.spent)} di ${Money.short(line.budget)}",
-                                        style = Ui.type.caption, color = c.inkSoft,
-                                    )
-                                    Spacer(Modifier.height(10.dp))
-                                    SoftProgress(
-                                        line.ratio,
-                                        when {
-                                            line.ratio > 1f -> c.expense
-                                            line.ratio > 0.8f -> Color(Palette.BUTTER)
-                                            else -> c.income
-                                        },
-                                        height = 8.dp,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            item {
-                Column(Modifier.staggered(3)) {
-                    SectionTitle("Dove vanno i soldi", action = "Report", onAction = onOpenReport)
-                    if (r.expenseSlices.isEmpty()) {
-                        SoftCard {
-                            Text("Ancora nessuna spesa questo mese.", style = Ui.type.body, color = c.inkSoft)
-                        }
-                    } else {
-                        SoftCard {
-                            r.expenseSlices.take(5).forEachIndexed { i, slice ->
-                                if (i > 0) Spacer(Modifier.height(14.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CategoryBadge(slice.category.icon, Color(slice.category.color), size = 34.dp)
-                                    Spacer(Modifier.width(12.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Row {
-                                            Text(slice.category.name, style = Ui.type.label, color = c.ink, modifier = Modifier.weight(1f))
-                                            Text(Money.format(slice.cents), style = Ui.type.label, color = c.ink)
-                                        }
-                                        Spacer(Modifier.height(6.dp))
-                                        SoftProgress(slice.share, Color(slice.category.color), height = 8.dp)
+                if (r.budgets.isNotEmpty()) {
+                    item {
+                        Column(Modifier.staggered(2)) {
+                            SectionTitle("Budget")
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(r.budgets, key = { it.category.id }) { line ->
+                                    SoftCard(Modifier.width(150.dp), padding = 16.dp) {
+                                        CategoryBadge(line.category.icon, Color(line.category.color), size = 36.dp)
+                                        Spacer(Modifier.height(10.dp))
+                                        Text(line.category.name, style = Ui.type.label, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(
+                                            "${Money.short(line.spent)} di ${Money.short(line.budget)}",
+                                            style = Ui.type.caption, color = c.inkSoft,
+                                        )
+                                        Spacer(Modifier.height(10.dp))
+                                        SoftProgress(
+                                            line.ratio,
+                                            when {
+                                                line.ratio > 1f -> c.expense
+                                                line.ratio > 0.8f -> Color(Palette.BUTTER)
+                                                else -> c.income
+                                            },
+                                            height = 8.dp,
+                                        )
                                     }
-                                    Text(
-                                        percent(slice.share),
-                                        style = Ui.type.caption,
-                                        color = c.inkSoft,
-                                        textAlign = TextAlign.End,
-                                        modifier = Modifier.width(44.dp),
-                                    )
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            if (s.upcoming.isNotEmpty()) {
                 item {
-                    Column(Modifier.staggered(4)) {
-                        SectionTitle("Prossimi addebiti", action = "Tutti", onAction = onOpenRecurring)
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(s.upcoming, key = { it.id }) { item ->
-                                UpcomingBubble(item) { onOpenRecurringItem(item.id) }
+                    Column(Modifier.staggered(3)) {
+                        SectionTitle("Dove vanno i soldi", action = "Report", onAction = onOpenReport)
+                        if (r.expenseSlices.isEmpty()) {
+                            SoftCard {
+                                Text("Ancora nessuna spesa questo mese.", style = Ui.type.body, color = c.inkSoft)
+                            }
+                        } else {
+                            SoftCard {
+                                r.expenseSlices.take(5).forEachIndexed { i, slice ->
+                                    if (i > 0) Spacer(Modifier.height(14.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CategoryBadge(slice.category.icon, Color(slice.category.color), size = 34.dp)
+                                        Spacer(Modifier.width(12.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Row {
+                                                Text(slice.category.name, style = Ui.type.label, color = c.ink, modifier = Modifier.weight(1f))
+                                                Text(Money.format(slice.cents), style = Ui.type.label, color = c.ink)
+                                            }
+                                            Spacer(Modifier.height(6.dp))
+                                            SoftProgress(slice.share, Color(slice.category.color), height = 8.dp)
+                                        }
+                                        Text(
+                                            percent(slice.share),
+                                            style = Ui.type.caption,
+                                            color = c.inkSoft,
+                                            textAlign = TextAlign.End,
+                                            modifier = Modifier.width(44.dp),
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            item {
-                SectionTitle(
-                    "Ultimi movimenti",
-                    Modifier.staggered(5),
-                    action = "Vedi tutti",
-                    onAction = onOpenTransactions,
-                )
-            }
-            if (s.recent.isEmpty()) {
+                if (s.upcoming.isNotEmpty()) {
+                    item {
+                        Column(Modifier.staggered(4)) {
+                            SectionTitle("Prossimi addebiti", action = "Tutti", onAction = onOpenRecurring)
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(s.upcoming, key = { it.id }) { item ->
+                                    UpcomingBubble(item) { onOpenRecurringItem(item.id) }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 item {
-                    EmptyState(
-                        "Tutto tranquillo",
-                        "Tocca il + per registrare la prima spesa o entrata del mese.",
-                        modifier = Modifier.staggered(6),
+                    SectionTitle(
+                        "Ultimi movimenti",
+                        Modifier.staggered(5),
+                        action = "Vedi tutti",
+                        onAction = onOpenTransactions,
                     )
                 }
-            }
-            items(s.recent, key = { it.id }) { tx ->
-                TransactionRow(
-                    tx, r.categories, { onOpenTransaction(tx.id) },
-                    modifier = Modifier.animateItem().staggered(6),
-                    showDate = Dates.dayHeader(LocalDate.ofEpochDay(tx.date)),
-                )
+                if (s.recent.isEmpty()) {
+                    item {
+                        EmptyState(
+                            "Tutto tranquillo",
+                            "Tocca il + per registrare la prima spesa o entrata del mese.",
+                            modifier = Modifier.staggered(6),
+                        )
+                    }
+                }
+                items(s.recent, key = { it.id }) { tx ->
+                    TransactionRow(
+                        tx, r.categories, { onOpenTransaction(tx.id) },
+                        modifier = Modifier.animateItem().staggered(6),
+                        showDate = Dates.dayHeader(LocalDate.ofEpochDay(tx.date)),
+                    )
+                }
             }
         }
     }
