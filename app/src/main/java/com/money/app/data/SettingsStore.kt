@@ -19,6 +19,7 @@ data class Settings(
     val remindersEnabled: Boolean = true,
     /** ARGB of the app primary color. */
     val accent: Long = Palette.LILAC,
+    val onboarded: Boolean = false,
 )
 
 private val Context.dataStore by preferencesDataStore("settings")
@@ -29,6 +30,7 @@ class SettingsStore(private val context: Context) {
         val lock = booleanPreferencesKey("lock")
         val reminders = booleanPreferencesKey("reminders")
         val accent = longPreferencesKey("accent")
+        val onboarded = booleanPreferencesKey("onboarded")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
@@ -39,11 +41,13 @@ class SettingsStore(private val context: Context) {
     suspend fun setLock(enabled: Boolean) = context.dataStore.edit { it[Keys.lock] = enabled }
     suspend fun setReminders(enabled: Boolean) = context.dataStore.edit { it[Keys.reminders] = enabled }
     suspend fun setAccent(color: Long) = context.dataStore.edit { it[Keys.accent] = color }
+    suspend fun setOnboarded() = context.dataStore.edit { it[Keys.onboarded] = true }
 
     private fun Preferences.toSettings() = Settings(
         theme = this[Keys.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
         lockEnabled = this[Keys.lock] ?: false,
         remindersEnabled = this[Keys.reminders] ?: true,
         accent = this[Keys.accent] ?: Palette.LILAC,
+        onboarded = this[Keys.onboarded] ?: false,
     )
 }

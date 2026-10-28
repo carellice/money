@@ -25,6 +25,7 @@ import com.money.app.data.Settings
 import com.money.app.ui.MoneyRoot
 import com.money.app.ui.lock.Biometric
 import com.money.app.ui.lock.LockScreen
+import com.money.app.ui.onboarding.OnboardingScreen
 import com.money.app.ui.theme.MoneyTheme
 import com.money.app.ui.theme.isDarkTheme
 import kotlinx.coroutines.launch
@@ -36,6 +37,7 @@ class MainActivity : FragmentActivity() {
 
     private var locked by mutableStateOf(false)
     private var deepLink by mutableStateOf<String?>(null)
+    private var onboarding by mutableStateOf(false)
     private var lockEnabled = false
     private var stoppedAt = 0L
     private var authenticating = false
@@ -48,6 +50,12 @@ class MainActivity : FragmentActivity() {
         val initial: Settings = runBlocking { container.settings.current() }
         lockEnabled = initial.lockEnabled
         if (savedInstanceState == null) locked = initial.lockEnabled
+        if (!initial.onboarded) {
+            // Users updating from a version without onboarding already know the app.
+            val info = packageManager.getPackageInfo(packageName, 0)
+            if (info.firstInstallTime == info.lastUpdateTime) onboarding = true
+            else lifecycleScope.launch { container.settings.setOnboarded() }
+        }
         handleIntent(intent)
 
         lifecycleScope.launch {
@@ -71,6 +79,21 @@ class MainActivity : FragmentActivity() {
                         exit = fadeOut() + scaleOut(targetScale = 1.1f),
                     ) {
                         LockScreen(onUnlockRequest = ::unlock)
+                    }
+                    AnimatedVisibility(
+                        visible = onboarding,
+                        enter = fadeIn(),
+                        exit = fadeOut() + scaleOut(targetScale = 1.1f),
+                    ) {
+                        OnboardingScreen(
+                            settings = settings,
+                            onTheme = { lifecycleScope.launch { container.settings.setTheme(it) } },
+                            onAccent = { lifecycleScope.launch { container.settings.setAccent(it) } },
+                            onDone = {
+                                onboarding = false
+                                lifecycleScope.launch { container.settings.setOnboarded() }
+                            },
+                        )
                     }
                 }
             }
