@@ -74,16 +74,16 @@ private val LightColors = MoneyColors(
     bg = Color(0xFFF6F1EA),
     surface = Color(0xFFFFFFFF),
     surfaceHigh = Color(0xFFECE4F4),
-    ink = Color(0xFF1B1726),
-    inkSoft = Color(0xFF5E5870),
-    inkFaint = Color(0xFF9A93A8),
+    ink = Color(0xFF15121F),
+    inkSoft = Color(0xFF433D55),
+    inkFaint = Color(0xFF746D86),
     line = Color(0x14000000),
     income = Color(0xFF8FE3C0),
     expense = Color(0xFFFF8A7A),
     accent = Color(0xFFB8A6FF),
-    incomeText = Color(0xFF1E8A63),
-    expenseText = Color(0xFFD14B3A),
-    accentText = Color(0xFF6A50E0),
+    incomeText = Color(0xFF17714F),
+    expenseText = Color(0xFFB8382A),
+    accentText = Color(0xFF5538CC),
 )
 
 @OptIn(ExperimentalTextApi::class)
@@ -99,18 +99,24 @@ private fun bricolage(weight: Int, opticalSize: Float) = Font(
 val DisplayFamily = FontFamily(bricolage(500, 72f), bricolage(600, 72f), bricolage(700, 72f), bricolage(800, 72f))
 val BodyFamily = FontFamily(bricolage(400, 14f), bricolage(500, 14f), bricolage(600, 14f), bricolage(700, 14f))
 
+/** Global text scale: the base sizes below read too small on most phones. */
+private const val TextScale = 1.1f
+
+private fun scaled(value: Float) = (value * TextScale).sp
+
 @Immutable
 class MoneyType {
     private val numbers = "tnum, lnum"
+    // Hero sizes are always set per screen, so the global scale does not apply.
     val hero = TextStyle(fontFamily = DisplayFamily, fontWeight = FontWeight.ExtraBold, fontSize = 60.sp, lineHeight = 60.sp, letterSpacing = (-0.04).em, fontFeatureSettings = numbers)
-    val display = TextStyle(fontFamily = DisplayFamily, fontWeight = FontWeight.Bold, fontSize = 38.sp, lineHeight = 40.sp, letterSpacing = (-0.03).em, fontFeatureSettings = numbers)
-    val title = TextStyle(fontFamily = DisplayFamily, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.sp, letterSpacing = (-0.02).em)
-    val titleSmall = TextStyle(fontFamily = DisplayFamily, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 22.sp, letterSpacing = (-0.01).em)
-    val body = TextStyle(fontFamily = BodyFamily, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 21.sp)
-    val bodyStrong = TextStyle(fontFamily = BodyFamily, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 21.sp)
-    val label = TextStyle(fontFamily = BodyFamily, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 17.sp)
-    val caption = TextStyle(fontFamily = BodyFamily, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp)
-    val amount = TextStyle(fontFamily = DisplayFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 20.sp, fontFeatureSettings = numbers)
+    val display = TextStyle(fontFamily = DisplayFamily, fontWeight = FontWeight.Bold, fontSize = scaled(38f), lineHeight = scaled(40f), letterSpacing = (-0.03).em, fontFeatureSettings = numbers)
+    val title = TextStyle(fontFamily = DisplayFamily, fontWeight = FontWeight.Bold, fontSize = scaled(24f), lineHeight = scaled(28f), letterSpacing = (-0.02).em)
+    val titleSmall = TextStyle(fontFamily = DisplayFamily, fontWeight = FontWeight.SemiBold, fontSize = scaled(18f), lineHeight = scaled(22f), letterSpacing = (-0.01).em)
+    val body = TextStyle(fontFamily = BodyFamily, fontWeight = FontWeight.Normal, fontSize = scaled(15f), lineHeight = scaled(21f))
+    val bodyStrong = TextStyle(fontFamily = BodyFamily, fontWeight = FontWeight.SemiBold, fontSize = scaled(15f), lineHeight = scaled(21f))
+    val label = TextStyle(fontFamily = BodyFamily, fontWeight = FontWeight.SemiBold, fontSize = scaled(13f), lineHeight = scaled(17f))
+    val caption = TextStyle(fontFamily = BodyFamily, fontWeight = FontWeight.Medium, fontSize = scaled(12f), lineHeight = scaled(16f))
+    val amount = TextStyle(fontFamily = DisplayFamily, fontWeight = FontWeight.SemiBold, fontSize = scaled(16f), lineHeight = scaled(20f), fontFeatureSettings = numbers)
 }
 
 private val LocalColors = staticCompositionLocalOf { DarkColors }
@@ -136,9 +142,12 @@ private fun accentTextFor(accent: Color, dark: Boolean): Color {
     val hsl = FloatArray(3)
     ColorUtils.colorToHSL(accent.toArgb(), hsl)
     hsl[1] = maxOf(hsl[1], 0.6f)
-    hsl[2] = if (dark) 0.8f else 0.42f
+    hsl[2] = if (dark) 0.8f else 0.36f
     return Color(ColorUtils.HSLToColor(hsl))
 }
+
+private fun TextStyle.scaled(family: FontFamily) =
+    copy(fontFamily = family, fontSize = fontSize * TextScale, lineHeight = lineHeight * TextScale)
 
 @Composable
 fun MoneyTheme(dark: Boolean, accent: Long = Palette.LILAC, content: @Composable () -> Unit) {
@@ -168,19 +177,19 @@ fun MoneyTheme(dark: Boolean, accent: Long = Palette.LILAC, content: @Composable
     }
     val baseType = Typography()
     val typography = Typography(
-        displayLarge = baseType.displayLarge.copy(fontFamily = DisplayFamily),
-        headlineLarge = baseType.headlineLarge.copy(fontFamily = DisplayFamily),
-        headlineMedium = baseType.headlineMedium.copy(fontFamily = DisplayFamily),
-        headlineSmall = baseType.headlineSmall.copy(fontFamily = DisplayFamily),
-        titleLarge = baseType.titleLarge.copy(fontFamily = DisplayFamily),
-        titleMedium = baseType.titleMedium.copy(fontFamily = BodyFamily),
-        titleSmall = baseType.titleSmall.copy(fontFamily = BodyFamily),
-        bodyLarge = baseType.bodyLarge.copy(fontFamily = BodyFamily),
-        bodyMedium = baseType.bodyMedium.copy(fontFamily = BodyFamily),
-        bodySmall = baseType.bodySmall.copy(fontFamily = BodyFamily),
-        labelLarge = baseType.labelLarge.copy(fontFamily = BodyFamily),
-        labelMedium = baseType.labelMedium.copy(fontFamily = BodyFamily),
-        labelSmall = baseType.labelSmall.copy(fontFamily = BodyFamily),
+        displayLarge = baseType.displayLarge.scaled(DisplayFamily),
+        headlineLarge = baseType.headlineLarge.scaled(DisplayFamily),
+        headlineMedium = baseType.headlineMedium.scaled(DisplayFamily),
+        headlineSmall = baseType.headlineSmall.scaled(DisplayFamily),
+        titleLarge = baseType.titleLarge.scaled(DisplayFamily),
+        titleMedium = baseType.titleMedium.scaled(BodyFamily),
+        titleSmall = baseType.titleSmall.scaled(BodyFamily),
+        bodyLarge = baseType.bodyLarge.scaled(BodyFamily),
+        bodyMedium = baseType.bodyMedium.scaled(BodyFamily),
+        bodySmall = baseType.bodySmall.scaled(BodyFamily),
+        labelLarge = baseType.labelLarge.scaled(BodyFamily),
+        labelMedium = baseType.labelMedium.scaled(BodyFamily),
+        labelSmall = baseType.labelSmall.scaled(BodyFamily),
     )
     val time = produceState(0f) {
         val start = withInfiniteAnimationFrameMillis { it }

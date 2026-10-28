@@ -402,7 +402,7 @@ fun PrimaryButton(
             Icon(it, contentDescription = null, tint = fg, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
         }
-        Text(text, style = Ui.type.bodyStrong.copy(fontSize = 16.sp), color = fg)
+        Text(text, style = Ui.type.bodyStrong.copy(fontSize = 17.sp), color = fg)
     }
 }
 

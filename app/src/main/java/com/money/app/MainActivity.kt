@@ -50,12 +50,7 @@ class MainActivity : FragmentActivity() {
         val initial: Settings = runBlocking { container.settings.current() }
         lockEnabled = initial.lockEnabled
         if (savedInstanceState == null) locked = initial.lockEnabled
-        if (!initial.onboarded) {
-            // Users updating from a version without onboarding already know the app.
-            val info = packageManager.getPackageInfo(packageName, 0)
-            if (info.firstInstallTime == info.lastUpdateTime) onboarding = true
-            else lifecycleScope.launch { container.settings.setOnboarded() }
-        }
+        onboarding = !initial.onboarded
         handleIntent(intent)
 
         lifecycleScope.launch {

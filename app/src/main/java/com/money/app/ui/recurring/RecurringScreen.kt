@@ -105,12 +105,12 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("ogni mese, in media", style = Ui.type.caption, color = Ink.copy(alpha = 0.6f))
+                    Text("ogni mese, in media", style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
                     AnimatedAmount(monthly, Ui.type.display, color = Ink, decimalsScale = 0.45f)
                     Text(
                         "${Money.short(monthly * 12)} l'anno · abbonamenti ${Money.short(subscriptions)}/mese",
                         style = Ui.type.caption,
-                        color = Ink.copy(alpha = 0.65f),
+                        color = Ink.copy(alpha = 0.8f),
                     )
                 }
             }

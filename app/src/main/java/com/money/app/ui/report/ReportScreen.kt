@@ -465,12 +465,12 @@ private fun StatGrid(r: MonthReport, modifier: Modifier = Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StatTile("Risparmiato", r.balance, r.prevIncome - r.prevExpense, c.accent, higherIsGood = true, Modifier.weight(1f))
             SoftCard(Modifier.weight(1f), color = Color(Palette.BUTTER), padding = 16.dp) {
-                Text("Media al giorno", style = Ui.type.caption, color = Ink.copy(alpha = 0.65f))
+                Text("Media al giorno", style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
                 AnimatedAmount(r.avgDailyExpense, Ui.type.title, color = Ink)
                 Text(
                     r.savingsRate?.let { "risparmio ${percent(it)}" } ?: "nessuna entrata",
                     style = Ui.type.caption,
-                    color = Ink.copy(alpha = 0.65f),
+                    color = Ink.copy(alpha = 0.8f),
                 )
             }
         }
@@ -480,7 +480,7 @@ private fun StatGrid(r: MonthReport, modifier: Modifier = Modifier) {
 @Composable
 private fun StatTile(label: String, cents: Long, previous: Long, color: Color, higherIsGood: Boolean, modifier: Modifier) {
     SoftCard(modifier, color = color, padding = 16.dp) {
-        Text(label, style = Ui.type.caption, color = Ink.copy(alpha = 0.65f))
+        Text(label, style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
         AnimatedAmount(cents, Ui.type.title, color = Ink)
         if (previous != 0L) {
             val delta = (cents - previous).toFloat() / kotlin.math.abs(previous)
@@ -489,17 +489,17 @@ private fun StatTile(label: String, cents: Long, previous: Long, color: Color, h
                 Icon(
                     if (up) Icons.AutoMirrored.Rounded.TrendingUp else Icons.AutoMirrored.Rounded.TrendingDown,
                     null,
-                    tint = Ink.copy(alpha = 0.7f),
+                    tint = Ink.copy(alpha = 0.8f),
                     modifier = Modifier.size(14.dp),
                 )
                 Text(
                     " ${if (up) "+" else "−"}${percent(kotlin.math.abs(delta))} · ${if (up == higherIsGood) "bene" else "occhio"}",
                     style = Ui.type.caption,
-                    color = Ink.copy(alpha = 0.7f),
+                    color = Ink.copy(alpha = 0.8f),
                 )
             }
         } else {
-            Text("primo mese", style = Ui.type.caption, color = Ink.copy(alpha = 0.6f))
+            Text("primo mese", style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
         }
     }
 }

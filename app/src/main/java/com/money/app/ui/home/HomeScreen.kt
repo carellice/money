@@ -289,13 +289,13 @@ private fun Hero(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifier = M
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("saldo del mese", style = Ui.type.caption, color = Ink.copy(alpha = 0.6f))
+                Text("saldo del mese", style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
                 AnimatedAmount(r.balance, Ui.type.display, color = Ink, decimalsScale = 0.45f)
                 if (r.savingsRate != null) {
                     Text(
                         if (r.balance >= 0) "risparmi ${percent(r.savingsRate)}" else "in rosso",
                         style = Ui.type.label,
-                        color = Ink.copy(alpha = 0.7f),
+                        color = Ink.copy(alpha = 0.8f),
                     )
                 }
             }
@@ -323,9 +323,9 @@ private fun MiniBlob(label: String, cents: Long, color: Color, seed: Int, modifi
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, style = Ui.type.caption, color = Ink.copy(alpha = 0.65f))
+            Text(label, style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
             Text(Money.short(cents), style = Ui.type.titleSmall, color = Ink, maxLines = 1)
-            Text("+ aggiungi", style = Ui.type.caption, color = Ink.copy(alpha = 0.55f))
+            Text("+ aggiungi", style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
         }
     }
 }
