@@ -126,7 +126,7 @@ fun TransactionsScreen(onOpen: (Long) -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 140.dp),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 156.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
             item {

@@ -13,6 +13,9 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Column
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -36,6 +39,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -110,11 +116,14 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
         if (deepLinkRoute != null) onDeepLinkHandled()
     }
 
+    // Tabs are not restored on purpose: every page opens scrolled to the top.
+    // Home stays in the back stack, so it gets an explicit nudge instead.
+    var homeScrollReset by remember { mutableIntStateOf(0) }
     val switchTab: (String) -> Unit = { target ->
+        if (target == Routes.HOME) homeScrollReset++
         nav.navigate(target) {
-            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+            popUpTo(nav.graph.findStartDestination().id)
             launchSingleTop = true
-            restoreState = true
         }
     }
 
@@ -130,13 +139,12 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
             composable(Routes.HOME) {
                 HomeScreen(
                     onAdd = { nav.navigate(Routes.add(it)) },
-                    onOpenTransaction = { nav.navigate(Routes.add(id = it)) },
-                    onOpenTransactions = { switchTab(Routes.TRANSACTIONS) },
                     onOpenReport = { switchTab(Routes.REPORT) },
                     onOpenRecurring = { switchTab(Routes.RECURRING) },
                     onOpenRecurringItem = { nav.navigate(Routes.recurringEdit(it)) },
                     onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                     onOpenChat = { nav.navigate(Routes.CHAT) },
+                    scrollToTop = homeScrollReset,
                 )
             }
             composable(Routes.TRANSACTIONS) {
@@ -231,43 +239,47 @@ private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> U
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(68.dp)
+                .height(80.dp)
                 .shadow(24.dp, CircleShape, ambientColor = Ink, spotColor = Ink)
                 .clip(CircleShape)
                 .background(c.surface)
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Equal halves keep the add button exactly centered whatever tab is expanded.
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceEvenly) {
-                tabs.take(2).forEach { TabItem(it, route == it.route) { onSelect(it.route) } }
-            }
-            Spacer(Modifier.width(68.dp))
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceEvenly) {
-                tabs.drop(2).forEach { TabItem(it, route == it.route) { onSelect(it.route) } }
-            }
+            // Every tab owns an equal slice of the full bar height, so the touch target is large.
+            tabs.take(2).forEach { TabItem(it, route == it.route, Modifier.weight(1f)) { onSelect(it.route) } }
+            Spacer(Modifier.width(80.dp))
+            tabs.drop(2).forEach { TabItem(it, route == it.route, Modifier.weight(1f)) { onSelect(it.route) } }
         }
         AddButton(onAdd)
     }
 }
 
 @Composable
-private fun TabItem(tab: Tab, selected: Boolean, onClick: () -> Unit) {
+private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = Ui.colors
     val bg by animateColorAsState(if (selected) c.accent else c.surface, label = "tabBg")
     val fg by animateColorAsState(if (selected) Ink else c.inkSoft, label = "tabFg")
-    Row(
-        Modifier
-            .bouncyClick(onClick = onClick)
-            .clip(CircleShape)
-            .background(bg)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val label by animateColorAsState(if (selected) c.ink else c.inkSoft, label = "tabLabel")
+    val width by animateDpAsState(if (selected) 56.dp else 40.dp, spring(dampingRatio = 0.6f, stiffness = 500f), label = "tabPill")
+    Column(
+        modifier
+            .fillMaxHeight()
+            .bouncyClick(pressedScale = 0.9f, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Icon(tab.icon, tab.label, tint = fg, modifier = Modifier.size(22.dp))
-        AnimatedVisibility(selected, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) {
-            Text(tab.label, style = Ui.type.label, color = fg, modifier = Modifier.padding(start = 6.dp), maxLines = 1)
+        Box(
+            Modifier
+                .size(width = width, height = 34.dp)
+                .clip(CircleShape)
+                .background(bg),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(tab.icon, null, tint = fg, modifier = Modifier.size(24.dp))
         }
+        Spacer(Modifier.height(4.dp))
+        Text(tab.label, style = Ui.type.caption, color = label, maxLines = 1)
     }
 }
 
@@ -277,7 +289,7 @@ private fun AddButton(onClick: () -> Unit) {
     val time = LocalBlobTime.current
     Box(
         Modifier
-            .size(64.dp)
+            .size(70.dp)
             .graphicsLayer {
                 val breathe = 1f + 0.035f * sin(time.value * 2.2f)
                 scaleX = breathe

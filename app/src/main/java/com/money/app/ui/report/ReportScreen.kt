@@ -164,7 +164,7 @@ fun ReportScreen(onOpenTransaction: (Long) -> Unit, onOpenChat: () -> Unit, onOp
     }
 
     LazyColumn(
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 140.dp),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 156.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize(),
     ) {

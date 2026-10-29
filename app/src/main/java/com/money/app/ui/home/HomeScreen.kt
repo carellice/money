@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,7 +84,6 @@ import java.time.YearMonth
 
 data class HomeState(
     val report: MonthReport,
-    val recent: List<TransactionEntity>,
     val upcoming: List<RecurringEntity>,
 )
 
@@ -101,7 +101,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             val report = ReportBuilder.build(m, txs, cats, trendMonths = 2)
             HomeState(
                 report = report,
-                recent = report.transactions.take(5),
                 upcoming = recurring.filter { it.active }.sortedBy { it.nextDate }.take(10),
             )
         }
@@ -115,13 +114,13 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 @Composable
 fun HomeScreen(
     onAdd: (TxType) -> Unit,
-    onOpenTransaction: (Long) -> Unit,
-    onOpenTransactions: () -> Unit,
     onOpenReport: () -> Unit,
     onOpenRecurring: () -> Unit,
     onOpenRecurringItem: (Long) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenChat: () -> Unit,
+    /** Changes when the Home tab is selected again, to jump back to the top. */
+    scrollToTop: Int = 0,
 ) {
     val vm = appViewModel { c, _ -> HomeViewModel(c) }
     val month by vm.month.collectAsStateWithLifecycle()
@@ -136,6 +135,7 @@ fun HomeScreen(
             .backdropBlobs(listOf(c.accent, c.income, Color(Palette.ROSE)), alpha = if (c.isDark) 0.10f else 0.22f)
     ) {
         val list = rememberLazyListState()
+        LaunchedEffect(scrollToTop) { if (scrollToTop > 0) list.scrollToItem(0) }
         // The divider under the fixed bar shows up only once content scrolls beneath it.
         val dividerAlpha by animateFloatAsState(if (list.canScrollBackward) 1f else 0f, label = "barDivider")
         Column(Modifier.fillMaxSize()) {
@@ -152,7 +152,7 @@ fun HomeScreen(
             LazyColumn(
                 state = list,
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 140.dp),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 156.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 item(key = "update") { UpdateBanner(updateState, updates, Modifier.animateItem()) }
@@ -241,31 +241,6 @@ fun HomeScreen(
                             }
                         }
                     }
-                }
-
-                item {
-                    SectionTitle(
-                        "Ultimi movimenti",
-                        Modifier.staggered(5),
-                        action = "Vedi tutti",
-                        onAction = onOpenTransactions,
-                    )
-                }
-                if (s.recent.isEmpty()) {
-                    item {
-                        EmptyState(
-                            "Tutto tranquillo",
-                            "Tocca il + per registrare la prima spesa o entrata del mese.",
-                            modifier = Modifier.staggered(6),
-                        )
-                    }
-                }
-                items(s.recent, key = { it.id }) { tx ->
-                    TransactionRow(
-                        tx, r.categories, { onOpenTransaction(tx.id) },
-                        modifier = Modifier.animateItem().staggered(6),
-                        showDate = Dates.dayHeader(LocalDate.ofEpochDay(tx.date)),
-                    )
                 }
             }
         }
