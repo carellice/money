@@ -15,6 +15,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -81,6 +82,7 @@ fun Modifier.bouncyClick(
     enabled: Boolean = true,
     pressedScale: Float = 0.92f,
     haptic: Boolean = true,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ): Modifier {
     val interaction = remember { MutableInteractionSource() }
@@ -93,7 +95,17 @@ fun Modifier.bouncyClick(
     val feedback = LocalHapticFeedback.current
     return this
         .graphicsLayer { scaleX = scale; scaleY = scale }
-        .clickable(interaction, indication = null, enabled = enabled) {
+        .combinedClickable(
+            interactionSource = interaction,
+            indication = null,
+            enabled = enabled,
+            onLongClick = onLongClick?.let {
+                {
+                    feedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    it()
+                }
+            },
+        ) {
             if (haptic) feedback.performHapticFeedback(HapticFeedbackType.ContextClick)
             onClick()
         }

@@ -1,6 +1,18 @@
 package com.money.app.ui.ai
 
 import androidx.compose.animation.AnimatedVisibility
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import com.money.app.ai.VoiceRecorder
+import kotlinx.coroutines.delay
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
@@ -82,11 +94,56 @@ class ChatViewModel(container: AppContainer) : ViewModel() {
     var error by mutableStateOf<String?>(null)
         private set
 
-    fun send(text: String) {
+    private val recorder = VoiceRecorder()
+    val level = recorder.level
+    var recording by mutableStateOf(false)
+        private set
+    var transcribing by mutableStateOf(false)
+        private set
+    private var discardRecording = false
+
+    /** Records until [stopRecording]; the transcript is then sent like a typed question. */
+    fun startRecording() {
+        if (recording || transcribing || busy) return
+        error = null
+        discardRecording = false
+        recording = true
+        viewModelScope.launch {
+            val result = runCatching { recorder.record() }
+            recording = false
+            val wav = result.getOrElse {
+                error = it.message
+                return@launch
+            }
+            if (discardRecording) return@launch
+            if (VoiceRecorder.seconds(wav) < 1) {
+                error = "Vocale troppo corto: tieni il microfono acceso almeno un secondo"
+                return@launch
+            }
+            transcribing = true
+            runCatching { ai.transcribe(wav) }
+                .onSuccess { send(it, voice = true) }
+                .onFailure { error = it.message }
+            transcribing = false
+        }
+    }
+
+    fun stopRecording() = recorder.stop()
+
+    fun cancelRecording() {
+        discardRecording = true
+        recorder.stop()
+    }
+
+    fun permissionDenied() {
+        error = "Per i vocali serve il permesso del microfono"
+    }
+
+    fun send(text: String, voice: Boolean = false) {
         val question = text.trim()
         if (question.isEmpty() || busy) return
         val history = messages.toList()
-        messages += ChatMessage("user", question)
+        messages += ChatMessage("user", question, voice)
         error = null
         busy = true
         viewModelScope.launch {
@@ -110,6 +167,14 @@ fun ChatScreen(onBack: () -> Unit, onOpenAiSettings: () -> Unit) {
     val c = Ui.colors
     var input by remember { mutableStateOf("") }
     val list = rememberLazyListState()
+    val context = LocalContext.current
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) vm.startRecording() else vm.permissionDenied()
+    }
+    val startVoice = {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) vm.startRecording()
+        else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
 
     LaunchedEffect(vm.messages.size, vm.busy) {
         val last = vm.messages.size + (if (vm.busy) 1 else 0)
@@ -177,6 +242,15 @@ fun ChatScreen(onBack: () -> Unit, onOpenAiSettings: () -> Unit) {
             vm.send(input)
             input = ""
         }
+        if (vm.recording || vm.transcribing) {
+            VoiceBar(
+                recording = vm.recording,
+                level = vm.level.collectAsStateWithLifecycle().value,
+                onCancel = vm::cancelRecording,
+                onSend = vm::stopRecording,
+            )
+            return@Column
+        }
         Row(
             Modifier
                 .fillMaxWidth()
@@ -201,22 +275,96 @@ fun ChatScreen(onBack: () -> Unit, onOpenAiSettings: () -> Unit) {
                             .background(c.surface)
                             .padding(horizontal = 18.dp, vertical = 15.dp)
                     ) {
-                        if (input.isEmpty()) Text("Scrivi una domanda…", style = Ui.type.body, color = c.inkFaint)
+                        if (input.isEmpty()) Text("Scrivi o manda un vocale…", style = Ui.type.body, color = c.inkFaint)
                         inner()
                     }
                 },
             )
             Spacer(Modifier.size(8.dp))
-            AnimatedVisibility(input.isNotBlank() && !vm.busy, enter = fadeIn(), exit = fadeOut()) {
+            AnimatedVisibility(!vm.busy, enter = fadeIn(), exit = fadeOut()) {
+                val typing = input.isNotBlank()
                 Box(
                     Modifier
                         .size(52.dp)
-                        .bouncyClick(pressedScale = 0.85f) { send() }
+                        .bouncyClick(pressedScale = 0.85f) { if (typing) send() else startVoice() }
                         .blob(c.accent, seed = 8, amplitude = 0.08f),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.AutoMirrored.Rounded.Send, "Invia", tint = Ink, modifier = Modifier.size(22.dp))
+                    AnimatedContent(typing, label = "sendOrMic") { isTyping ->
+                        Icon(
+                            if (isTyping) Icons.AutoMirrored.Rounded.Send else Icons.Rounded.Mic,
+                            if (isTyping) "Invia" else "Registra un vocale",
+                            tint = Ink,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
                 }
+            }
+        }
+    }
+}
+
+/** Replaces the input row while dictating: live level blob, timer, cancel and send. */
+@Composable
+private fun VoiceBar(recording: Boolean, level: Float, onCancel: () -> Unit, onSend: () -> Unit) {
+    val c = Ui.colors
+    var seconds by remember { mutableIntStateOf(0) }
+    LaunchedEffect(recording) {
+        seconds = 0
+        while (recording) {
+            delay(1_000)
+            seconds++
+        }
+    }
+    val pulse by animateFloatAsState(1f + level * 1.6f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "level")
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(26.dp))
+                .background(c.surface)
+                .padding(horizontal = 18.dp, vertical = 15.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (recording) {
+                Box(
+                    Modifier
+                        .size(14.dp)
+                        .graphicsLayer { scaleX = pulse; scaleY = pulse }
+                        .blob(c.expense, seed = 4, amplitude = 0.12f)
+                )
+                Spacer(Modifier.size(12.dp))
+                Text("%d:%02d".format(seconds / 60, seconds % 60), style = Ui.type.bodyStrong, color = c.ink)
+                Spacer(Modifier.size(10.dp))
+                Text("Ti ascolto…", style = Ui.type.body, color = c.inkSoft, modifier = Modifier.weight(1f))
+                Text(
+                    "Annulla",
+                    style = Ui.type.label,
+                    color = c.expenseText,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).bouncyClick(onClick = onCancel).padding(horizontal = 6.dp, vertical = 4.dp),
+                )
+            } else {
+                ThinkingDots(c.accentText)
+                Spacer(Modifier.size(12.dp))
+                Text("Trascrivo il vocale…", style = Ui.type.body, color = c.inkSoft)
+            }
+        }
+        if (recording) {
+            Spacer(Modifier.size(8.dp))
+            Box(
+                Modifier
+                    .size(52.dp)
+                    .bouncyClick(pressedScale = 0.85f, onClick = onSend)
+                    .blob(c.accent, seed = 8, amplitude = 0.08f),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.AutoMirrored.Rounded.Send, "Invia vocale", tint = Ink, modifier = Modifier.size(22.dp))
             }
         }
     }
@@ -230,7 +378,8 @@ private fun Bubble(message: ChatMessage) {
     LaunchedEffect(Unit) { pop.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 500f)) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
         Text(
-            if (mine) androidx.compose.ui.text.AnnotatedString(message.content) else aiText(message.content),
+            if (mine) androidx.compose.ui.text.AnnotatedString(if (message.voice) "🎙️ ${message.content}" else message.content)
+            else aiText(message.content),
             style = Ui.type.body,
             color = if (mine) Ink else c.ink,
             modifier = Modifier

@@ -22,7 +22,8 @@ enum class Frequency(val label: String, val short: String, val months: Int, val 
     BIMONTHLY("Ogni 2 mesi", "/2 mesi", 2),
     QUARTERLY("Ogni 3 mesi", "/3 mesi", 3),
     SEMIANNUAL("Ogni 6 mesi", "/6 mesi", 6),
-    YEARLY("Ogni anno", "/anno", 12);
+    YEARLY("Ogni anno", "/anno", 12),
+    BIENNIAL("Ogni 2 anni", "/2 anni", 24);
 
     /** Average cost per month of something billed [cents] at this frequency. */
     fun monthlyCents(cents: Long): Long =

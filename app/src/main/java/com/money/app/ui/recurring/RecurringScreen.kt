@@ -1,6 +1,30 @@
 package com.money.app.ui.recurring
 
 import androidx.compose.foundation.background
+import android.widget.Toast
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import com.money.app.data.TransactionEntity
+import com.money.app.data.TxType
+import com.money.app.ui.components.AmountField
+import com.money.app.ui.components.FormLabel
+import com.money.app.ui.components.Pill
+import com.money.app.ui.components.PrimaryButton
+import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneOffset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,9 +87,27 @@ import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 
 class RecurringViewModel(container: AppContainer) : ViewModel() {
-    val items: StateFlow<List<RecurringEntity>?> = container.repository.recurring
+    private val repo = container.repository
+    val items: StateFlow<List<RecurringEntity>?> = repo.recurring
         .map { list -> list.sortedWith(compareByDescending<RecurringEntity> { it.active }.thenBy { it.nextDate }) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Records one payment of [item] now, without touching its schedule. */
+    fun registerNow(item: RecurringEntity, cents: Long, date: LocalDate, onDone: () -> Unit) = viewModelScope.launch {
+        repo.saveTransaction(
+            TransactionEntity(
+                type = TxType.EXPENSE,
+                amountCents = cents,
+                date = date.toEpochDay(),
+                categoryId = item.categoryId,
+                subcategoryId = item.subcategoryId,
+                payment = item.payment,
+                note = item.name,
+                recurringId = item.id,
+            )
+        )
+        onDone()
+    }
 }
 
 @Composable
@@ -73,6 +115,8 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
     val vm = appViewModel { c, _ -> RecurringViewModel(c) }
     val all by vm.items.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var registering by remember { mutableStateOf<RecurringEntity?>(null) }
+    val context = LocalContext.current
     val c = Ui.colors
     val list = all ?: return
     val visible = when (tab) {
@@ -131,20 +175,98 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
             }
         }
         items(visible, key = { it.id }) { item ->
-            RecurringCard(item, Modifier.animateItem().staggered(2)) { onOpen(item.id) }
+            RecurringCard(item, Modifier.animateItem().staggered(2), onLongClick = { registering = item }) { onOpen(item.id) }
+        }
+        if (visible.isNotEmpty()) {
+            item {
+                Text(
+                    "Tieni premuto per aggiungere subito una spesa ai movimenti.",
+                    style = Ui.type.caption,
+                    color = c.inkFaint,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                )
+            }
+        }
+    }
+
+    registering?.let { item ->
+        RegisterNowSheet(item, onDismiss = { registering = null }) { cents, date ->
+            vm.registerNow(item, cents, date) {
+                registering = null
+                Toast.makeText(context, "${item.name} aggiunto ai movimenti del ${Dates.long(date)}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }
 
 @Composable
-private fun RecurringCard(item: RecurringEntity, modifier: Modifier, onClick: () -> Unit) {
+private fun RegisterNowSheet(item: RecurringEntity, onDismiss: () -> Unit, onConfirm: (Long, LocalDate) -> Unit) {
+    val c = Ui.colors
+    val today = LocalDate.now()
+    var amount by remember { mutableStateOf(Money.toInput(item.amountCents)) }
+    var date by remember { mutableStateOf(today) }
+    var showPicker by remember { mutableStateOf(false) }
+    val cents = Money.parse(amount) ?: 0L
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = c.bg,
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).imePadding().padding(bottom = 28.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RecurringLogo(item.brandKey, item.imagePath, item.icon, Color(item.color), size = 56.dp, animated = true)
+                Spacer(Modifier.size(14.dp))
+                Column {
+                    Text("Aggiungi alle spese", style = Ui.type.caption, color = c.inkSoft)
+                    Text(item.name, style = Ui.type.title, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            FormLabel("Importo")
+            AmountField(amount, { amount = it })
+            FormLabel("Data")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Pill("Oggi", date == today, { date = today })
+                Pill("Ieri", date == today.minusDays(1), { date = today.minusDays(1) })
+                val other = date != today && date != today.minusDays(1)
+                Pill(if (other) Dates.long(date) else "Altra data", other, { showPicker = true }, icon = Icons.Rounded.CalendarMonth)
+            }
+            Text(
+                "Il prossimo addebito programmato (${Dates.long(LocalDate.ofEpochDay(item.nextDate))}) resta invariato.",
+                style = Ui.type.caption,
+                color = c.inkFaint,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            Spacer(Modifier.height(20.dp))
+            PrimaryButton("Aggiungi ${Money.format(cents)}", { onConfirm(cents, date) }, enabled = cents > 0, icon = Icons.Rounded.Check)
+        }
+    }
+
+    if (showPicker) {
+        val state = rememberDatePickerState(date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton({
+                    state.selectedDateMillis?.let { date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
+                    showPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton({ showPicker = false }) { Text("Annulla") } },
+        ) { DatePicker(state) }
+    }
+}
+
+@Composable
+private fun RecurringCard(item: RecurringEntity, modifier: Modifier, onLongClick: () -> Unit, onClick: () -> Unit) {
     val c = Ui.colors
     val date = LocalDate.ofEpochDay(item.nextDate)
     val days = item.nextDate - LocalDate.now().toEpochDay()
     Row(
         modifier
             .fillMaxWidth()
-            .bouncyClick(pressedScale = 0.97f, onClick = onClick)
+            .bouncyClick(pressedScale = 0.97f, onLongClick = onLongClick, onClick = onClick)
             .clip(RoundedCornerShape(28.dp))
             .background(c.surface)
             .padding(14.dp)

@@ -42,6 +42,8 @@ class AiAssistant(
     suspend fun testConnection(): String =
         client.complete(config(), listOf(ChatMessage("user", "Rispondi solo con: Ciao, sono pronto!")), maxTokens = 30)
 
+    suspend fun transcribe(wav: ByteArray): String = client.transcribe(config(), wav)
+
     // --- month commentary ---------------------------------------------------------------------
 
     private fun cacheFile(month: YearMonth) = File(File(cacheDir, "ai").apply { mkdirs() }, "commentary-$month.txt")
