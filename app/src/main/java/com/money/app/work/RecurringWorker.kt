@@ -22,6 +22,7 @@ import com.money.app.R
 import com.money.app.data.RecurringEntity
 import com.money.app.domain.Dates
 import com.money.app.domain.Money
+import com.money.app.widget.RenewalsWidget
 import java.time.LocalDate
 import java.time.YearMonth
 import java.util.concurrent.TimeUnit
@@ -50,6 +51,8 @@ class RecurringWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 reminders.forEach { Reminders.notify(context, it) }
             }
             runCatching { MonthlyNotice.check(context, container) }
+            // "Tra N giorni" changes every day even when nothing else does.
+            RenewalsWidget.refresh(context)
         }
     }
 }

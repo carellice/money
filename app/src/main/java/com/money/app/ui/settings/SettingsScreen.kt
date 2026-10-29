@@ -1,6 +1,8 @@
 package com.money.app.ui.settings
 
 import android.Manifest
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -56,6 +58,8 @@ import com.money.app.ui.appViewModel
 import com.money.app.ui.update.UpdateBanner
 import com.money.app.update.UpdateState
 import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material.icons.rounded.Widgets
+import com.money.app.widget.RenewalsWidgetReceiver
 import com.money.app.data.Palette
 import com.money.app.ui.components.ColorSwatches
 import com.money.app.ui.components.FormLabel
@@ -186,6 +190,12 @@ fun SettingsScreen(onBack: () -> Unit, onOpenCategories: () -> Unit, onOpenAi: (
 
             FormLabel("Organizza")
             NavRow(Icons.Rounded.Category, "Categorie e budget", "Sottocategorie, icone, colori e limiti mensili", onOpenCategories)
+            val widgets = remember { AppWidgetManager.getInstance(context) }
+            if (widgets.isRequestPinAppWidgetSupported) {
+                NavRow(Icons.Rounded.Widgets, "Aggiungi il widget", "I prossimi rinnovi sulla schermata home") {
+                    widgets.requestPinAppWidget(ComponentName(context, RenewalsWidgetReceiver::class.java), null, null)
+                }
+            }
 
             FormLabel("Backup")
             NavRow(Icons.Rounded.CloudUpload, "Esporta backup", "Salva tutti i dati in un file JSON") {

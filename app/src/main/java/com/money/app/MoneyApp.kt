@@ -7,11 +7,16 @@ import com.money.app.data.MoneyDatabase
 import com.money.app.data.MoneyRepository
 import com.money.app.data.SettingsStore
 import com.money.app.update.UpdateManager
+import com.money.app.widget.RenewalsWidget
 import com.money.app.work.Reminders
 import com.money.app.work.RecurringWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import java.time.YearMonth
 import kotlinx.coroutines.launch
 
@@ -41,5 +46,11 @@ class MoneyApp : Application() {
             RecurringWorker.runNow(this@MoneyApp, container)
         }
         container.updates.checkIfDue()
+        // Keep the home screen widget in step with fixed expenses and the accent color.
+        container.scope.launch {
+            combine(container.repository.recurring, container.settings.settings.map { it.accent }) { _, _ -> }
+                .drop(1)
+                .collectLatest { RenewalsWidget.refresh(this@MoneyApp) }
+        }
     }
 }

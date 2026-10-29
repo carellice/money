@@ -99,4 +99,5 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.5")
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("androidx.glance:glance-appwidget:1.1.1")
 }
