@@ -119,7 +119,9 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
     // Tabs are not restored on purpose: every page opens scrolled to the top.
     // Home stays in the back stack, so it gets an explicit nudge instead.
     var homeScrollReset by remember { mutableIntStateOf(0) }
-    val switchTab: (String) -> Unit = { target ->
+    val switchTab: (String) -> Unit = switch@{ target ->
+        // Tapping the tab you are already on does nothing.
+        if (nav.currentDestination?.route == target) return@switch
         if (target == Routes.HOME) homeScrollReset++
         nav.navigate(target) {
             popUpTo(nav.graph.findStartDestination().id)
