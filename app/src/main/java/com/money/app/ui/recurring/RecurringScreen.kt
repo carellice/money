@@ -16,9 +16,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import com.money.app.data.PaymentMethod
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
 import com.money.app.ui.components.AmountField
+import com.money.app.ui.components.AppIcons
 import com.money.app.ui.components.FormLabel
 import com.money.app.ui.components.Pill
 import com.money.app.ui.components.PrimaryButton
@@ -93,7 +95,7 @@ class RecurringViewModel(container: AppContainer) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Records one payment of [item] now, without touching its schedule. */
-    fun registerNow(item: RecurringEntity, cents: Long, date: LocalDate, onDone: () -> Unit) = viewModelScope.launch {
+    fun registerNow(item: RecurringEntity, cents: Long, date: LocalDate, payment: PaymentMethod, onDone: () -> Unit) = viewModelScope.launch {
         repo.saveTransaction(
             TransactionEntity(
                 type = TxType.EXPENSE,
@@ -101,7 +103,7 @@ class RecurringViewModel(container: AppContainer) : ViewModel() {
                 date = date.toEpochDay(),
                 categoryId = item.categoryId,
                 subcategoryId = item.subcategoryId,
-                payment = item.payment,
+                payment = payment,
                 note = item.name,
                 recurringId = item.id,
             )
@@ -191,8 +193,8 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
     }
 
     registering?.let { item ->
-        RegisterNowSheet(item, onDismiss = { registering = null }) { cents, date ->
-            vm.registerNow(item, cents, date) {
+        RegisterNowSheet(item, onDismiss = { registering = null }) { cents, date, payment ->
+            vm.registerNow(item, cents, date, payment) {
                 registering = null
                 Toast.makeText(context, "${item.name} aggiunto ai movimenti del ${Dates.long(date)}", Toast.LENGTH_SHORT).show()
             }
@@ -201,11 +203,13 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
 }
 
 @Composable
-private fun RegisterNowSheet(item: RecurringEntity, onDismiss: () -> Unit, onConfirm: (Long, LocalDate) -> Unit) {
+private fun RegisterNowSheet(item: RecurringEntity, onDismiss: () -> Unit, onConfirm: (Long, LocalDate, PaymentMethod) -> Unit) {
     val c = Ui.colors
     val today = LocalDate.now()
     var amount by remember { mutableStateOf(Money.toInput(item.amountCents)) }
     var date by remember { mutableStateOf(today) }
+    // Defaults to the usual method; this one payment may have gone another way.
+    var payment by remember { mutableStateOf(item.payment) }
     var showPicker by remember { mutableStateOf(false) }
     val cents = Money.parse(amount) ?: 0L
 
@@ -232,6 +236,10 @@ private fun RegisterNowSheet(item: RecurringEntity, onDismiss: () -> Unit, onCon
                 val other = date != today && date != today.minusDays(1)
                 Pill(if (other) Dates.long(date) else "Altra data", other, { showPicker = true }, icon = Icons.Rounded.CalendarMonth)
             }
+            FormLabel("Metodo di pagamento")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PaymentMethod.entries.forEach { m -> Pill(m.label, payment == m, { payment = m }, icon = AppIcons[m.icon]) }
+            }
             Text(
                 "Il prossimo addebito programmato (${Dates.long(LocalDate.ofEpochDay(item.nextDate))}) resta invariato.",
                 style = Ui.type.caption,
@@ -239,7 +247,7 @@ private fun RegisterNowSheet(item: RecurringEntity, onDismiss: () -> Unit, onCon
                 modifier = Modifier.padding(top = 12.dp),
             )
             Spacer(Modifier.height(20.dp))
-            PrimaryButton("Aggiungi ${Money.format(cents)}", { onConfirm(cents, date) }, enabled = cents > 0, icon = Icons.Rounded.Check)
+            PrimaryButton("Aggiungi ${Money.format(cents)}", { onConfirm(cents, date, payment) }, enabled = cents > 0, icon = Icons.Rounded.Check)
         }
     }
 
