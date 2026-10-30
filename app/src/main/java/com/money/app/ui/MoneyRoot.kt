@@ -37,11 +37,13 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,6 +72,7 @@ import com.money.app.ui.recurring.RecurringScreen
 import com.money.app.ui.report.ReportScreen
 import com.money.app.ui.settings.SettingsScreen
 import com.money.app.ui.transactions.TransactionsScreen
+import com.money.app.ui.components.LocalMembers
 import com.money.app.ui.theme.Ink
 import com.money.app.ui.theme.LocalBlobTime
 import com.money.app.ui.theme.Ui
@@ -108,6 +111,8 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val c = Ui.colors
+    val members by appContainer().repository.members.collectAsStateWithLifecycle(emptyList())
+    val membersById = remember(members) { members.associateBy { it.id } }
 
     LaunchedEffect(deepLinkRoute) {
         if (deepLinkRoute != null && deepLinkRoute in Routes.topLevel) {
@@ -130,81 +135,83 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize().background(c.bg)) {
-        NavHost(
-            navController = nav,
-            startDestination = Routes.HOME,
-            enterTransition = { fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 0.97f) },
-            exitTransition = { fadeOut(tween(180)) },
-            popEnterTransition = { fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 1.03f) },
-            popExitTransition = { fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.97f) },
-        ) {
-            composable(Routes.HOME) {
-                HomeScreen(
-                    onAdd = { nav.navigate(Routes.add(it)) },
-                    onOpenReport = { switchTab(Routes.REPORT) },
-                    onOpenRecurring = { switchTab(Routes.RECURRING) },
-                    onOpenRecurringItem = { nav.navigate(Routes.recurringEdit(it)) },
-                    onOpenSettings = { nav.navigate(Routes.SETTINGS) },
-                    onOpenChat = { nav.navigate(Routes.CHAT) },
-                    scrollToTop = homeScrollReset,
-                )
-            }
-            composable(Routes.TRANSACTIONS) {
-                TransactionsScreen(onOpen = { nav.navigate(Routes.add(id = it)) })
-            }
-            composable(Routes.RECURRING) {
-                RecurringScreen(
-                    onOpen = { nav.navigate(Routes.recurringEdit(it)) },
-                    onAdd = { nav.navigate(Routes.recurringEdit()) },
-                )
-            }
-            composable(Routes.REPORT) {
-                ReportScreen(
-                    onOpenTransaction = { nav.navigate(Routes.add(id = it)) },
-                    onOpenChat = { nav.navigate(Routes.CHAT) },
-                    onOpenAiSettings = { nav.navigate(Routes.AI_SETTINGS) },
-                )
-            }
-            composable(
-                Routes.ADD_PATTERN,
-                arguments = listOf(
-                    navArgument("type") { type = NavType.StringType; defaultValue = TxType.EXPENSE.name },
-                    navArgument("id") { type = NavType.LongType; defaultValue = 0L },
-                ),
-                enterTransition = { slideInVertically(spring(dampingRatio = 0.85f, stiffness = 320f)) { it / 2 } + fadeIn() },
-                popExitTransition = { slideOutVertically(tween(260)) { it / 2 } + fadeOut(tween(200)) },
+        CompositionLocalProvider(LocalMembers provides membersById) {
+            NavHost(
+                navController = nav,
+                startDestination = Routes.HOME,
+                enterTransition = { fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 0.97f) },
+                exitTransition = { fadeOut(tween(180)) },
+                popEnterTransition = { fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 1.03f) },
+                popExitTransition = { fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.97f) },
             ) {
-                AddTransactionScreen(onClose = { nav.closeScreen(Routes.ADD_PATTERN) })
-            }
-            composable(
-                Routes.RECURRING_EDIT_PATTERN,
-                arguments = listOf(
-                    navArgument("id") { type = NavType.LongType; defaultValue = 0L },
-                    navArgument("kind") { type = NavType.StringType; defaultValue = RecurringKind.SUBSCRIPTION.name },
-                ),
-                enterTransition = { slideInVertically(spring(dampingRatio = 0.85f, stiffness = 320f)) { it / 2 } + fadeIn() },
-                popExitTransition = { slideOutVertically(tween(260)) { it / 2 } + fadeOut(tween(200)) },
-            ) {
-                RecurringEditScreen(onClose = { nav.closeScreen(Routes.RECURRING_EDIT_PATTERN) })
-            }
-            composable(Routes.CATEGORIES) {
-                CategoriesScreen(onBack = { nav.closeScreen(Routes.CATEGORIES) })
-            }
-            composable(Routes.SETTINGS) {
-                SettingsScreen(
-                    onBack = { nav.closeScreen(Routes.SETTINGS) },
-                    onOpenCategories = { nav.navigate(Routes.CATEGORIES) },
-                    onOpenAi = { nav.navigate(Routes.AI_SETTINGS) },
-                )
-            }
-            composable(Routes.CHAT) {
-                ChatScreen(
-                    onBack = { nav.closeScreen(Routes.CHAT) },
-                    onOpenAiSettings = { nav.navigate(Routes.AI_SETTINGS) },
-                )
-            }
-            composable(Routes.AI_SETTINGS) {
-                AiSettingsScreen(onBack = { nav.closeScreen(Routes.AI_SETTINGS) })
+                composable(Routes.HOME) {
+                    HomeScreen(
+                        onAdd = { nav.navigate(Routes.add(it)) },
+                        onOpenReport = { switchTab(Routes.REPORT) },
+                        onOpenRecurring = { switchTab(Routes.RECURRING) },
+                        onOpenRecurringItem = { nav.navigate(Routes.recurringEdit(it)) },
+                        onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+                        onOpenChat = { nav.navigate(Routes.CHAT) },
+                        scrollToTop = homeScrollReset,
+                    )
+                }
+                composable(Routes.TRANSACTIONS) {
+                    TransactionsScreen(onOpen = { nav.navigate(Routes.add(id = it)) })
+                }
+                composable(Routes.RECURRING) {
+                    RecurringScreen(
+                        onOpen = { nav.navigate(Routes.recurringEdit(it)) },
+                        onAdd = { nav.navigate(Routes.recurringEdit()) },
+                    )
+                }
+                composable(Routes.REPORT) {
+                    ReportScreen(
+                        onOpenTransaction = { nav.navigate(Routes.add(id = it)) },
+                        onOpenChat = { nav.navigate(Routes.CHAT) },
+                        onOpenAiSettings = { nav.navigate(Routes.AI_SETTINGS) },
+                    )
+                }
+                composable(
+                    Routes.ADD_PATTERN,
+                    arguments = listOf(
+                        navArgument("type") { type = NavType.StringType; defaultValue = TxType.EXPENSE.name },
+                        navArgument("id") { type = NavType.LongType; defaultValue = 0L },
+                    ),
+                    enterTransition = { slideInVertically(spring(dampingRatio = 0.85f, stiffness = 320f)) { it / 2 } + fadeIn() },
+                    popExitTransition = { slideOutVertically(tween(260)) { it / 2 } + fadeOut(tween(200)) },
+                ) {
+                    AddTransactionScreen(onClose = { nav.closeScreen(Routes.ADD_PATTERN) })
+                }
+                composable(
+                    Routes.RECURRING_EDIT_PATTERN,
+                    arguments = listOf(
+                        navArgument("id") { type = NavType.LongType; defaultValue = 0L },
+                        navArgument("kind") { type = NavType.StringType; defaultValue = RecurringKind.SUBSCRIPTION.name },
+                    ),
+                    enterTransition = { slideInVertically(spring(dampingRatio = 0.85f, stiffness = 320f)) { it / 2 } + fadeIn() },
+                    popExitTransition = { slideOutVertically(tween(260)) { it / 2 } + fadeOut(tween(200)) },
+                ) {
+                    RecurringEditScreen(onClose = { nav.closeScreen(Routes.RECURRING_EDIT_PATTERN) })
+                }
+                composable(Routes.CATEGORIES) {
+                    CategoriesScreen(onBack = { nav.closeScreen(Routes.CATEGORIES) })
+                }
+                composable(Routes.SETTINGS) {
+                    SettingsScreen(
+                        onBack = { nav.closeScreen(Routes.SETTINGS) },
+                        onOpenCategories = { nav.navigate(Routes.CATEGORIES) },
+                        onOpenAi = { nav.navigate(Routes.AI_SETTINGS) },
+                    )
+                }
+                composable(Routes.CHAT) {
+                    ChatScreen(
+                        onBack = { nav.closeScreen(Routes.CHAT) },
+                        onOpenAiSettings = { nav.navigate(Routes.AI_SETTINGS) },
+                    )
+                }
+                composable(Routes.AI_SETTINGS) {
+                    AiSettingsScreen(onBack = { nav.closeScreen(Routes.AI_SETTINGS) })
+                }
             }
         }
 

@@ -86,13 +86,15 @@ class TransactionsViewModel(private val container: AppContainer) : ViewModel() {
     val filter = MutableStateFlow(0) // 0 all, 1 expenses, 2 incomes
 
     val state: StateFlow<TransactionsState?> = container.month.flatMapLatest { m ->
-        combine(repo.transactionsIn(m), repo.categories, query, filter) { txs, cats, q, f ->
+        combine(repo.transactionsIn(m), repo.categories, repo.members, query, filter) { txs, cats, members, q, f ->
             val byId = cats.associateBy { it.id }
+            val memberNames = members.associate { it.id to it.name }
             val needle = q.trim().lowercase()
             val visible = txs.filter { tx ->
                 (f == 0 || (f == 1 && tx.type == TxType.EXPENSE) || (f == 2 && tx.type == TxType.INCOME)) &&
                     (needle.isEmpty() || listOfNotNull(
                         tx.note, byId[tx.categoryId]?.name, tx.subcategoryId?.let { byId[it]?.name }, tx.payment.label,
+                        tx.memberId?.let { memberNames[it] },
                     ).any { it.lowercase().contains(needle) })
             }
             TransactionsState(
@@ -245,7 +247,7 @@ private fun SearchField(value: String, onChange: (String) -> Unit) {
                 Icon(Icons.Rounded.Search, null, tint = c.inkFaint, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.size(10.dp))
                 Box {
-                    if (value.isEmpty()) Text("Cerca per nota, categoria, metodo…", style = Ui.type.body, color = c.inkFaint)
+                    if (value.isEmpty()) Text("Cerca per nota, categoria, persona…", style = Ui.type.body, color = c.inkFaint)
                     inner()
                 }
             }

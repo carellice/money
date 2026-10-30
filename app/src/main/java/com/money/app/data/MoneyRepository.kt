@@ -11,9 +11,11 @@ class MoneyRepository(private val db: MoneyDatabase, private val filesDir: File)
     private val categoryDao = db.categories()
     private val txDao = db.transactions()
     private val recurringDao = db.recurring()
+    private val memberDao = db.members()
 
     val categories: Flow<List<CategoryEntity>> = categoryDao.observeAll()
     val recurring: Flow<List<RecurringEntity>> = recurringDao.observeAll()
+    val members: Flow<List<MemberEntity>> = memberDao.observeAll()
 
     fun transactionsIn(month: YearMonth): Flow<List<TransactionEntity>> =
         transactionsBetween(month.atDay(1), month.atEndOfMonth())
@@ -76,6 +78,16 @@ class MoneyRepository(private val db: MoneyDatabase, private val filesDir: File)
         categoryDao.deleteChildren(category.id)
         categoryDao.delete(category)
         true
+    }
+
+    suspend fun saveMember(member: MemberEntity) {
+        memberDao.upsert(if (member.id == 0L) member.copy(sortOrder = memberDao.all().size) else member)
+    }
+
+    /** Movements of the removed person stay, just without an owner. */
+    suspend fun deleteMember(member: MemberEntity) = db.withTransaction {
+        txDao.clearMember(member.id)
+        memberDao.delete(member)
     }
 
     suspend fun seedIfEmpty() {
@@ -144,18 +156,23 @@ class MoneyRepository(private val db: MoneyDatabase, private val filesDir: File)
 
     // --- backup -------------------------------------------------------------------------------
 
-    suspend fun snapshot() = Triple(categoryDao.all(), txDao.all(), recurringDao.all())
+    data class Snapshot(
+        val categories: List<CategoryEntity>,
+        val transactions: List<TransactionEntity>,
+        val recurring: List<RecurringEntity>,
+        val members: List<MemberEntity>,
+    )
 
-    suspend fun replaceAll(
-        categories: List<CategoryEntity>,
-        transactions: List<TransactionEntity>,
-        recurring: List<RecurringEntity>,
-    ) = db.withTransaction {
+    suspend fun snapshot() = Snapshot(categoryDao.all(), txDao.all(), recurringDao.all(), memberDao.all())
+
+    suspend fun replaceAll(snapshot: Snapshot) = db.withTransaction {
         txDao.clear()
         recurringDao.clear()
         categoryDao.clear()
-        categoryDao.insertAll(categories)
-        txDao.insertAll(transactions)
-        recurringDao.insertAll(recurring)
+        memberDao.clear()
+        categoryDao.insertAll(snapshot.categories)
+        memberDao.insertAll(snapshot.members)
+        txDao.insertAll(snapshot.transactions)
+        recurringDao.insertAll(snapshot.recurring)
     }
 }

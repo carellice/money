@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.money.app.AppContainer
 import com.money.app.data.CategoryEntity
+import com.money.app.data.MemberEntity
 import com.money.app.data.PaymentMethod
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
@@ -18,6 +19,7 @@ import com.money.app.domain.Money
 import com.money.app.ui.ImageStore
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
@@ -44,6 +46,7 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
     var note by mutableStateOf("")
     var receiptPath by mutableStateOf<String?>(null)
         private set
+    var memberId by mutableStateOf<Long?>(null)
     var step by mutableIntStateOf(if (editId != 0L) 2 else 0)
     var saved by mutableStateOf(false)
         private set
@@ -57,9 +60,16 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
     val categories: StateFlow<List<CategoryEntity>> =
         repo.categories.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val members: StateFlow<List<MemberEntity>> =
+        repo.members.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val amountCents: Long get() = Money.parse(amountText) ?: 0L
 
+    /** With people set up, every movement must say whose it is. */
+    val memberChosen: Boolean get() = members.value.isEmpty() || members.value.any { it.id == memberId }
+
     init {
+        if (!isEdit) viewModelScope.launch { memberId = repo.members.first().firstOrNull()?.id }
         if (isEdit) viewModelScope.launch {
             repo.transaction(editId)?.let { tx ->
                 original = tx
@@ -71,6 +81,7 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
                 payment = tx.payment
                 note = tx.note
                 receiptPath = tx.receiptPath
+                memberId = tx.memberId
             }
             loaded = true
         }
@@ -160,7 +171,7 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
 
     fun save() = viewModelScope.launch {
         val category = categoryId ?: return@launch
-        if (amountCents <= 0) return@launch
+        if (amountCents <= 0 || !memberChosen) return@launch
         repo.saveTransaction(
             TransactionEntity(
                 id = editId,
@@ -174,6 +185,7 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
                 receiptPath = receiptPath,
                 recurringId = original?.recurringId,
                 createdAt = original?.createdAt ?: System.currentTimeMillis(),
+                memberId = memberId?.takeIf { id -> members.value.any { it.id == id } },
             )
         )
         original?.receiptPath?.takeIf { it != receiptPath }?.let(repo::deleteImage)

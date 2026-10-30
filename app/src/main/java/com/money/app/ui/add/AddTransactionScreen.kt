@@ -105,6 +105,7 @@ import com.money.app.ui.components.Segmented
 import com.money.app.ui.components.TopBar
 import com.money.app.ui.components.bouncyClick
 import com.money.app.ui.components.staggered
+import com.money.app.ui.settings.MemberAvatar
 import com.money.app.ui.theme.Ink
 import com.money.app.ui.theme.Ui
 import com.money.app.ui.theme.blob
@@ -438,6 +439,7 @@ private fun CategoryCell(cat: CategoryEntity, selected: Boolean, modifier: Modif
 private fun DetailsStep(vm: AddViewModel, accent: Color, onDeleted: () -> Unit) {
     val c = Ui.colors
     val context = LocalContext.current
+    val members by vm.members.collectAsStateWithLifecycle()
     val today = LocalDate.now()
     var showPicker by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -460,6 +462,21 @@ private fun DetailsStep(vm: AddViewModel, accent: Color, onDeleted: () -> Unit) 
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Spacer(Modifier.height(4.dp))
+        if (members.isNotEmpty()) {
+            Label(if (vm.type == TxType.EXPENSE) "Di chi è la spesa?" else "Di chi è l'entrata?")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                members.forEach { member ->
+                    Pill(
+                        member.name,
+                        vm.memberId == member.id,
+                        { vm.memberId = member.id },
+                        color = Color(member.color),
+                        leading = { MemberAvatar(member, size = 24.dp) },
+                    )
+                }
+            }
+        }
+
         Label("Quando?")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill("Oggi", vm.date == today, { vm.date = today }, color = accent)
@@ -504,7 +521,7 @@ private fun DetailsStep(vm: AddViewModel, accent: Color, onDeleted: () -> Unit) 
         PrimaryButton(
             if (vm.isEdit) "Salva modifiche" else "Salva",
             { vm.save() },
-            enabled = vm.amountCents > 0 && vm.categoryId != null,
+            enabled = vm.amountCents > 0 && vm.categoryId != null && (members.isEmpty() || members.any { it.id == vm.memberId }),
             color = accent,
             icon = Icons.Rounded.Check,
         )

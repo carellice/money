@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.money.app.AppContainer
 import com.money.app.data.Backup
+import com.money.app.data.MemberEntity
 import com.money.app.data.Settings
 import com.money.app.data.ThemeMode
 import com.money.app.ui.appContainer
@@ -86,6 +87,12 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setReminders(enabled: Boolean) = viewModelScope.launch { container.settings.setReminders(enabled) }
     fun setAccent(color: Long) = viewModelScope.launch { container.settings.setAccent(color) }
 
+    val members: StateFlow<List<MemberEntity>> =
+        container.repository.members.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun saveMember(member: MemberEntity) = viewModelScope.launch { container.repository.saveMember(member) }
+    fun deleteMember(member: MemberEntity) = viewModelScope.launch { container.repository.deleteMember(member) }
+
     fun export(context: android.content.Context, uri: Uri, onResult: (String) -> Unit) = viewModelScope.launch {
         val message = runCatching {
             withContext(Dispatchers.IO) {
@@ -111,6 +118,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 fun SettingsScreen(onBack: () -> Unit, onOpenCategories: () -> Unit, onOpenAi: () -> Unit) {
     val vm = appViewModel { c, _ -> SettingsViewModel(c) }
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val members by vm.members.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val c = Ui.colors
     var pendingImport by remember { mutableStateOf<Uri?>(null) }
@@ -187,6 +195,9 @@ fun SettingsScreen(onBack: () -> Unit, onOpenCategories: () -> Unit, onOpenAi: (
                     if (enable && missing) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) else vm.setReminders(enable)
                 },
             )
+
+            FormLabel("Persone")
+            MembersSection(members, vm::saveMember, vm::deleteMember)
 
             FormLabel("Organizza")
             NavRow(Icons.Rounded.Category, "Categorie e budget", "Sottocategorie, icone, colori e limiti mensili", onOpenCategories)

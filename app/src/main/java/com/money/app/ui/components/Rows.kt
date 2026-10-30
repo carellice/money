@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.money.app.data.CategoryEntity
+import com.money.app.data.MemberEntity
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
 import com.money.app.domain.Money
@@ -51,6 +53,9 @@ fun Modifier.staggered(index: Int, step: Long = 55L): Modifier {
     }
 }
 
+/** People of the household by id, provided once at the root for every movement row. */
+val LocalMembers = compositionLocalOf<Map<Long, MemberEntity>> { emptyMap() }
+
 @Composable
 fun TransactionRow(
     tx: TransactionEntity,
@@ -63,7 +68,9 @@ fun TransactionRow(
     val category = categories[tx.categoryId]
     val sub = tx.subcategoryId?.let { categories[it] }
     val title = tx.note.ifBlank { sub?.name ?: category?.name ?: "Movimento" }
+    val member = tx.memberId?.let { LocalMembers.current[it] }
     val subtitle = buildList {
+        member?.let { add(it.name) }
         if (tx.note.isNotBlank()) add(sub?.name ?: category?.name ?: "")
         else if (sub != null) add(category?.name ?: "")
         add(tx.payment.label)

@@ -49,7 +49,7 @@ data class CategoryEntity(
 
 @Entity(
     tableName = "transactions",
-    indices = [Index("date"), Index("categoryId"), Index("recurringId")],
+    indices = [Index("date"), Index("categoryId"), Index("recurringId"), Index("memberId")],
 )
 data class TransactionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -65,6 +65,18 @@ data class TransactionEntity(
     /** Set when generated automatically from a fixed expense. */
     val recurringId: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
+    /** Person of the household the movement belongs to; null when no one was chosen. */
+    val memberId: Long? = null,
+)
+
+/** Person of the household, used only to tell whose a movement is. All data stays shared. */
+@Entity(tableName = "members")
+data class MemberEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    /** ARGB color. */
+    val color: Long,
+    val sortOrder: Int = 0,
 )
 
 @Entity(tableName = "recurring")

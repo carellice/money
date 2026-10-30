@@ -10,7 +10,7 @@ object Backup {
     private const val VERSION = 1
 
     suspend fun export(repo: MoneyRepository, out: OutputStream) {
-        val (categories, transactions, recurring) = repo.snapshot()
+        val (categories, transactions, recurring, members) = repo.snapshot()
         val root = JSONObject()
             .put("app", "Money")
             .put("version", VERSION)
@@ -18,6 +18,7 @@ object Backup {
             .put("categories", JSONArray(categories.map { it.toJson() }))
             .put("transactions", JSONArray(transactions.map { it.toJson() }))
             .put("recurring", JSONArray(recurring.map { it.toJson() }))
+            .put("members", JSONArray(members.map { it.toJson() }))
         out.bufferedWriter().use { it.write(root.toString(2)) }
     }
 
@@ -28,7 +29,17 @@ object Backup {
         val categories = root.getJSONArray("categories").objects().map { it.toCategory() }
         val transactions = root.getJSONArray("transactions").objects().map { it.toTransaction() }
         val recurring = root.getJSONArray("recurring").objects().map { it.toRecurring() }
-        repo.replaceAll(categories, transactions, recurring)
+        // Backups made before people were introduced have no members.
+        val members = root.optJSONArray("members")?.objects()?.map { it.toMember() }.orEmpty()
+        val known = members.map { it.id }.toSet()
+        repo.replaceAll(
+            MoneyRepository.Snapshot(
+                categories,
+                transactions.map { if (it.memberId != null && it.memberId !in known) it.copy(memberId = null) else it },
+                recurring,
+                members,
+            )
+        )
         return transactions.size
     }
 
@@ -51,13 +62,21 @@ object Backup {
         .put("id", id).put("type", type.name).put("amountCents", amountCents).put("date", date)
         .put("categoryId", categoryId).put("subcategoryId", subcategoryId ?: JSONObject.NULL)
         .put("payment", payment.name).put("note", note).put("recurringId", recurringId ?: JSONObject.NULL)
-        .put("createdAt", createdAt)
+        .put("createdAt", createdAt).put("memberId", memberId ?: JSONObject.NULL)
 
     private fun JSONObject.toTransaction() = TransactionEntity(
         id = getLong("id"), type = TxType.valueOf(getString("type")), amountCents = getLong("amountCents"),
         date = getLong("date"), categoryId = getLong("categoryId"), subcategoryId = optLongOrNull("subcategoryId"),
         payment = PaymentMethod.valueOf(getString("payment")), note = optString("note"),
         recurringId = optLongOrNull("recurringId"), createdAt = optLong("createdAt"),
+        memberId = optLongOrNull("memberId"),
+    )
+
+    private fun MemberEntity.toJson() = JSONObject()
+        .put("id", id).put("name", name).put("color", color).put("sortOrder", sortOrder)
+
+    private fun JSONObject.toMember() = MemberEntity(
+        id = getLong("id"), name = getString("name"), color = getLong("color"), sortOrder = optInt("sortOrder"),
     )
 
     private fun RecurringEntity.toJson() = JSONObject()

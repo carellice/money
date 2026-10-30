@@ -70,6 +70,9 @@ interface TransactionDao {
     @Query("UPDATE transactions SET subcategoryId = NULL WHERE subcategoryId = :subId")
     suspend fun clearSubcategory(subId: Long)
 
+    @Query("UPDATE transactions SET memberId = NULL WHERE memberId = :memberId")
+    suspend fun clearMember(memberId: Long)
+
     @Query("DELETE FROM transactions")
     suspend fun clear()
 }
@@ -104,5 +107,26 @@ interface RecurringDao {
     suspend fun delete(item: RecurringEntity)
 
     @Query("DELETE FROM recurring")
+    suspend fun clear()
+}
+
+@Dao
+interface MemberDao {
+    @Query("SELECT * FROM members ORDER BY sortOrder, id")
+    fun observeAll(): Flow<List<MemberEntity>>
+
+    @Query("SELECT * FROM members ORDER BY sortOrder, id")
+    suspend fun all(): List<MemberEntity>
+
+    @Upsert
+    suspend fun upsert(member: MemberEntity): Long
+
+    @Insert
+    suspend fun insertAll(members: List<MemberEntity>)
+
+    @Delete
+    suspend fun delete(member: MemberEntity)
+
+    @Query("DELETE FROM members")
     suspend fun clear()
 }
