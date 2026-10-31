@@ -26,7 +26,28 @@ Lo script ti chiede:
 
 Poi costruisce l'immagine Docker, avvia il container e lo registra tra le app della dashboard di CasaOS.
 
-Per aggiornare Money rilancia lo stesso comando. I dati restano dove sono.
+## Aggiornamenti
+
+L'installazione aggiunge il comando `money-aggiorna` e chiede se attivare gli aggiornamenti automatici. Se li attivi,
+ogni notte verso le 4 il server controlla se su GitHub c'è una versione nuova e, se c'è, la installa da solo.
+
+```bash
+sudo money-aggiorna              # aggiorna adesso, se c'è una versione nuova
+sudo money-aggiorna --controlla  # dice soltanto se c'è una versione nuova
+sudo money-aggiorna --forza      # ricostruisce Money anche se la versione è la stessa
+journalctl -u money-aggiorna     # com'è andato l'ultimo aggiornamento automatico
+```
+
+Ogni aggiornamento:
+
+1. costruisce la nuova versione a parte. Se la build non riesce, Money resta com'è;
+2. salva una copia del database in `<cartella dati>/backup` (tiene le ultime 5);
+3. avvia la nuova versione. Se non risponde entro due minuti, torna a quella di prima.
+
+Il timer si spegne con `sudo systemctl disable --now money-aggiorna.timer`. Rilanciando `installa.sh` si può anche
+cambiare la configurazione: i dati restano dove sono.
+
+Per rilasciare una versione nuova basta alzare `version` in `server/package.json` e fare il push su `main`.
 
 Senza HTTPS Money funziona lo stesso nel browser. Però non si installa come app, non riceve i promemoria e non può usare
 il blocco con impronta.

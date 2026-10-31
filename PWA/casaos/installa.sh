@@ -7,6 +7,7 @@
 #   sudo bash PWA/casaos/installa.sh
 #
 # Rilanciandolo si aggiorna Money all'ultima versione: i dati restano dove sono.
+# Installa anche il comando "money-aggiorna" e, se vuoi, un timer che aggiorna Money ogni notte.
 
 set -euo pipefail
 
@@ -344,6 +345,49 @@ elif [ "$MODE" = local ]; then
   URL_PHONE="https://$(echo "$HTTPS_HOSTS" | cut -d, -f1):$HTTPS_PORT"
 fi
 
+# --- aggiornamenti -----------------------------------------------------------------------------
+
+step "Aggiornamenti"
+install -m 755 "$SRC/casaos/aggiorna.sh" /usr/local/bin/money-aggiorna
+ok "Comando installato: sudo money-aggiorna"
+AUTO_UPDATE=0
+if command -v systemctl >/dev/null 2>&1 && [ -d /etc/systemd/system ]; then
+  if systemctl is-enabled money-aggiorna.timer >/dev/null 2>&1; then
+    AUTO_UPDATE=1
+    ok "Aggiornamenti automatici già attivi"
+  elif ask_yes "Controllo ogni notte se c'è una versione nuova e la installo da solo?" s; then
+    cat > /etc/systemd/system/money-aggiorna.service <<'EOF'
+[Unit]
+Description=Aggiorna Money all'ultima versione
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/money-aggiorna
+TimeoutStartSec=1h
+Nice=10
+EOF
+    cat > /etc/systemd/system/money-aggiorna.timer <<'EOF'
+[Unit]
+Description=Controlla ogni notte se c'è una nuova versione di Money
+
+[Timer]
+OnCalendar=*-*-* 04:00
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+    systemctl daemon-reload
+    systemctl enable --now money-aggiorna.timer >/dev/null 2>&1 && AUTO_UPDATE=1
+    [ "$AUTO_UPDATE" = 1 ] && ok "Ogni notte verso le 4 Money si aggiorna da sola" || warn "Timer non attivato: aggiorna a mano con sudo money-aggiorna"
+  fi
+else
+  warn "systemd non trovato: aggiorna a mano con sudo money-aggiorna"
+fi
+
 # --- fine --------------------------------------------------------------------------------------
 
 step "Fatto!"
@@ -369,6 +413,11 @@ echo
 info "Hai già l'app Android? Esporta il backup da lì (Impostazioni → Esporta backup)"
 info "e importalo in Money web da Impostazioni → Importa backup."
 echo
-info "Per aggiornare in futuro rilancia questo stesso comando."
+if [ "$AUTO_UPDATE" = 1 ]; then
+  info "Money si aggiorna da sola ogni notte. Per farlo subito: sudo money-aggiorna"
+  info "${D}Ultimi aggiornamenti: journalctl -u money-aggiorna · Per spegnerli: systemctl disable --now money-aggiorna.timer${R}"
+else
+  info "Per aggiornare in futuro: sudo money-aggiorna"
+fi
 info "${D}Configurazione: $APP_DIR · Dati: $DATA_DIR · Log: docker logs $APP${R}"
 echo
