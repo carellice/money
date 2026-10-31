@@ -1,7 +1,7 @@
 # Money · PWA
 
 La versione web di Money, da installare sul proprio server CasaOS. Stessa grafica, stesse animazioni e stesse
-funzioni dell'app Android, con i dati condivisi da tutta la famiglia su un server di casa.
+funzioni dell'app Android, con i dati su un server di casa. Ogni persona della famiglia può avere il suo account.
 
 L'app Android nella cartella `app/` resta indipendente: questa cartella non la tocca.
 
@@ -17,14 +17,26 @@ Lo script ti chiede:
 
 1. la cartella dei dati (predefinita `/DATA/AppData/money`);
 2. la porta (predefinita `8095`);
-3. una password per la famiglia (consigliata);
-4. il fuso orario;
-5. come aprire Money dal telefono in HTTPS:
+3. il fuso orario;
+4. come aprire Money dal telefono in HTTPS:
    - **Tailscale** (consigliato): HTTPS vero anche fuori casa. Funziona sia con Tailscale installato sul sistema sia con l'app Tailscale di CasaOS;
    - **HTTPS in casa**: Money crea un suo certificato. Su ogni telefono lo installi una volta da `http://<server>:<porta>/certificato`;
    - **solo HTTP**: se hai già un reverse proxy o un Cloudflare Tunnel con HTTPS.
 
 Poi costruisce l'immagine Docker, avvia il container e lo registra tra le app della dashboard di CasaOS.
+
+## Account
+
+Alla prima apertura tocca *Creane uno*: bastano un nome utente e una password, senza email. Ogni persona della
+famiglia può crearsi il suo account. Ognuno ha il suo Money: movimenti, spese fisse, categorie, persone, scontrini e
+assistente AI restano separati, e nessuno vede i dati degli altri.
+
+Da Impostazioni → *Account* si cambia la password, si esce oppure si elimina l'account con tutti i suoi dati.
+
+Chiunque raggiunga Money può creare un account. Con Tailscale o l'HTTPS in casa la raggiungono solo i tuoi dispositivi.
+Con un reverse proxy o un Cloudflare Tunnel, invece, non renderla pubblica su Internet senza un accesso protetto.
+
+Se avevi già installato la versione con la password unica, i dati esistenti vanno al primo account creato.
 
 ## Aggiornamenti
 
@@ -70,7 +82,7 @@ Le foto degli scontrini e i loghi personalizzati non fanno parte del backup, com
 
 | App Android | PWA |
 |---|---|
-| Dati sul telefono | Dati sul server, condivisi tra i telefoni di casa |
+| Dati sul telefono | Dati sul server, un account per ogni persona della famiglia |
 | Notifiche di sistema | Notifiche Web Push, inviate dal server |
 | Blocco con impronta (BiometricPrompt) | Blocco con impronta tramite passkey del telefono (serve HTTPS con un nome, non un indirizzo IP) |
 | Token AI cifrato sul telefono | Token AI salvato solo sul server, mai rimandato al browser |

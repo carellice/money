@@ -466,17 +466,19 @@ export function NoteField({ value, onChange, placeholder, style, onFocus, onBlur
   )
 }
 
-export function TextField({ value, onChange, placeholder, secret = false, style }: {
+export function TextField({ value, onChange, placeholder, secret = false, autoComplete, style }: {
   value: string
   onChange: (v: string) => void
   placeholder: string
   secret?: boolean
+  /** Lets password managers fill username and password ("username", "current-password"...). */
+  autoComplete?: string
   style?: CSSProperties
 }) {
   return (
     <label style={{ display: 'block', borderRadius: 20, background: 'var(--surface)', padding: '16px 18px', cursor: 'text', ...style }}>
       <input className="field t-body" type={secret ? 'password' : 'text'} value={value} placeholder={placeholder}
-        autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete={secret ? 'new-password' : 'off'}
+        autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete={autoComplete ?? (secret ? 'new-password' : 'off')}
         onChange={(e) => onChange(e.target.value)} />
     </label>
   )

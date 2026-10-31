@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, unlinkSync } from 'node:fs'
 import { basename, join } from 'node:path'
@@ -15,14 +16,10 @@ import {
 import { nextAfter } from '../../shared/recurrence.ts'
 
 export const dataDir = process.env.DATA_DIR ?? join(process.cwd(), 'data')
-export const imagesDir = join(dataDir, 'images')
-mkdirSync(imagesDir, { recursive: true })
-
-export const db = new DatabaseSync(join(dataDir, 'money.db'))
-db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = OFF;')
+mkdirSync(dataDir, { recursive: true })
 
 // Same tables and columns as the Android Room database.
-db.exec(`
+const schema = `
 CREATE TABLE IF NOT EXISTS categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, icon TEXT NOT NULL, color INTEGER NOT NULL,
   type TEXT NOT NULL, parentId INTEGER, budgetCents INTEGER, sortOrder INTEGER NOT NULL DEFAULT 0);
@@ -44,10 +41,57 @@ CREATE TABLE IF NOT EXISTS recurring (
 CREATE TABLE IF NOT EXISTS members (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, color INTEGER NOT NULL, sortOrder INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY NOT NULL, createdAt INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY NOT NULL, json TEXT NOT NULL, reminders INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS ai_cache (month TEXT PRIMARY KEY NOT NULL, signature TEXT NOT NULL, text TEXT NOT NULL);
-`)
+`
+
+// --- accounts: every account has its own database, picked per request -------------------------
+
+type UserData = { id: number; db: DatabaseSync; imagesDir: string }
+
+const opened = new Map<number, UserData>()
+const current = new AsyncLocalStorage<UserData>()
+
+export const userDir = (userId: number) => join(dataDir, 'users', String(userId))
+
+function open(userId: number): UserData {
+  const known = opened.get(userId)
+  if (known) return known
+  const dir = userDir(userId)
+  const imagesDir = join(dir, 'images')
+  mkdirSync(imagesDir, { recursive: true })
+  const db = new DatabaseSync(join(dir, 'money.db'))
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = OFF;')
+  db.exec(schema)
+  const data = { id: userId, db, imagesDir }
+  opened.set(userId, data)
+  current.run(data, seedIfEmpty)
+  return data
+}
+
+/** Runs [work] on the data of [userId]: every function of this module then reads and writes there. */
+export function withUser<T>(userId: number, work: () => T): T {
+  return current.run(open(userId), work)
+}
+
+export function closeUser(userId: number) {
+  opened.get(userId)?.db.close()
+  opened.delete(userId)
+}
+
+function user(): UserData {
+  const data = current.getStore()
+  if (!data) throw new Error('Nessun account attivo')
+  return data
+}
+
+/** The database of the current account. */
+export const db = {
+  prepare: (sql: string) => user().db.prepare(sql),
+  exec: (sql: string) => user().db.exec(sql),
+}
+
+export const imagesDir = () => user().imagesDir
 
 // --- meta ------------------------------------------------------------------------------------
 
@@ -299,7 +343,7 @@ export function processRecurring(today = todayEpoch()): Recurring[] {
 export function deleteImage(path: string) {
   const name = basename(path)
   if (!path.startsWith('/images/') || !/^[\w.-]+$/.test(name)) return
-  try { unlinkSync(join(imagesDir, name)) } catch { /* already gone */ }
+  try { unlinkSync(join(imagesDir(), name)) } catch { /* already gone */ }
 }
 
 // --- backup (same JSON as the Android app) ---------------------------------------------------

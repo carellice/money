@@ -4,7 +4,7 @@ import { parseMonthKey } from '../../shared/date.ts'
 import { api, authEvents } from './lib/api.ts'
 import { blobTime, onFrame } from './lib/blob.ts'
 import { navigate, openDeepLink, sheetRoutes, switchTab, topLevel, useNav, type Entry, type Route } from './lib/nav.ts'
-import { refresh, setMonth, updateSettings, useStore } from './lib/store.ts'
+import { getStore, loggedUser, refresh, setMonth, setUser, updateSettings, useStore } from './lib/store.ts'
 import { applyTheme, Ink, themeColors } from './lib/theme.ts'
 import { BlobLayer } from './components/Blob.tsx'
 import { MessagesHost } from './components/overlays.tsx'
@@ -44,16 +44,26 @@ export function App() {
   const systemDark = useSystemDark()
   const dark = settings.theme === 'SYSTEM' ? systemDark : settings.theme === 'DARK'
   const [session, setSession] = useState<'checking' | 'login' | 'ready'>('checking')
-  const [locked, setLocked] = useState(settings.lockCredential != null)
-  const [onboarding, setOnboarding] = useState(!settings.onboarded)
+  const [locked, setLocked] = useState(false)
+  const onboarding = !settings.onboarded
   const hiddenAt = useRef(0)
 
   useEffect(() => applyTheme(themeColors(dark, settings.accent)), [dark, settings.accent])
 
   useEffect(() => {
-    const check = () => api<{ authRequired: boolean; loggedIn: boolean }>('/api/session')
-      .then((s) => setSession(s.authRequired && !s.loggedIn ? 'login' : 'ready'))
-      .catch(() => setSession('ready'))
+    const check = () => api<{ loggedIn: boolean; username: string | null }>('/api/session')
+      .then((s) => {
+        if (!s.loggedIn || !s.username) return setSession('login')
+        setUser(s.username)
+        setLocked(getStore().settings.lockCredential != null)
+        setSession('ready')
+      })
+      // Offline: open with the data cached on this device.
+      .catch(() => {
+        if (!loggedUser()) return setSession('login')
+        setLocked(getStore().settings.lockCredential != null)
+        setSession('ready')
+      })
     check()
     const logout = () => setSession('login')
     authEvents.addEventListener('logout', logout)
@@ -93,7 +103,11 @@ export function App() {
       <AnimatePresence>
         {session === 'login' && (
           <motion.div key="login" className="layer" style={{ zIndex: 90 }} exit={{ opacity: 0, scale: 1.1 }}>
-            <LoginScreen onDone={() => setSession('ready')} />
+            <LoginScreen onDone={(username) => {
+              setUser(username)
+              setLocked(false)
+              setSession('ready')
+            }} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -107,10 +121,7 @@ export function App() {
       <AnimatePresence>
         {session === 'ready' && onboarding && (
           <motion.div key="onboarding" className="layer" style={{ zIndex: 96 }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 1.1 }}>
-            <OnboardingScreen onDone={() => {
-              setOnboarding(false)
-              updateSettings({ onboarded: true })
-            }} />
+            <OnboardingScreen onDone={() => updateSettings({ onboarded: true })} />
           </motion.div>
         )}
       </AnimatePresence>

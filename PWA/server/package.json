@@ -1,6 +1,6 @@
 {
   "name": "money-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "Server di Money PWA: dati in SQLite, spese fisse automatiche, notifiche push e assistente AI.",

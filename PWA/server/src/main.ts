@@ -1,18 +1,18 @@
 import { createServer as createHttp, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createServer as createHttps } from 'node:https'
 import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { randomBytes, timingSafeEqual, createHash } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { extname, join, normalize } from 'node:path'
 import { parseMonthKey } from '../../shared/date.ts'
 import type { Category, Member, Recurring, Transaction, TxType } from '../../shared/model.ts'
 import * as data from './db.ts'
 import { exportBackup, importBackup } from './backup.ts'
 import * as ai from './ai.ts'
-import { runRecurring, subscribe, unsubscribe, vapidPublicKey } from './push.ts'
+import * as accounts from './accounts.ts'
+import { runRecurring, runRecurringForAll, subscribe, unsubscribe, vapidPublicKey } from './push.ts'
 
 const PORT = Number(process.env.PORT ?? 8080)
 const HTTPS_PORT = Number(process.env.HTTPS_PORT ?? 8443)
-const PASSWORD = process.env.MONEY_PASSWORD ?? ''
 const publicDir = process.env.PUBLIC_DIR ?? join(import.meta.dirname, '..', 'public')
 const certDir = join(data.dataDir, 'certs')
 const VERSION = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8')).version as string
@@ -65,28 +65,30 @@ function cookies(req: IncomingMessage): Record<string, string> {
 const secure = (req: IncomingMessage) =>
   (req.socket as { encrypted?: boolean }).encrypted === true || req.headers['x-forwarded-proto'] === 'https'
 
-// --- auth: one shared password for the household ----------------------------------------------
+// --- auth: one account per family member, each with its own data -----------------------------
 
 const SESSION = 'money_session'
 
-function loggedIn(req: IncomingMessage): boolean {
-  if (!PASSWORD) return true
-  const token = cookies(req)[SESSION]
-  if (!token) return false
-  return data.db.prepare('SELECT 1 FROM sessions WHERE token = ?').get(token) != null
-}
+const sessionUser = (req: IncomingMessage) => accounts.sessionUser(cookies(req)[SESSION])
 
-function passwordMatches(candidate: string): boolean {
-  const a = createHash('sha256').update(candidate).digest()
-  const b = createHash('sha256').update(PASSWORD).digest()
-  return timingSafeEqual(a, b)
-}
-
-function startSession(req: IncomingMessage, res: ServerResponse) {
-  const token = randomBytes(32).toString('hex')
-  data.db.prepare('INSERT INTO sessions (token, createdAt) VALUES (?, ?)').run(token, Date.now())
+function startSession(req: IncomingMessage, res: ServerResponse, userId: number) {
+  const token = accounts.startSession(userId)
   const flags = `Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 400}${secure(req) ? '; Secure' : ''}`
   res.setHeader('Set-Cookie', `${SESSION}=${token}; ${flags}`)
+}
+
+function clearSession(res: ServerResponse) {
+  res.setHeader('Set-Cookie', `${SESSION}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
+}
+
+/** Account mistakes (name taken, short password...) reach the user as they are. */
+function accountCall(work: () => void) {
+  try {
+    work()
+  } catch (e) {
+    if (e instanceof accounts.AccountError) throw new HttpError(400, e.message)
+    throw e
+  }
 }
 
 // --- static files ----------------------------------------------------------------------------
@@ -130,28 +132,53 @@ function serveStatic(req: IncomingMessage, res: ServerResponse, path: string) {
 
 // --- API -------------------------------------------------------------------------------------
 
-type Handler = (req: IncomingMessage, res: ServerResponse, params: string[], url: URL) => Promise<void> | void
+type Handler = (req: IncomingMessage, res: ServerResponse, params: string[], url: URL, user: accounts.User) => Promise<void> | void
 const routes: [string, RegExp, Handler][] = []
 const route = (method: string, pattern: string, handler: Handler) =>
   routes.push([method, new RegExp('^' + pattern.replace(/:\w+/g, '([^/]+)') + '$'), handler])
 
-route('GET', '/api/session', (req, res) => json(res, 200, { authRequired: !!PASSWORD, loggedIn: loggedIn(req), version: VERSION }))
+route('GET', '/api/session', (req, res) => {
+  const user = sessionUser(req)
+  json(res, 200, { loggedIn: user != null, username: user?.username ?? null, version: VERSION })
+})
+
+route('POST', '/api/register', async (req, res) => {
+  const { username, password } = await readJson<{ username?: string; password?: string }>(req)
+  accountCall(() => {
+    const user = accounts.register(String(username ?? ''), String(password ?? ''))
+    startSession(req, res, user.id)
+    json(res, 200, { username: user.username })
+  })
+})
 
 route('POST', '/api/login', async (req, res) => {
-  const { password } = await readJson<{ password?: string }>(req)
-  if (!PASSWORD || passwordMatches(String(password ?? ''))) {
-    if (PASSWORD) startSession(req, res)
-    json(res, 200, { ok: true })
-    return
+  const { username, password } = await readJson<{ username?: string; password?: string }>(req)
+  const user = accounts.login(String(username ?? ''), String(password ?? ''))
+  if (!user) {
+    await new Promise((r) => setTimeout(r, 800))
+    throw new HttpError(401, 'Nome utente o password sbagliati')
   }
-  await new Promise((r) => setTimeout(r, 800))
-  throw new HttpError(401, 'Password sbagliata')
+  startSession(req, res, user.id)
+  json(res, 200, { username: user.username })
 })
 
 route('POST', '/api/logout', (req, res) => {
   const token = cookies(req)[SESSION]
-  if (token) data.db.prepare('DELETE FROM sessions WHERE token = ?').run(token)
-  res.setHeader('Set-Cookie', `${SESSION}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
+  if (token) accounts.endSession(token)
+  clearSession(res)
+  json(res, 200, { ok: true })
+})
+
+route('POST', '/api/account/password', async (req, res, _p, _u, user) => {
+  const { current, password } = await readJson<{ current?: string; password?: string }>(req)
+  accountCall(() => accounts.changePassword(user.id, String(current ?? ''), String(password ?? '')))
+  json(res, 200, { ok: true })
+})
+
+route('POST', '/api/account/delete', async (req, res, _p, _u, user) => {
+  const { password } = await readJson<{ password?: string }>(req)
+  accountCall(() => accounts.deleteAccount(user.id, String(password ?? '')))
+  clearSession(res)
   json(res, 200, { ok: true })
 })
 
@@ -211,7 +238,7 @@ route('POST', '/api/images', async (req, res, _p, url) => {
   if (body.length < 4 || !(body[0] === 0xff && body[1] === 0xd8)) throw new HttpError(400, 'Immagine non valida')
   const prefix = url.searchParams.get('prefix') === 'logo' ? 'logo' : 'receipt'
   const name = `${prefix}_${Date.now()}_${randomBytes(3).toString('hex')}.jpg`
-  writeFileSync(join(data.imagesDir, name), body)
+  writeFileSync(join(data.imagesDir(), name), body)
   json(res, 200, { path: `/images/${name}` })
 })
 
@@ -238,10 +265,10 @@ route('POST', '/api/backup', async (req, res) => {
 
 // Push
 route('GET', '/api/push/key', (_req, res) => json(res, 200, { key: vapidPublicKey }))
-route('POST', '/api/push/subscribe', async (req, res) => {
+route('POST', '/api/push/subscribe', async (req, res, _p, _u, user) => {
   const { subscription, reminders } = await readJson<{ subscription: Parameters<typeof subscribe>[0]; reminders: boolean }>(req)
   if (!subscription?.endpoint) throw new HttpError(400, 'Iscrizione non valida')
-  subscribe(subscription, reminders !== false)
+  subscribe(subscription, reminders !== false, user.id)
   json(res, 200, { ok: true })
 })
 route('POST', '/api/push/unsubscribe', async (req, res) => {
@@ -301,7 +328,7 @@ route('POST', '/api/ai/transcribe', async (req, res) => {
 
 // --- server ----------------------------------------------------------------------------------
 
-const open = new Set(['/api/session', '/api/login', '/api/logout'])
+const open = new Set(['/api/session', '/api/register', '/api/login', '/api/logout'])
 
 async function handle(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? '/', 'http://localhost')
@@ -318,20 +345,24 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       return
     }
     if (path.startsWith('/api/')) {
-      if (!open.has(path) && !loggedIn(req)) throw new HttpError(401, 'Accesso richiesto')
+      const user = sessionUser(req)
+      if (!open.has(path) && !user) throw new HttpError(401, 'Accesso richiesto')
       for (const [method, pattern, handler] of routes) {
         const match = pattern.exec(path)
         if (match && method === req.method) {
-          await handler(req, res, match.slice(1), url)
+          // Everything the handler reads or writes belongs to the logged in account.
+          if (user) await data.withUser(user.id, () => handler(req, res, match.slice(1), url, user))
+          else await handler(req, res, match.slice(1), url, { id: 0, username: '' })
           return
         }
       }
       throw new HttpError(404, 'Non trovato')
     }
     if (path.startsWith('/images/')) {
-      if (!loggedIn(req)) throw new HttpError(401, 'Accesso richiesto')
+      const user = sessionUser(req)
+      if (!user) throw new HttpError(401, 'Accesso richiesto')
       const name = path.slice('/images/'.length)
-      const file = join(data.imagesDir, name)
+      const file = join(data.withUser(user.id, data.imagesDir), name)
       if (!/^[\w.-]+$/.test(name) || !existsSync(file)) throw new HttpError(404, 'Immagine non trovata')
       sendFile(req, res, file, 'private, max-age=31536000, immutable')
       return
@@ -357,10 +388,9 @@ a.b{display:inline-block;background:#B8A6FF;color:#15121F;padding:14px 22px;bord
 <p>Poi apri <b>https://${host}:${HTTPS_PORT}</b></p></body></html>`
 }
 
-data.seedIfEmpty()
-await runRecurring()
-// Like WorkManager's periodic job: due fixed expenses and reminders, every hour.
-setInterval(runRecurring, 60 * 60 * 1000)
+await runRecurringForAll()
+// Like WorkManager's periodic job: due fixed expenses and reminders of every account, every hour.
+setInterval(runRecurringForAll, 60 * 60 * 1000)
 
 createHttp(handle).listen(PORT, () => console.log(`Money ${VERSION} su http://0.0.0.0:${PORT}`))
 

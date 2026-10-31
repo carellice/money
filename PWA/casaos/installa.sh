@@ -50,12 +50,6 @@ ask_yes() { # ask_yes "domanda" s|n
   [[ "$REPLY" =~ ^[sSyY] ]]
 }
 
-ask_secret() { # ask_secret "domanda" -> REPLY
-  printf "    %s: " "$1" >"$TTY"
-  IFS= read -rs REPLY <"$TTY" || true
-  printf "\n" >"$TTY"
-}
-
 printf "${V}${B}"
 cat <<'EOF'
 
@@ -167,20 +161,6 @@ if [ "$UPDATE" = 0 ]; then
     warn "La porta $PORT è già usata da un altro servizio, scegline un'altra."
   done
 
-  echo
-  info "Password: chi apre Money deve conoscerla (una per tutta la famiglia)."
-  info "Lasciala vuota solo se il server non è raggiungibile da fuori casa."
-  while true; do
-    ask_secret "Password di Money (Invio per nessuna)"
-    first="$REPLY"
-    [ -z "$first" ] && { warn "Nessuna password: chiunque sulla tua rete potrà aprire Money."; MONEY_PASSWORD=""; break; }
-    [ ${#first} -ge 6 ] || { warn "Usa almeno 6 caratteri."; continue; }
-    [[ "$first" != *"'"* ]] || { warn "Non usare l'apostrofo (') nella password."; continue; }
-    ask_secret "Ripeti la password"
-    [ "$first" = "$REPLY" ] && { MONEY_PASSWORD="$first"; break; }
-    warn "Le due password non coincidono, riprova."
-  done
-
   host_tz=$(cat /etc/timezone 2>/dev/null || timedatectl show -p Timezone --value 2>/dev/null || echo "")
   ask "Fuso orario (per le spese fisse e i promemoria)" "${TZ:-${host_tz:-Europe/Rome}}"
   TZ="$REPLY"
@@ -252,7 +232,6 @@ HTTPS_PORT=$HTTPS_PORT
 HTTPS_HOSTS=$HTTPS_HOSTS
 MODE=$MODE
 TZ=$TZ
-MONEY_PASSWORD='$MONEY_PASSWORD'
 EOF
 umask 022
 
@@ -275,7 +254,6 @@ $https_ports
         target: /data
     environment:
       TZ: \${TZ}
-      MONEY_PASSWORD: \${MONEY_PASSWORD}
       HTTPS_HOSTS: \${HTTPS_HOSTS}
     x-casaos:
       ports:
@@ -404,8 +382,13 @@ if [ "$MODE" = local ]; then
 fi
 if [ "$MODE" = http ]; then
   info "Punta il tuo reverse proxy o Cloudflare Tunnel (con HTTPS) a http://$LAN_IP:$PORT"
+  warn "Chi raggiunge Money può crearsi un account: non renderla pubblica su Internet senza un accesso protetto."
   echo
 fi
+info "${B}Crea il tuo account:${R} apri Money e tocca \"Creane uno\"."
+info "Ogni persona della famiglia può crearne uno: i dati di ognuno restano separati."
+info "Se avevi già usato Money, i dati esistenti vanno al primo account creato."
+echo
 info "${B}Installala come app:${R}"
 info "  Android (Chrome): menu ⋮ → Installa app"
 info "  iPhone (Safari):  Condividi → Aggiungi alla schermata Home"

@@ -6,10 +6,10 @@ import { navigate, close } from '../lib/nav.ts'
 import { disablePush, enablePush, pushSupported } from '../lib/push.ts'
 import { download } from '../lib/reportExport.ts'
 import { isoDate } from '../../../shared/date.ts'
-import { actions, refresh, themeModes, updateSettings, useStore } from '../lib/store.ts'
+import { actions, forgetUser, loggedUser, refresh, themeModes, updateSettings, useStore } from '../lib/store.ts'
 import { Ink } from '../lib/theme.ts'
 import type { UiIcon } from '../lib/icons.gen.ts'
-import { Bouncy, ColorSwatches, FormLabel, Icon, NoteField, PrimaryButton, Segmented, SwitchRow, TopBar } from '../components/ui.tsx'
+import { Bouncy, ColorSwatches, FormLabel, Icon, NoteField, PrimaryButton, Segmented, SwitchRow, TextField, TopBar } from '../components/ui.tsx'
 import { AlertDialog, Sheet, toast } from '../components/overlays.tsx'
 import { deviceLockAvailable, registerDeviceLock } from './Lock.tsx'
 
@@ -21,15 +21,12 @@ export function SettingsScreen() {
   const [lockAvailable, setLockAvailable] = useState(false)
   const [pendingImport, setPendingImport] = useState<File | null>(null)
   const [version, setVersion] = useState('')
-  const [authRequired, setAuthRequired] = useState(false)
+  const [accountSheet, setAccountSheet] = useState<'password' | 'delete' | null>(null)
   const [update, setUpdate] = useState<UpdateState>('idle')
 
   useEffect(() => {
     deviceLockAvailable().then(setLockAvailable)
-    api<{ version: string; authRequired: boolean }>('/api/session').then((s) => {
-      setVersion(s.version)
-      setAuthRequired(s.authRequired)
-    }).catch(() => {})
+    api<{ version: string }>('/api/session').then((s) => setVersion(s.version)).catch(() => {})
   }, [])
 
   const toggleLock = async (enable: boolean) => {
@@ -90,6 +87,8 @@ export function SettingsScreen() {
   }
 
   const logout = async () => {
+    // This phone stops getting the reminders of the account that leaves it.
+    if (settings.remindersEnabled) await disablePush()
     await api('/api/logout', { method: 'POST' }).catch(() => {})
     location.reload()
   }
@@ -151,12 +150,11 @@ export function SettingsScreen() {
                       : `Versione installata: ${version}`
             } />
 
-          {authRequired && (
-            <>
-              <FormLabel text="Account" />
-              <NavRow icon="logout" title="Esci" subtitle="Su questo dispositivo servirà di nuovo la password" onClick={logout} />
-            </>
-          )}
+          <FormLabel text="Account" />
+          <NavRow icon="lock" title="Cambia password" subtitle={`Sei entrato come ${loggedUser()}`} onClick={() => setAccountSheet('password')} />
+          <NavRow icon="logout" title="Esci" subtitle="Su questo dispositivo servirà di nuovo la password" onClick={logout} />
+          <NavRow icon="delete" title="Elimina account" subtitle="Cancella per sempre i tuoi movimenti, le spese fisse e gli scontrini"
+            onClick={() => setAccountSheet('delete')} />
 
           <div style={{ height: 16 }} />
           <span className="t-caption" style={{ color: 'var(--inkFaint)' }}>
@@ -165,6 +163,7 @@ export function SettingsScreen() {
           <div style={{ height: 24 }} />
         </div>
       </div>
+      {accountSheet && <AccountSheet kind={accountSheet} onDismiss={() => setAccountSheet(null)} />}
       {pendingImport && (
         <AlertDialog title="Importare il backup?" text="Tutti i movimenti, le categorie e le spese fisse attuali verranno sostituiti."
           confirm="Importa" confirmColor="var(--expenseText)" onDismiss={() => setPendingImport(null)}
@@ -174,6 +173,64 @@ export function SettingsScreen() {
           }} />
       )}
     </div>
+  )
+}
+
+/** Change password, or delete the account with all its data (asks the password again). */
+function AccountSheet({ kind, onDismiss }: { kind: 'password' | 'delete'; onDismiss: () => void }) {
+  const [current, setCurrent] = useState('')
+  const [password, setPassword] = useState('')
+  const [repeat, setRepeat] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const remove = kind === 'delete'
+  const ready = !busy && !!current && (remove || (!!password && !!repeat))
+
+  const submit = async () => {
+    if (!remove && password !== repeat) return setError('Le due password non coincidono.')
+    setBusy(true)
+    setError(null)
+    try {
+      if (remove) {
+        const user = loggedUser()
+        await disablePush()
+        await api('/api/account/delete', { method: 'POST', json: { password: current } })
+        forgetUser(user)
+        location.reload()
+        return
+      }
+      await api('/api/account/password', { method: 'POST', json: { current, password } })
+      toast('Password cambiata', true)
+      onDismiss()
+    } catch (e) {
+      setError((e as Error).message)
+    }
+    setBusy(false)
+  }
+
+  return (
+    <Sheet onDismiss={onDismiss}>
+      <form className="col" style={{ padding: '0 20px 32px', gap: 10 }} onSubmit={(e) => { e.preventDefault(); if (ready) submit() }}>
+        <span className="t-title" style={{ color: 'var(--ink)' }}>{remove ? 'Eliminare l’account?' : 'Cambia password'}</span>
+        {remove && (
+          <span className="t-body" style={{ color: 'var(--inkSoft)' }}>
+            Movimenti, spese fisse, categorie e scontrini di {loggedUser()} verranno cancellati per sempre. Se vuoi tenerli, esporta prima un backup.
+          </span>
+        )}
+        <TextField value={current} onChange={setCurrent} placeholder={remove ? 'Password' : 'Password attuale'} secret autoComplete="current-password" />
+        {!remove && (
+          <>
+            <TextField value={password} onChange={setPassword} placeholder="Nuova password" secret autoComplete="new-password" />
+            <TextField value={repeat} onChange={setRepeat} placeholder="Ripeti la nuova password" secret autoComplete="new-password" />
+          </>
+        )}
+        {error && <span className="t-label" style={{ color: 'var(--expenseText)' }}>{error}</span>}
+        <div style={{ height: 10 }} />
+        <PrimaryButton text={remove ? 'Elimina per sempre' : 'Salva'} icon={remove ? 'delete' : 'check'} enabled={ready} onClick={submit}
+          color={remove ? 'var(--expense)' : undefined} />
+        <button type="submit" style={{ display: 'none' }} />
+      </form>
+    </Sheet>
   )
 }
 

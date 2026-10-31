@@ -3,15 +3,17 @@ import { monthKey, today, ymd } from '../../shared/date.ts'
 import { Dates, Money } from '../../shared/format.ts'
 import type { Recurring } from '../../shared/model.ts'
 import { aiConfig, aiStatus, monthCommentary, report } from './ai.ts'
-import { db, getMeta, processRecurring, setMeta } from './db.ts'
+import { getServerMeta, setServerMeta, userIds } from './accounts.ts'
+import { db, getMeta, processRecurring, setMeta, withUser } from './db.ts'
 
 // Web Push replaces Android notifications: renewal reminders and the end of month summary.
 
-let keys = { publicKey: getMeta('vapid_public') ?? '', privateKey: getMeta('vapid_private') ?? '' }
+// One pair of keys for the whole server; each account keeps the subscriptions of its own devices.
+let keys = { publicKey: getServerMeta('vapid_public') ?? '', privateKey: getServerMeta('vapid_private') ?? '' }
 if (!keys.publicKey || !keys.privateKey) {
   keys = webpush.generateVAPIDKeys()
-  setMeta('vapid_public', keys.publicKey)
-  setMeta('vapid_private', keys.privateKey)
+  setServerMeta('vapid_public', keys.publicKey)
+  setServerMeta('vapid_private', keys.privateKey)
 }
 webpush.setVapidDetails('https://github.com/carellice/money', keys.publicKey, keys.privateKey)
 
@@ -19,7 +21,11 @@ export const vapidPublicKey = keys.publicKey
 
 type Subscription = { endpoint: string; keys: { p256dh: string; auth: string } }
 
-export function subscribe(subscription: Subscription, reminders: boolean) {
+/** Subscribes a device of the current account. A phone moved to another account stops getting the old one's reminders. */
+export function subscribe(subscription: Subscription, reminders: boolean, userId: number) {
+  for (const other of userIds()) {
+    if (other !== userId) withUser(other, () => unsubscribe(subscription.endpoint))
+  }
   db.prepare('INSERT INTO push_subs (endpoint, json, reminders) VALUES (?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET json = excluded.json, reminders = excluded.reminders')
     .run(subscription.endpoint, JSON.stringify(subscription), reminders ? 1 : 0)
 }
@@ -77,7 +83,7 @@ async function monthlyNotice() {
   })
 }
 
-/** Registers due fixed expenses and sends renewal reminders, like the Android RecurringWorker. */
+/** Registers due fixed expenses and sends renewal reminders of the current account, like the Android RecurringWorker. */
 export async function runRecurring() {
   try {
     const reminders = processRecurring()
@@ -86,4 +92,9 @@ export async function runRecurring() {
   } catch (e) {
     console.error('Elaborazione spese fisse non riuscita:', e)
   }
+}
+
+/** The same for every account, every hour. */
+export async function runRecurringForAll() {
+  for (const id of userIds()) await withUser(id, runRecurring)
 }

@@ -22,12 +22,28 @@ export type Settings = {
   onboarded: boolean
 }
 
-const SETTINGS_KEY = 'money.settings'
+// Every account keeps its own settings and data cache, so a shared tablet can switch between them.
+const LAST_USER_KEY = 'money.user'
+const settingsKey = (user: string) => `money.settings.${user.toLowerCase()}`
+const cacheKey = (user: string) => `money.cache.${user.toLowerCase()}`
 
-function loadSettings(): Settings {
+function read(key: string): string | null {
+  try { return localStorage.getItem(key) } catch { return null }
+}
+
+function write(key: string, value: string | null) {
+  try {
+    if (value == null) localStorage.removeItem(key)
+    else localStorage.setItem(key, value)
+  } catch { /* too big or private mode */ }
+}
+
+let currentUser = read(LAST_USER_KEY) ?? ''
+
+function loadSettings(user: string): Settings {
   const defaults: Settings = { theme: 'SYSTEM', lockCredential: null, remindersEnabled: false, accent: Palette.LILAC, onboarded: false }
   try {
-    return { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') }
+    return { ...defaults, ...JSON.parse(read(settingsKey(user)) ?? '{}') }
   } catch {
     return defaults
   }
@@ -44,23 +60,20 @@ type Store = {
   loadError: string | null
 }
 
-const CACHE_KEY = 'money.cache'
-
-function cachedData(): { data: AppState; revision: number } | null {
+function cachedData(user: string): { data: AppState; revision: number } | null {
   try {
-    const raw = localStorage.getItem(CACHE_KEY)
+    const raw = read(cacheKey(user))
     return raw ? JSON.parse(raw) : null
   } catch {
     return null
   }
 }
 
-const cached = cachedData()
 let store: Store = {
-  data: cached?.data ?? null,
+  data: currentUser ? cachedData(currentUser)?.data ?? null : null,
   revision: -1,
   month: currentMonth(),
-  settings: loadSettings(),
+  settings: loadSettings(currentUser),
   loadError: null,
 }
 const listeners = new Set<() => void>()
@@ -88,9 +101,29 @@ export function setMonth(month: Month) {
 
 export function updateSettings(patch: Partial<Settings>) {
   const settings = { ...store.settings, ...patch }
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)) } catch { /* private mode */ }
+  write(settingsKey(currentUser), JSON.stringify(settings))
   set({ settings })
 }
+
+/** Switches to the settings and data of [user], after logging in or when the app opens. */
+export function setUser(user: string) {
+  if (user.toLowerCase() === currentUser.toLowerCase() && store.data) {
+    currentUser = user
+    write(LAST_USER_KEY, user)
+    return
+  }
+  currentUser = user
+  write(LAST_USER_KEY, user)
+  set({ data: cachedData(user)?.data ?? null, revision: -1, month: currentMonth(), settings: loadSettings(user), loadError: null })
+}
+
+/** Forgets the data of the account that just left this device (deleted account). */
+export function forgetUser(user: string) {
+  write(settingsKey(user), null)
+  write(cacheKey(user), null)
+}
+
+export const loggedUser = () => currentUser
 
 // --- data ------------------------------------------------------------------------------------
 
@@ -108,7 +141,7 @@ export function refresh(force = false): Promise<void> {
       if ('unchanged' in result) return
       const { revision, ...data } = result
       set({ data: data as AppState, revision, loadError: null })
-      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data, revision })) } catch { /* too big or private mode */ }
+      write(cacheKey(currentUser), JSON.stringify({ data, revision }))
     } catch (e) {
       set({ loadError: (e as Error).message })
     } finally {
