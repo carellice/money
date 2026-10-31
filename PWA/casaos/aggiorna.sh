@@ -18,6 +18,15 @@ IMAGE="money-pwa:latest"
 NEW_IMAGE="money-pwa:nuova"
 OLD_IMAGE="money-pwa:precedente"
 KEEP_BACKUPS=5
+DB_NAME="money.db"
+
+# Gira dentro il container: copia accounts.db e il database di ogni account nella cartella indicata.
+BACKUP_JS="const s=require('node:sqlite'),fs=require('node:fs'),p=require('node:path');
+const out=process.argv[1];fs.mkdirSync(out,{recursive:true});
+const dbs=[['accounts.db','/data/accounts.db'],['$DB_NAME','/data/$DB_NAME']];
+for(const id of fs.existsSync('/data/users')?fs.readdirSync('/data/users'):[])dbs.push(['user-'+id+'.db','/data/users/'+id+'/$DB_NAME']);
+(async()=>{for(const[n,f]of dbs){if(!fs.existsSync(f))continue;const d=new s.DatabaseSync(f);await s.backup(d,p.join(out,n));d.close()}})()
+.catch((e)=>{console.error(e);process.exit(1)})"
 
 if [ -t 1 ]; then
   B=$'\e[1m'; R=$'\e[0m'; V=$'\e[35m'; G=$'\e[32m'; Y=$'\e[33m'; E=$'\e[31m'
@@ -116,14 +125,13 @@ main() {
   ok "Immagine pronta"
 
   if [ -n "$installed" ]; then
-    step "Salvo una copia del database"
-    local name="money-$installed-$(date +%Y%m%d-%H%M%S).db"
+    step "Salvo una copia dei database"
+    local name="$installed-$(date +%Y%m%d-%H%M%S)"
     mkdir -p "$DATA_DIR/backup"
-    if docker exec "$APP" node --disable-warning=ExperimentalWarning -e \
-      "const s=require('node:sqlite');const db=new s.DatabaseSync('/data/money.db');s.backup(db,process.argv[1]).then(()=>db.close())" \
-      "/data/backup/$name" >/dev/null 2>&1; then
+    # Copia coerente anche a server acceso: gli account e il database di ogni account.
+    if docker exec "$APP" node --disable-warning=ExperimentalWarning -e "$BACKUP_JS" "/data/backup/$name" >/dev/null 2>&1; then
       ok "Copia in $DATA_DIR/backup/$name"
-      ls -1t "$DATA_DIR"/backup/money-*.db 2>/dev/null | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f || true
+      ls -1dt "$DATA_DIR"/backup/*/ 2>/dev/null | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -rf || true
     else
       warn "Copia non riuscita, continuo comunque."
     fi
