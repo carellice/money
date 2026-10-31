@@ -1,0 +1,17 @@
+{
+  "name": "money-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Server di Money PWA: dati in SQLite, spese fisse automatiche, notifiche push e assistente AI.",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/main.ts",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/main.ts"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "web-push": "3.6.7"
+  }
+}

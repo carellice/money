@@ -1,0 +1,134 @@
+@font-face {
+  font-family: 'Bricolage';
+  src: url('/bricolage.ttf') format('truetype');
+  font-weight: 200 800;
+  font-stretch: 75% 100%;
+  font-display: block;
+}
+
+:root {
+  --bg: #F6F1EA;
+  --surface: #FFFFFF;
+  --surfaceHigh: #ECE4F4;
+  --ink: #15121F;
+  --inkSoft: #433D55;
+  --inkFaint: #746D86;
+  --line: rgba(0, 0, 0, 0.08);
+  --income: #8FE3C0;
+  --expense: #FF8A7A;
+  --accent: #B8A6FF;
+  --incomeText: #17714F;
+  --expenseText: #B8382A;
+  --accentText: #5538CC;
+  --Ink: #15121F;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Bricolage', system-ui, sans-serif;
+  font-variation-settings: 'opsz' 14;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+input, textarea, button { font: inherit; color: inherit; }
+input, textarea { user-select: text; -webkit-user-select: text; }
+button { background: none; border: 0; padding: 0; cursor: pointer; }
+svg { display: block; }
+
+/* The app keeps phone proportions on wide screens. */
+.app {
+  position: relative;
+  height: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  /* clip, not hidden: focus and scrollIntoView must never shift the whole app. */
+  overflow: clip;
+  background: var(--bg);
+}
+@media (min-width: 560px) {
+  body { background: color-mix(in srgb, var(--bg) 82%, #000); }
+  .app { box-shadow: 0 0 60px rgba(0, 0, 0, 0.18); }
+}
+
+.layer { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); overflow: clip; }
+.scroll { flex: 1; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+.hscroll { display: flex; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+.hscroll::-webkit-scrollbar { display: none; }
+.status-pad { padding-top: var(--safe-top); }
+.nav-pad { padding-bottom: var(--safe-bottom); }
+
+/* Typography: MoneyType, with the same 1.1 text scale as the app. */
+.t-hero { font-variation-settings: 'opsz' 72; font-weight: 800; font-size: 60px; line-height: 60px; letter-spacing: -0.04em; font-variant-numeric: tabular-nums lining-nums; }
+.t-display { font-variation-settings: 'opsz' 72; font-weight: 700; font-size: 41.8px; line-height: 44px; letter-spacing: -0.03em; font-variant-numeric: tabular-nums lining-nums; }
+.t-title { font-variation-settings: 'opsz' 72; font-weight: 700; font-size: 26.4px; line-height: 30.8px; letter-spacing: -0.02em; }
+.t-titleSmall { font-variation-settings: 'opsz' 72; font-weight: 600; font-size: 19.8px; line-height: 24.2px; letter-spacing: -0.01em; }
+.t-body { font-weight: 400; font-size: 16.5px; line-height: 23.1px; }
+.t-bodyStrong { font-weight: 600; font-size: 16.5px; line-height: 23.1px; }
+.t-label { font-weight: 600; font-size: 14.3px; line-height: 18.7px; }
+.t-caption { font-weight: 500; font-size: 13.2px; line-height: 17.6px; }
+.t-amount { font-variation-settings: 'opsz' 72; font-weight: 600; font-size: 17.6px; line-height: 22px; font-variant-numeric: tabular-nums lining-nums; }
+
+.ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.row { display: flex; flex-direction: row; align-items: center; }
+.col { display: flex; flex-direction: column; }
+.center { display: flex; align-items: center; justify-content: center; }
+.flex1 { flex: 1; min-width: 0; }
+.flow { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.field {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  caret-color: var(--accentText);
+  padding: 0;
+}
+.field::placeholder { color: var(--inkFaint); opacity: 1; }
+textarea.field { resize: none; }
+
+.blob-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.blob-box { position: relative; }
+.blob-box > .blob-content { position: relative; }
+
+/* Material 3 dialog and date picker. */
+.scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.32); z-index: 50; }
+.dialog {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(312px, calc(100% - 48px)); background: var(--surfaceHigh); color: var(--ink);
+  border-radius: 28px; padding: 24px; z-index: 51;
+}
+.dialog h2 { margin: 0 0 16px; font-variation-settings: 'opsz' 72; font-weight: 400; font-size: 26.4px; line-height: 35px; }
+.dialog p { margin: 0; color: var(--inkSoft); font-size: 15.4px; line-height: 22px; letter-spacing: 0.25px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.text-button { padding: 10px 12px; border-radius: 99px; font-weight: 600; font-size: 15.4px; color: var(--accentText); }
+.text-button:active { background: color-mix(in srgb, var(--accentText) 12%, transparent); }
+
+.toast {
+  position: absolute; left: 50%; bottom: calc(96px + var(--safe-bottom)); transform: translateX(-50%);
+  max-width: calc(100% - 48px); padding: 12px 18px; border-radius: 22px; z-index: 80;
+  background: #2b2833; color: #fff; font-size: 15px; line-height: 20px; text-align: center; pointer-events: none;
+}
+.snackbar {
+  position: absolute; left: 12px; right: 12px; bottom: calc(110px + var(--safe-bottom)); z-index: 70;
+  display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 6px 8px 6px 16px; border-radius: 4px;
+  background: color-mix(in srgb, var(--ink) 92%, var(--bg)); color: var(--bg);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2); font-size: 15.4px;
+}
+.snackbar button { color: var(--snackAction); font-weight: 600; padding: 10px 12px; }
+
+#overlays { position: absolute; inset: 0; pointer-events: none; z-index: 40; }
+#overlays > * { pointer-events: auto; }
