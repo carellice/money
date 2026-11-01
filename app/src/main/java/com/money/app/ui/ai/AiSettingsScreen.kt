@@ -211,7 +211,13 @@ fun AiSettingsScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun Field(value: String, onChange: (String) -> Unit, placeholder: String, secret: Boolean = false) {
+internal fun Field(
+    value: String,
+    onChange: (String) -> Unit,
+    placeholder: String,
+    secret: Boolean = false,
+    keyboard: KeyboardType = KeyboardType.Ascii,
+) {
     val c = Ui.colors
     BasicTextField(
         value = value,
@@ -220,7 +226,7 @@ private fun Field(value: String, onChange: (String) -> Unit, placeholder: String
         textStyle = Ui.type.body.copy(color = c.ink),
         cursorBrush = SolidColor(c.accentText),
         visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
-        keyboardOptions = KeyboardOptions(keyboardType = if (secret) KeyboardType.Password else KeyboardType.Ascii, autoCorrectEnabled = false),
+        keyboardOptions = KeyboardOptions(keyboardType = if (secret) KeyboardType.Password else keyboard, autoCorrectEnabled = false),
         modifier = Modifier.fillMaxWidth(),
         decorationBox = { inner ->
             Box(

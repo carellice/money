@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -82,6 +83,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     val settings: StateFlow<Settings> =
         container.settings.settings.stateIn(viewModelScope, SharingStarted.Eagerly, Settings())
 
+    val server = container.repository.server.store.config
+
     fun setTheme(mode: ThemeMode) = viewModelScope.launch { container.settings.setTheme(mode) }
     fun setLock(enabled: Boolean) = viewModelScope.launch { container.settings.setLock(enabled) }
     fun setReminders(enabled: Boolean) = viewModelScope.launch { container.settings.setReminders(enabled) }
@@ -115,7 +118,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 }
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onOpenCategories: () -> Unit, onOpenAi: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onOpenCategories: () -> Unit, onOpenAi: () -> Unit, onOpenServer: () -> Unit) {
     val vm = appViewModel { c, _ -> SettingsViewModel(c) }
     val settings by vm.settings.collectAsStateWithLifecycle()
     val members by vm.members.collectAsStateWithLifecycle()
@@ -208,6 +211,15 @@ fun SettingsScreen(onBack: () -> Unit, onOpenCategories: () -> Unit, onOpenAi: (
                 }
             }
 
+            FormLabel("Server CasaOS")
+            val server by vm.server.collectAsStateWithLifecycle()
+            NavRow(
+                Icons.Rounded.Dns,
+                "Usa il server CasaOS",
+                server?.let { "Attivo: ${it.username} su ${it.url.substringAfter("://")}" } ?: "Spento: i dati restano solo sul telefono",
+                onOpenServer,
+            )
+
             FormLabel("Backup")
             NavRow(Icons.Rounded.CloudUpload, "Esporta backup", "Salva tutti i dati in un file JSON") {
                 exportLauncher.launch("money-backup-${LocalDate.now()}.json")
@@ -254,7 +266,12 @@ fun SettingsScreen(onBack: () -> Unit, onOpenCategories: () -> Unit, onOpenAi: (
         AlertDialog(
             onDismissRequest = { pendingImport = null },
             title = { Text("Importare il backup?") },
-            text = { Text("Tutti i movimenti, le categorie e le spese fisse attuali verranno sostituiti.") },
+            text = {
+                Text(
+                    "Tutti i movimenti, le categorie e le spese fisse attuali verranno sostituiti" +
+                        if (vm.server.value != null) ", anche sul server CasaOS." else "."
+                )
+            },
             confirmButton = {
                 TextButton({
                     vm.import(context, uri, toast)

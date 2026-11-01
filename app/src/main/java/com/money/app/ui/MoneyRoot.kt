@@ -70,6 +70,7 @@ import com.money.app.ui.home.HomeScreen
 import com.money.app.ui.recurring.RecurringEditScreen
 import com.money.app.ui.recurring.RecurringScreen
 import com.money.app.ui.report.ReportScreen
+import com.money.app.ui.settings.ServerSettingsScreen
 import com.money.app.ui.settings.SettingsScreen
 import com.money.app.ui.transactions.TransactionsScreen
 import com.money.app.ui.components.LocalMembers
@@ -88,6 +89,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val CHAT = "chat"
     const val AI_SETTINGS = "ai_settings"
+    const val SERVER_SETTINGS = "server_settings"
     private const val ADD = "add"
     private const val RECURRING_EDIT = "recurring_edit"
 
@@ -201,6 +203,7 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
                         onBack = { nav.closeScreen(Routes.SETTINGS) },
                         onOpenCategories = { nav.navigate(Routes.CATEGORIES) },
                         onOpenAi = { nav.navigate(Routes.AI_SETTINGS) },
+                        onOpenServer = { nav.navigate(Routes.SERVER_SETTINGS) },
                     )
                 }
                 composable(Routes.CHAT) {
@@ -211,6 +214,9 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
                 }
                 composable(Routes.AI_SETTINGS) {
                     AiSettingsScreen(onBack = { nav.closeScreen(Routes.AI_SETTINGS) })
+                }
+                composable(Routes.SERVER_SETTINGS) {
+                    ServerSettingsScreen(onBack = { nav.closeScreen(Routes.SERVER_SETTINGS) })
                 }
             }
         }

@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.os.SystemClock
+import android.widget.Toast
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -19,8 +20,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.money.app.data.Settings
 import com.money.app.ui.MoneyRoot
 import com.money.app.ui.lock.Biometric
@@ -28,6 +31,7 @@ import com.money.app.ui.lock.LockScreen
 import com.money.app.ui.onboarding.OnboardingScreen
 import com.money.app.ui.theme.MoneyTheme
 import com.money.app.ui.theme.isDarkTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.time.YearMonth
@@ -55,6 +59,18 @@ class MainActivity : FragmentActivity() {
 
         lifecycleScope.launch {
             container.settings.settings.collect { lockEnabled = it.lockEnabled }
+        }
+        lifecycleScope.launch {
+            container.repository.errors.collect { Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show() }
+        }
+        // Server mode: changes made elsewhere (PWA, other phones) show up on opening and while the app stays open.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    container.repository.refresh()
+                    delay(REFRESH_MS)
+                }
+            }
         }
 
         setContent {
@@ -139,5 +155,6 @@ class MainActivity : FragmentActivity() {
         const val EXTRA_ROUTE = "route"
         const val EXTRA_MONTH = "month"
         private const val LOCK_AFTER_MS = 30_000L
+        private const val REFRESH_MS = 30_000L
     }
 }

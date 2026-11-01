@@ -25,7 +25,7 @@ val aiModels = listOf(
 )
 
 /** Encrypts small secrets with an AES key that never leaves the Android Keystore. */
-private object SecretBox {
+internal object SecretBox {
     private const val ALIAS = "money_ai_secret"
 
     private fun key(): SecretKey {

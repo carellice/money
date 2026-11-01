@@ -172,7 +172,7 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
     fun save() = viewModelScope.launch {
         val category = categoryId ?: return@launch
         if (amountCents <= 0 || !memberChosen) return@launch
-        repo.saveTransaction(
+        val savedId = repo.saveTransaction(
             TransactionEntity(
                 id = editId,
                 type = type,
@@ -188,6 +188,8 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
                 memberId = memberId?.takeIf { id -> members.value.any { it.id == id } },
             )
         )
+        // Not saved (server unreachable): the form stays open with everything filled in.
+        if (savedId < 0) return@launch
         original?.receiptPath?.takeIf { it != receiptPath }?.let(repo::deleteImage)
         createdReceipts.clear()
         saved = true

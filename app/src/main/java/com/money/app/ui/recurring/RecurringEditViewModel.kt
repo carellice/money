@@ -170,7 +170,7 @@ class RecurringEditViewModel(private val container: AppContainer, handle: SavedS
         val epoch = date.toEpochDay()
         val o = original
         val reschedule = o == null || o.nextDate != epoch || o.frequency != frequency
-        repo.saveRecurring(
+        val savedId = repo.saveRecurring(
             RecurringEntity(
                 id = editId,
                 kind = kind,
@@ -193,6 +193,8 @@ class RecurringEditViewModel(private val container: AppContainer, handle: SavedS
                 note = o?.note.orEmpty(),
             )
         )
+        // Not saved (server unreachable): the form stays open with everything filled in.
+        if (savedId < 0) return@launch
         o?.imagePath?.takeIf { it != imagePath }?.let(repo::deleteImage)
         createdImages.clear()
         saved = true

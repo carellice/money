@@ -2,16 +2,48 @@ package com.money.app.data
 
 import androidx.room.withTransaction
 import com.money.app.domain.Recurrence
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDate
 import java.time.YearMonth
 
-class MoneyRepository(private val db: MoneyDatabase, private val filesDir: File) {
+class MoneyRepository(
+    private val db: MoneyDatabase,
+    private val filesDir: File,
+    serverStore: ServerStore,
+    private val scope: CoroutineScope,
+) {
     private val categoryDao = db.categories()
     private val txDao = db.transactions()
     private val recurringDao = db.recurring()
     private val memberDao = db.members()
+
+    /** Server mode (data on the CasaOS server, as for the PWA); off keeps everything on the phone. */
+    val server = ServerSync(db, serverStore) { imagesDir }
+
+    private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    /** Changes the server refused or couldn't receive, shown as a message. */
+    val errors: SharedFlow<String> = _errors
+
+    /** Runs [remote] in server mode, [local] otherwise; a failed remote change returns [failed]. */
+    private suspend fun <T> either(failed: T, remote: suspend ServerSync.() -> T, local: suspend () -> T): T {
+        if (!server.enabled) return local()
+        return try {
+            server.remote()
+        } catch (e: Exception) {
+            _errors.tryEmit("Modifica non salvata: ${e.message ?: "errore del server"}")
+            failed
+        }
+    }
+
+    /** Reloads the local copy from the server; does nothing on the phone only. */
+    suspend fun refresh(force: Boolean = false) {
+        if (server.enabled) runCatching { server.pull(force) }
+    }
 
     val categories: Flow<List<CategoryEntity>> = categoryDao.observeAll()
     val recurring: Flow<List<RecurringEntity>> = recurringDao.observeAll()
@@ -32,10 +64,12 @@ class MoneyRepository(private val db: MoneyDatabase, private val filesDir: File)
     suspend fun transaction(id: Long) = txDao.get(id)
     suspend fun recurringItem(id: Long) = recurringDao.get(id)
 
-    suspend fun saveTransaction(tx: TransactionEntity): Long = txDao.upsert(tx)
+    /** Returns the id of the movement, or -1 when the server didn't save it. */
+    suspend fun saveTransaction(tx: TransactionEntity): Long =
+        either(-1L, { saveTransaction(tx) }) { txDao.upsert(tx).let { if (tx.id == 0L) it else tx.id } }
 
     suspend fun deleteTransaction(tx: TransactionEntity) {
-        txDao.delete(tx)
+        either(Unit, { deleteTransaction(tx.id) }) { txDao.delete(tx) }
     }
 
     /** Called when an undo window has passed and the movement is gone for good. */
@@ -43,18 +77,23 @@ class MoneyRepository(private val db: MoneyDatabase, private val filesDir: File)
         tx.receiptPath?.let { deleteImage(it) }
     }
 
-    suspend fun saveRecurring(item: RecurringEntity): Long {
+    /** Returns the id of the fixed expense, or -1 when the server didn't save it. */
+    suspend fun saveRecurring(item: RecurringEntity): Long = either(-1L, { saveRecurring(item) }) {
         val id = recurringDao.upsert(item)
-        return if (item.id == 0L) id else item.id
+        if (item.id == 0L) id else item.id
     }
 
     suspend fun deleteRecurring(item: RecurringEntity) {
-        recurringDao.delete(item)
+        either(Unit, { deleteRecurring(item.id) }) { recurringDao.delete(item) }
         item.imagePath?.let { deleteImage(it) }
     }
 
     /** Saves a top level category with its subcategories (missing ones are removed). */
-    suspend fun saveCategory(category: CategoryEntity, subs: List<CategoryEntity>) = db.withTransaction {
+    suspend fun saveCategory(category: CategoryEntity, subs: List<CategoryEntity>) {
+        either(Unit, { saveCategory(category, subs) }) { saveCategoryLocally(category, subs) }
+    }
+
+    private suspend fun saveCategoryLocally(category: CategoryEntity, subs: List<CategoryEntity>) = db.withTransaction {
         val id = if (category.id == 0L) categoryDao.insert(category) else category.also { categoryDao.upsert(it) }.id
         val existing = categoryDao.all().filter { it.parentId == id }
         val keep = subs.filter { it.id != 0L }.map { it.id }.toSet()
@@ -70,7 +109,11 @@ class MoneyRepository(private val db: MoneyDatabase, private val filesDir: File)
     }
 
     /** Returns false when the category is still used by movements or fixed expenses. */
-    suspend fun deleteCategory(category: CategoryEntity): Boolean = db.withTransaction {
+    suspend fun deleteCategory(category: CategoryEntity): Boolean =
+        // A change the server couldn't receive is reported as such, not as "category in use".
+        either(true, { deleteCategory(category.id) }) { deleteCategoryLocally(category) }
+
+    private suspend fun deleteCategoryLocally(category: CategoryEntity): Boolean = db.withTransaction {
         if (txDao.countForCategory(category.id) > 0 || recurringDao.countForCategory(category.id) > 0) {
             return@withTransaction false
         }
@@ -81,17 +124,24 @@ class MoneyRepository(private val db: MoneyDatabase, private val filesDir: File)
     }
 
     suspend fun saveMember(member: MemberEntity) {
-        memberDao.upsert(if (member.id == 0L) member.copy(sortOrder = memberDao.all().size) else member)
+        either(Unit, { saveMember(member) }) {
+            memberDao.upsert(if (member.id == 0L) member.copy(sortOrder = memberDao.all().size) else member)
+        }
     }
 
     /** Movements of the removed person stay, just without an owner. */
-    suspend fun deleteMember(member: MemberEntity) = db.withTransaction {
-        txDao.clearMember(member.id)
-        memberDao.delete(member)
+    suspend fun deleteMember(member: MemberEntity) {
+        either(Unit, { deleteMember(member.id) }) {
+            db.withTransaction {
+                txDao.clearMember(member.id)
+                memberDao.delete(member)
+            }
+        }
     }
 
+    /** The server seeds new accounts itself. */
     suspend fun seedIfEmpty() {
-        if (categoryDao.count() > 0) return
+        if (server.enabled || categoryDao.count() > 0) return
         db.withTransaction {
             for ((type, list) in listOf(TxType.EXPENSE to defaultExpenseCategories, TxType.INCOME to defaultIncomeCategories)) {
                 list.forEachIndexed { index, def ->
@@ -110,7 +160,23 @@ class MoneyRepository(private val db: MoneyDatabase, private val filesDir: File)
      * Registers due fixed expenses up to [today] and advances their next date.
      * Returns the items whose renewal reminder should be shown now.
      */
-    suspend fun processRecurring(today: LocalDate = LocalDate.now()): List<RecurringEntity> = db.withTransaction {
+    suspend fun processRecurring(today: LocalDate = LocalDate.now()): List<RecurringEntity> =
+        if (server.enabled) serverReminders() else processRecurringLocally(today)
+
+    /**
+     * In server mode the server registers fixed expenses and marks reminders as due
+     * (notifiedFor = next billing date): the phone only shows each of them once.
+     */
+    private suspend fun serverReminders(): List<RecurringEntity> {
+        runCatching { server.pull() }.onFailure { return emptyList() }
+        val due = recurringDao.active().filter { it.remindDaysBefore >= 0 && it.notifiedFor == it.nextDate }
+        val keys = due.map { "${it.id}:${it.nextDate}" }.toSet()
+        val shown = server.store.shownReminders
+        server.store.shownReminders = keys
+        return due.filter { "${it.id}:${it.nextDate}" !in shown }
+    }
+
+    private suspend fun processRecurringLocally(today: LocalDate): List<RecurringEntity> = db.withTransaction {
         val todayEpoch = today.toEpochDay()
         val reminders = mutableListOf<RecurringEntity>()
         for (original in recurringDao.active()) {
@@ -145,13 +211,21 @@ class MoneyRepository(private val db: MoneyDatabase, private val filesDir: File)
 
     // --- images -------------------------------------------------------------------------------
 
+    /** Data the phone had before server mode was turned on, to go back to it when turning it off. */
+    val localCopy: File get() = File(filesDir, "dati-prima-del-server.json")
+
     val imagesDir: File get() = File(filesDir, "images").apply { mkdirs() }
 
     fun newImageFile(prefix: String): File = File(imagesDir, "${prefix}_${System.currentTimeMillis()}.jpg")
 
     fun deleteImage(path: String) {
         val file = File(path)
-        if (file.parentFile == imagesDir) file.delete()
+        if (file.parentFile != imagesDir) return
+        file.delete()
+        val config = server.config
+        if (config != null && ServerSync.isServerImage(file.name)) {
+            scope.launch { runCatching { server.client.deleteImage(config, "/images/${file.name}") } }
+        }
     }
 
     // --- backup -------------------------------------------------------------------------------
@@ -165,7 +239,12 @@ class MoneyRepository(private val db: MoneyDatabase, private val filesDir: File)
 
     suspend fun snapshot() = Snapshot(categoryDao.all(), txDao.all(), recurringDao.all(), memberDao.all())
 
-    suspend fun replaceAll(snapshot: Snapshot) = db.withTransaction {
+    /** In server mode the backup replaces the account's data on the server. */
+    suspend fun replaceAll(snapshot: Snapshot) {
+        if (server.enabled) server.upload(snapshot) else replaceLocally(snapshot)
+    }
+
+    suspend fun replaceLocally(snapshot: Snapshot) = db.withTransaction {
         txDao.clear()
         recurringDao.clear()
         categoryDao.clear()

@@ -5,6 +5,7 @@ import com.money.app.ai.AiAssistant
 import com.money.app.ai.AiConfigStore
 import com.money.app.data.MoneyDatabase
 import com.money.app.data.MoneyRepository
+import com.money.app.data.ServerStore
 import com.money.app.data.SettingsStore
 import com.money.app.update.UpdateManager
 import com.money.app.widget.RenewalsWidget
@@ -21,11 +22,11 @@ import java.time.YearMonth
 import kotlinx.coroutines.launch
 
 class AppContainer(app: Application) {
+    val scope = CoroutineScope(SupervisorJob())
     val database = MoneyDatabase.build(app)
-    val repository = MoneyRepository(database, app.filesDir)
+    val repository = MoneyRepository(database, app.filesDir, ServerStore(app), scope)
     val settings = SettingsStore(app)
     val ai = AiAssistant(repository, AiConfigStore(app), app.filesDir)
-    val scope = CoroutineScope(SupervisorJob())
     val updates = UpdateManager(app, scope)
 
     /** Month shown by home, movements and report, kept in sync between screens. */

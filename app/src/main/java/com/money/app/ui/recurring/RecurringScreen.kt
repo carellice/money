@@ -96,7 +96,7 @@ class RecurringViewModel(container: AppContainer) : ViewModel() {
 
     /** Records one payment of [item] now, without touching its schedule. */
     fun registerNow(item: RecurringEntity, cents: Long, date: LocalDate, payment: PaymentMethod, onDone: () -> Unit) = viewModelScope.launch {
-        repo.saveTransaction(
+        val savedId = repo.saveTransaction(
             TransactionEntity(
                 type = TxType.EXPENSE,
                 amountCents = cents,
@@ -108,7 +108,7 @@ class RecurringViewModel(container: AppContainer) : ViewModel() {
                 recurringId = item.id,
             )
         )
-        onDone()
+        if (savedId >= 0) onDone()
     }
 }
 
