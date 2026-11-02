@@ -167,6 +167,8 @@ async function mutate<T>(work: () => Promise<T>): Promise<T> {
 
 export const actions = {
   saveTransaction: (tx: Transaction) => mutate(() => api<Transaction>('/api/transactions', { method: 'POST', json: tx })),
+  /** People settled up: these expenses don't count again. */
+  settleTransactions: (ids: number[]) => mutate(() => api('/api/transactions/settle', { method: 'POST', json: { ids } })),
   deleteTransaction: (tx: Transaction) => {
     // Optimistic: the row leaves the list at once, like on the phone.
     if (store.data) set({ data: { ...store.data, transactions: store.data.transactions.filter((t) => t.id !== tx.id) } })

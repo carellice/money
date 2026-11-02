@@ -28,7 +28,7 @@ CREATE INDEX IF NOT EXISTS index_categories_parentId ON categories (parentId);
 CREATE TABLE IF NOT EXISTS transactions (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, type TEXT NOT NULL, amountCents INTEGER NOT NULL, date INTEGER NOT NULL,
   categoryId INTEGER NOT NULL, subcategoryId INTEGER, payment TEXT NOT NULL, note TEXT NOT NULL, receiptPath TEXT,
-  recurringId INTEGER, createdAt INTEGER NOT NULL, memberId INTEGER, paymentId INTEGER);
+  recurringId INTEGER, createdAt INTEGER NOT NULL, memberId INTEGER, paymentId INTEGER, settle INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS index_transactions_date ON transactions (date);
 CREATE INDEX IF NOT EXISTS index_transactions_categoryId ON transactions (categoryId);
 CREATE INDEX IF NOT EXISTS index_transactions_recurringId ON transactions (recurringId);
@@ -79,6 +79,7 @@ function migrate(db: DatabaseSync) {
   for (const table of ['transactions', 'recurring']) {
     const columns = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name)
     if (!columns.includes('paymentId')) db.exec(`ALTER TABLE ${table} ADD COLUMN paymentId INTEGER`)
+    if (table === 'transactions' && !columns.includes('settle')) db.exec('ALTER TABLE transactions ADD COLUMN settle INTEGER NOT NULL DEFAULT 0')
   }
 }
 
@@ -155,7 +156,7 @@ const toTransaction = (r: Row): Transaction => ({
   id: num(r.id), type: r.type as TxType, amountCents: num(r.amountCents), date: num(r.date),
   categoryId: num(r.categoryId), subcategoryId: optNum(r.subcategoryId), payment: r.payment as Transaction['payment'],
   note: String(r.note), receiptPath: (r.receiptPath as string | null) ?? null, recurringId: optNum(r.recurringId),
-  createdAt: num(r.createdAt), memberId: optNum(r.memberId), paymentId: optNum(r.paymentId),
+  createdAt: num(r.createdAt), memberId: optNum(r.memberId), paymentId: optNum(r.paymentId), settle: num(r.settle ?? 0),
 })
 
 const toRecurring = (r: Row): Recurring => ({
@@ -216,7 +217,7 @@ export function state(): AppState {
 
 // --- writes ----------------------------------------------------------------------------------
 
-const txColumns = ['type', 'amountCents', 'date', 'categoryId', 'subcategoryId', 'payment', 'note', 'receiptPath', 'recurringId', 'createdAt', 'memberId', 'paymentId'] as const
+const txColumns = ['type', 'amountCents', 'date', 'categoryId', 'subcategoryId', 'payment', 'note', 'receiptPath', 'recurringId', 'createdAt', 'memberId', 'paymentId', 'settle'] as const
 const recurringColumns = ['kind', 'name', 'amountCents', 'categoryId', 'subcategoryId', 'payment', 'frequency', 'startDate', 'nextDate', 'brandKey', 'imagePath', 'icon', 'color', 'autoRegister', 'remindDaysBefore', 'notifiedFor', 'active', 'note', 'paymentId'] as const
 const categoryColumns = ['name', 'icon', 'color', 'type', 'parentId', 'budgetCents', 'sortOrder'] as const
 const memberColumns = ['name', 'color', 'sortOrder'] as const
@@ -243,7 +244,17 @@ function upsert(table: string, columns: readonly string[], entity: Record<string
 }
 
 export function saveTransaction(tx: Transaction): Transaction {
-  return transaction(() => transactionById(upsert('transactions', txColumns, tx))!)
+  // Apps from before settling up don't send it: the movement keeps what it had.
+  const settle = tx.settle ?? (tx.id ? transactionById(tx.id)?.settle : undefined) ?? 0
+  return transaction(() => transactionById(upsert('transactions', txColumns, { ...tx, settle }))!)
+}
+
+/** People settled up: the expenses [ids] don't count again. */
+export function settleTransactions(ids: number[]) {
+  transaction(() => {
+    const update = db.prepare('UPDATE transactions SET settle = 2 WHERE settle = 0 AND id = ?')
+    for (const id of ids) update.run(id)
+  })
 }
 
 export function deleteTransaction(id: number) {
@@ -359,7 +370,7 @@ export function processRecurring(today = todayEpoch()): Recurring[] {
           upsert('transactions', txColumns, {
             id: 0, type: 'EXPENSE', amountCents: original.amountCents, date: next, categoryId: original.categoryId,
             subcategoryId: original.subcategoryId, payment: original.payment, note: original.name, receiptPath: null,
-            recurringId: original.id, createdAt: Date.now(), memberId: null, paymentId: original.paymentId,
+            recurringId: original.id, createdAt: Date.now(), memberId: null, paymentId: original.paymentId, settle: 0,
           })
         }
         next = nextAfter(original.startDate, original.frequency, next)

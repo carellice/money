@@ -24,7 +24,7 @@ export function exportBackup(): string {
     transactions: transactions.map((t) => ({
       id: t.id, type: t.type, amountCents: t.amountCents, date: t.date, categoryId: t.categoryId,
       subcategoryId: t.subcategoryId, payment: t.payment, note: t.note, recurringId: t.recurringId,
-      createdAt: t.createdAt, memberId: t.memberId, paymentId: t.paymentId,
+      createdAt: t.createdAt, memberId: t.memberId, paymentId: t.paymentId, settle: t.settle,
     })),
     recurring: recurring.map((r) => ({
       id: r.id, kind: r.kind, name: r.name, amountCents: r.amountCents, categoryId: r.categoryId,
@@ -71,6 +71,7 @@ export function importBackup(text: string): number {
       recurringId: optNum(o, 'recurringId'), createdAt: Number(o.createdAt ?? 0),
       memberId: memberId != null && known.has(memberId) ? memberId : null,
       paymentId: paymentId(o),
+      settle: Number(o.settle ?? 0) || 0,
     }
   })
   const recurring: Recurring[] = list('recurring').map((o) => ({

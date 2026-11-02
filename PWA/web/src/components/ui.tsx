@@ -432,11 +432,19 @@ export function SwitchRow({ title, subtitle, checked, onChange, style }: {
 }
 
 /** Euro amount input with decimal keyboard. */
-export function AmountField({ value, onChange, placeholder = '0,00' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+/** Euro amount input; with [operations] it also takes + − × ÷ (see amountMath). */
+export function AmountField({ value, onChange, placeholder = '0,00', operations = false }: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  operations?: boolean
+}) {
   return (
     <label className="row" style={{ borderRadius: 24, background: 'var(--surface)', padding: '14px 20px', cursor: 'text' }}>
       <input className="field t-display flex1" inputMode="decimal" value={value} placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value.replace(/[^0-9.,]/g, '').slice(0, 10))} />
+        onChange={(e) => onChange(operations
+          ? e.target.value.replace(/[^0-9.,+\-−*×x/÷:]/g, '').slice(0, 24)
+          : e.target.value.replace(/[^0-9.,]/g, '').slice(0, 10))} />
       <span className="t-title" style={{ color: 'var(--inkSoft)' }}>€</span>
     </label>
   )

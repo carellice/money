@@ -335,17 +335,22 @@ function LiquidCapsule({ index, rowRef, slots }: {
     if (!placed.current) place()
     else {
       const toLeft = t.center - t.half
+      const toRight = t.center + t.half
       const front = spring(0.8, 900)
       const back = spring(0.7, 240)
       const goingRight = toLeft > left.get()
       controls.push(animate(organic, 0, tween(120)))
-      const edges = [animate(left, toLeft, goingRight ? back : front), animate(right, t.center + t.half, goingRight ? front : back)]
-      controls.push(...edges)
-      let stopped = false
-      controls.push({ stop: () => { stopped = true } })
-      Promise.all(edges).then(() => {
-        if (!stopped) controls.push(animate(organic, 1, tween(700)))
-      })
+      controls.push(animate(left, toLeft, goingRight ? back : front), animate(right, toRight, goingRight ? front : back))
+      // As soon as both ends are about there, the blob takes over: the last wobble happens under it.
+      let morphed = false
+      const check = () => {
+        if (morphed || Math.abs(left.get() - toLeft) >= 4 || Math.abs(right.get() - toRight) >= 4) return
+        morphed = true
+        controls.push(animate(organic, 1, tween(120)))
+      }
+      const offLeft = left.on('change', check)
+      const offRight = right.on('change', check)
+      controls.push({ stop: () => { offLeft(); offRight() } })
     }
     // A new width (rotation, resize) puts it straight in place.
     let width = row.clientWidth
@@ -412,8 +417,9 @@ function AddButton() {
   return (
     <div ref={ref} style={{ pointerEvents: 'auto', transform: `scale(${1 + 0.035 * Math.sin(blobTime() * 2.2)})` }}>
       <Bouncy pressedScale={0.85} onClick={() => navigate('add')} aria-label="Aggiungi" className="center blob-box" style={{ width: 70, height: 70 }}>
-        <BlobLayer color="var(--accent)" seed={3} amplitude={0.09} speed={1.4} />
-        <div className="blob-content center"><Icon name="add" size={32} color={Ink} /></div>
+        {/* Only the outline, so it doesn't look like the selected tab. */}
+        <BlobLayer color="var(--accent)" seed={3} amplitude={0.09} speed={1.4} stroke={3} />
+        <div className="blob-content center"><Icon name="add" size={32} color="var(--accentText)" /></div>
       </Bouncy>
     </div>
   )

@@ -71,7 +71,9 @@ import com.money.app.domain.Money
 import com.money.app.domain.MonthReport
 import com.money.app.domain.Pagella
 import com.money.app.domain.ReportBuilder
+import com.money.app.domain.SettleUpBuilder
 import com.money.app.domain.Slice
+import com.money.app.data.MemberEntity
 import com.money.app.domain.percent
 import com.money.app.ui.appViewModel
 import com.money.app.ui.components.AnimatedAmount
@@ -120,6 +122,11 @@ class ReportViewModel(private val container: AppContainer) : ViewModel() {
         container.month.value = m
     }
 
+    val members: StateFlow<List<MemberEntity>> = container.repository.members
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun markSettled(ids: List<Long>) = viewModelScope.launch { container.repository.markSettled(ids) }
+
     private val ai = container.ai
     val aiReady: StateFlow<Boolean> = ai.store.config.map { it != null }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ai.store.config.value != null)
@@ -154,6 +161,7 @@ fun ReportScreen(onOpenTransaction: (Long) -> Unit, onOpenChat: () -> Unit, onOp
     val scope = rememberCoroutineScope()
     val exporter = remember { ReportExport(context) }
     val aiReady by vm.aiReady.collectAsStateWithLifecycle()
+    val members by vm.members.collectAsStateWithLifecycle()
     val c = Ui.colors
 
     val savePdf = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
@@ -211,6 +219,9 @@ fun ReportScreen(onOpenTransaction: (Long) -> Unit, onOpenChat: () -> Unit, onOp
             )
         }
         item { StatGrid(r, Modifier.staggered(1)) }
+        SettleUpBuilder.build(r.transactions, members)?.let { settle ->
+            item(key = "settle_${r.month}") { SettleUpCard(settle, r.month, vm::markSettled, Modifier.staggered(2)) }
+        }
         if (r.insights.isNotEmpty()) {
             item {
                 Column(Modifier.staggered(2)) {

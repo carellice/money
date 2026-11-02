@@ -74,14 +74,14 @@ object Backup {
         .put("categoryId", categoryId).put("subcategoryId", subcategoryId ?: JSONObject.NULL)
         .put("payment", payment.name).put("note", note).put("recurringId", recurringId ?: JSONObject.NULL)
         .put("createdAt", createdAt).put("memberId", memberId ?: JSONObject.NULL)
-        .put("paymentId", paymentId ?: JSONObject.NULL)
+        .put("paymentId", paymentId ?: JSONObject.NULL).put("settle", settle)
 
     private fun JSONObject.toTransaction() = TransactionEntity(
         id = getLong("id"), type = TxType.valueOf(getString("type")), amountCents = getLong("amountCents"),
         date = getLong("date"), categoryId = getLong("categoryId"), subcategoryId = optLongOrNull("subcategoryId"),
         payment = PaymentMethod.valueOf(getString("payment")), note = optString("note"),
         recurringId = optLongOrNull("recurringId"), createdAt = optLong("createdAt"),
-        memberId = optLongOrNull("memberId"), paymentId = optLongOrNull("paymentId"),
+        memberId = optLongOrNull("memberId"), paymentId = optLongOrNull("paymentId"), settle = optInt("settle"),
     )
 
     private fun MemberEntity.toJson() = JSONObject()

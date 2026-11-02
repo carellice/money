@@ -14,6 +14,8 @@ import com.money.app.data.CategoryEntity
 import com.money.app.data.MemberEntity
 import com.money.app.data.PaymentChoice
 import com.money.app.data.PaymentMethod
+import com.money.app.data.Settle
+import com.money.app.domain.AmountOp
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
 import com.money.app.domain.Money
@@ -37,12 +39,11 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
         runCatching { TxType.valueOf(handle.get<String>("type") ?: "") }.getOrDefault(TxType.EXPENSE)
     )
         private set
-    /** Digits typed on the keypad, POS style: the last two are always the cents ("1250" is 12,50 €). */
-    private var digits by mutableStateOf("")
+    /** The keypad's amount, POS style (the last two digits are the cents), with operations. */
+    val calc = AmountCalc()
 
     /** The amount as shown above the keypad ("12,50"), empty before the first digit. */
-    val amountText: String
-        get() = digits.toLongOrNull()?.let { "%d,%02d".format(it / 100, it % 100) }.orEmpty()
+    val amountText: String get() = calc.text
     var categoryId by mutableStateOf<Long?>(null)
         private set
     var subcategoryId by mutableStateOf<Long?>(null)
@@ -52,6 +53,8 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
     var receiptPath by mutableStateOf<String?>(null)
         private set
     var memberId by mutableStateOf<Long?>(null)
+    /** The payer keeps this expense for themselves: it doesn't count when settling up. */
+    var excludeFromSettle by mutableStateOf(false)
     var step by mutableIntStateOf(if (editId != 0L) 2 else 0)
     var saved by mutableStateOf(false)
         private set
@@ -68,7 +71,7 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
     val members: StateFlow<List<MemberEntity>> =
         repo.members.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val amountCents: Long get() = digits.toLongOrNull() ?: 0L
+    val amountCents: Long get() = calc.cents
 
     /** With people set up, every movement must say whose it is. */
     val memberChosen: Boolean get() = members.value.isEmpty() || members.value.any { it.id == memberId }
@@ -79,7 +82,7 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
             repo.transaction(editId)?.let { tx ->
                 original = tx
                 type = tx.type
-                digits = tx.amountCents.toString()
+                calc.set(tx.amountCents)
                 categoryId = tx.categoryId
                 subcategoryId = tx.subcategoryId
                 date = LocalDate.ofEpochDay(tx.date)
@@ -87,23 +90,24 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
                 note = tx.note
                 receiptPath = tx.receiptPath
                 memberId = tx.memberId
+                excludeFromSettle = tx.settle == Settle.EXCLUDED
             }
             loaded = true
         }
     }
 
-    /** A digit (or "00") enters from the right, as on a card terminal. */
-    fun press(key: String) {
-        val next = (digits + key).trimStart('0')
-        if (next.length <= MAX_DIGITS) digits = next
-    }
+    fun press(key: String) = calc.press(key)
 
-    fun backspace() {
-        digits = digits.dropLast(1)
-    }
+    fun operation(op: AmountOp) = calc.operation(op)
 
-    fun clearAmount() {
-        digits = ""
+    fun backspace() = calc.backspace()
+
+    fun clearAmount() = calc.clear()
+
+    /** Moving on keeps only the result of the operations. */
+    fun confirmAmount() {
+        calc.set(calc.cents)
+        step = 1
     }
 
     fun switchType(newType: TxType) {
@@ -186,6 +190,12 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
                 recurringId = original?.recurringId,
                 createdAt = original?.createdAt ?: System.currentTimeMillis(),
                 memberId = memberId?.takeIf { id -> members.value.any { it.id == id } },
+                settle = when {
+                    type != TxType.EXPENSE -> Settle.OPEN
+                    excludeFromSettle -> Settle.EXCLUDED
+                    original?.settle == Settle.SETTLED -> Settle.SETTLED
+                    else -> Settle.OPEN
+                },
             )
         )
         // Not saved (server unreachable): the form stays open with everything filled in.
@@ -207,10 +217,5 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
 
     override fun onCleared() {
         if (!saved) createdReceipts.forEach(repo::deleteImage)
-    }
-
-    private companion object {
-        /** Up to 9.999.999,99 €. */
-        const val MAX_DIGITS = 9
     }
 }

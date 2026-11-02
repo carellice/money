@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { monthEnd, monthKey, monthStart } from '../../../shared/date.ts'
 import { Dates, Money, percent } from '../../../shared/format.ts'
 import { argb, paletteAll, Palette, paymentLabel } from '../../../shared/model.ts'
+import { buildSettleUp } from '../../../shared/settle.ts'
+import { SettleUpCard } from './SettleUpCard.tsx'
 import { buildReport, type MonthReport, type Pagella, type Slice } from '../../../shared/report.ts'
 import { api } from '../lib/api.ts'
 import { navigate } from '../lib/nav.ts'
@@ -60,6 +62,7 @@ export function ReportScreen() {
   }
 
   const r = report
+  const settle = useMemo(() => (r ? buildSettleUp(r.transactions, data?.members ?? []) : null), [r, data?.members])
   return (
     <div className="scroll">
       <div className="col" style={{ padding: '0 20px 156px', gap: 14 }}>
@@ -90,6 +93,7 @@ export function ReportScreen() {
               <AiCommentaryCard ready={aiReady} commentary={commentary} busy={aiBusy} error={aiError} onGenerate={generate} />
             </Staggered>
             <Staggered index={1}><StatGrid r={r} /></Staggered>
+            {settle && <Staggered key={`s${month}`} index={2}><SettleUpCard settle={settle} month={month} /></Staggered>}
             {r.insights.length > 0 && (
               <Staggered index={2}>
                 <SectionTitle text="Cosa è successo" />

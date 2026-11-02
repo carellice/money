@@ -76,6 +76,10 @@ interface TransactionDao {
     @Query("UPDATE transactions SET paymentId = NULL WHERE paymentId = :paymentId")
     suspend fun clearPayment(paymentId: Long)
 
+    /** Settled up: these expenses don't count again. */
+    @Query("UPDATE transactions SET settle = 2 WHERE settle = 0 AND id IN (:ids)")
+    suspend fun markSettled(ids: List<Long>)
+
     @Query("DELETE FROM transactions")
     suspend fun clear()
 }

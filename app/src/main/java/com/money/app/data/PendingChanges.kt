@@ -12,6 +12,8 @@ import java.io.File
 sealed interface Change {
     data class SaveTransaction(val tx: TransactionEntity, val created: Boolean = false) : Change
     data class DeleteTransaction(val id: Long) : Change
+    /** People settled up: these expenses don't count again. */
+    data class SettleTransactions(val ids: List<Long>) : Change
     data class SaveRecurring(val item: RecurringEntity, val created: Boolean = false) : Change
     data class DeleteRecurring(val id: Long) : Change
     /** [created]: ids of the category and subcategories that the server doesn't have yet. */

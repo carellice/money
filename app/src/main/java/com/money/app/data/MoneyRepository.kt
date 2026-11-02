@@ -95,6 +95,15 @@ class MoneyRepository(
         }) { txDao.delete(tx) }
     }
 
+    /** People settled up: the expenses [ids] don't count again. */
+    suspend fun markSettled(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        either(Unit, { submit(Change.SettleTransactions(ids)) }, offline = {
+            txDao.markSettled(ids)
+            server.enqueue(Change.SettleTransactions(ids))
+        }) { txDao.markSettled(ids) }
+    }
+
     /** Called when an undo window has passed and the movement is gone for good. */
     fun discardReceipt(tx: TransactionEntity) {
         tx.receiptPath?.let { deleteImage(it) }

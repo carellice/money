@@ -91,6 +91,8 @@ import coil.compose.AsyncImage
 import com.money.app.data.CategoryEntity
 import com.money.app.ui.settings.PaymentPills
 import com.money.app.data.TxType
+import com.money.app.domain.AmountOp
+import com.money.app.ui.components.SwitchRow
 import com.money.app.domain.Dates
 import com.money.app.domain.Money
 import com.money.app.ui.ImageStore
@@ -231,12 +233,18 @@ private fun AmountStep(vm: AddViewModel, accent: Color) {
                 .blob(accent.copy(alpha = 0.22f), seed = 5, amplitude = 0.1f),
             contentAlignment = Alignment.Center,
         ) {
-            AmountDisplay(vm.amountText)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                AmountDisplay(vm.amountText)
+                // The operation being typed, under the result that already follows it.
+                AnimatedVisibility(vm.calc.expression != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    Text(vm.calc.expression.orEmpty(), style = Ui.type.bodyStrong, color = c.inkSoft, maxLines = 1)
+                }
+            }
         }
         Spacer(Modifier.weight(1f))
-        Keypad(onKey = vm::press, onBackspace = vm::backspace, onClear = vm::clearAmount)
+        Keypad(onKey = vm::press, onOperation = vm::operation, pending = vm.calc.pending, onBackspace = vm::backspace, onClear = vm::clearAmount)
         Spacer(Modifier.height(16.dp))
-        PrimaryButton("Avanti", { vm.step = 1 }, enabled = vm.amountCents > 0, color = accent)
+        PrimaryButton("Avanti", vm::confirmAmount, enabled = vm.amountCents > 0, color = accent)
         Spacer(Modifier.height(12.dp))
     }
 }
@@ -275,11 +283,19 @@ private fun AmountDisplay(text: String) {
 }
 
 @Composable
-private fun Keypad(onKey: (String) -> Unit, onBackspace: () -> Unit, onClear: () -> Unit) {
+private fun Keypad(
+    onKey: (String) -> Unit,
+    onOperation: (AmountOp) -> Unit,
+    pending: AmountOp?,
+    onBackspace: () -> Unit,
+    onClear: () -> Unit,
+) {
     val c = Ui.colors
     val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "00", "0", "<")
+    // Operations sit in a slimmer column on the right, as on a calculator.
+    val ops = listOf(AmountOp.DIVIDE, AmountOp.TIMES, AmountOp.MINUS, AmountOp.PLUS)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        keys.chunked(3).forEach { row ->
+        keys.chunked(3).forEachIndexed { r, row ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 row.forEach { k ->
                     Box(
@@ -297,6 +313,20 @@ private fun Keypad(onKey: (String) -> Unit, onBackspace: () -> Unit, onClear: ()
                             Text(k, style = Ui.type.title, color = c.ink)
                         }
                     }
+                }
+                val op = ops[r]
+                val active = op == pending
+                val bg by animateColorAsState(if (active) c.accent else c.surfaceHigh, label = "opBg")
+                Box(
+                    Modifier
+                        .weight(0.7f)
+                        .height(62.dp)
+                        .bouncyClick(pressedScale = 0.88f) { onOperation(op) }
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(bg),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(op.sign, style = Ui.type.title, color = if (active) Ink else c.ink)
                 }
             }
         }
@@ -475,6 +505,16 @@ private fun DetailsStep(vm: AddViewModel, accent: Color, onDeleted: () -> Unit) 
                         leading = { MemberAvatar(member, size = 24.dp) },
                     )
                 }
+            }
+            val payer = members.firstOrNull { it.id == vm.memberId }
+            if (vm.type == TxType.EXPENSE && members.size >= 2 && payer != null) {
+                SwitchRow(
+                    "Escludi da Para i conti",
+                    "La paga solo ${payer.name}: non si divide con gli altri",
+                    vm.excludeFromSettle,
+                    { vm.excludeFromSettle = it },
+                    Modifier.padding(top = 4.dp),
+                )
             }
         }
 

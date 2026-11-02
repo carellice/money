@@ -11,7 +11,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.PI
 import kotlin.math.cos
@@ -69,7 +71,7 @@ class BlobShape(seed: Int, private val time: Float = 0f, amplitude: Float = 0.07
         Outline.Generic(spec.path(size, time))
 }
 
-/** Draws a living blob behind the content. Only the draw phase reads the clock. */
+/** Draws a living blob behind the content, filled or, with [stroke], only its outline. Only the draw phase reads the clock. */
 @Composable
 fun Modifier.blob(
     color: Color,
@@ -77,13 +79,18 @@ fun Modifier.blob(
     amplitude: Float = 0.07f,
     animated: Boolean = true,
     speed: Float = 1f,
+    stroke: Dp? = null,
 ): Modifier {
     val time = LocalBlobTime.current
     val spec = remember(seed, amplitude) { BlobSpec(seed, amplitude = amplitude) }
     val path = remember { Path() }
     return drawBehind {
         val t = if (animated) time.value * speed else 0f
-        drawPath(spec.path(size, t, path), color)
+        if (stroke == null) drawPath(spec.path(size, t, path), color)
+        else {
+            val width = stroke.toPx()
+            drawPath(spec.path(size, t, path, inset = width / 2), color, style = Stroke(width))
+        }
     }
 }
 

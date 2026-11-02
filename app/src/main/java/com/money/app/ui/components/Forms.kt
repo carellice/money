@@ -35,6 +35,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.height
+import com.money.app.domain.AmountOp
 import com.money.app.ui.theme.Ink
 import com.money.app.ui.theme.Ui
 
@@ -81,13 +83,24 @@ fun SwitchRow(
     }
 }
 
-/** Euro amount input with decimal keyboard. */
+/** Euro amount input with decimal keyboard; with [operations] it also takes + − × ÷ (see AmountMath). */
 @Composable
-fun AmountField(value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier, placeholder: String = "0,00") {
+fun AmountField(
+    value: String,
+    onChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "0,00",
+    operations: Boolean = false,
+) {
     val c = Ui.colors
     BasicTextField(
         value = value,
-        onValueChange = { text -> onChange(text.filter { it.isDigit() || it == ',' || it == '.' }.take(10)) },
+        onValueChange = { text ->
+            onChange(
+                if (operations) text.filter { it.isDigit() || it == ',' || it == '.' || AmountOp.of(it) != null }.take(24)
+                else text.filter { it.isDigit() || it == ',' || it == '.' }.take(10)
+            )
+        },
         singleLine = true,
         textStyle = Ui.type.display.copy(color = c.ink),
         cursorBrush = SolidColor(c.accentText),
@@ -110,6 +123,29 @@ fun AmountField(value: String, onChange: (String) -> Unit, modifier: Modifier = 
             }
         },
     )
+}
+
+/** The four operations under an [AmountField]: each one goes at the end, replacing one already there. */
+@Composable
+fun OperationKeys(value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    val c = Ui.colors
+    Row(modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(AmountOp.PLUS, AmountOp.MINUS, AmountOp.TIMES, AmountOp.DIVIDE).forEach { op ->
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(46.dp)
+                    .bouncyClick(pressedScale = 0.9f, enabled = value.isNotEmpty()) {
+                        onChange(value.trimEnd { AmountOp.of(it) != null } + op.sign)
+                    }
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(c.surfaceHigh),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(op.sign, style = Ui.type.title, color = if (value.isNotEmpty()) c.ink else c.inkFaint)
+            }
+        }
+    }
 }
 
 @Composable

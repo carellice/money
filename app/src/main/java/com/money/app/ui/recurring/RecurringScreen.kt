@@ -27,10 +27,15 @@ import com.money.app.ui.components.AppIcons
 import com.money.app.ui.components.LocalPayments
 import com.money.app.ui.components.SectionTitle
 import com.money.app.ui.components.SoftCard
+import com.money.app.ui.components.SoftProgress
+import androidx.compose.foundation.layout.width
 import com.money.app.ui.settings.PaymentPills
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
 import com.money.app.ui.components.AmountField
+import com.money.app.ui.components.OperationKeys
+import com.money.app.domain.AmountMath
+import androidx.compose.animation.AnimatedVisibility
 import com.money.app.ui.components.FormLabel
 import com.money.app.ui.components.Pill
 import com.money.app.ui.components.PrimaryButton
@@ -249,7 +254,8 @@ private fun RegisterNowSheet(item: RecurringEntity, onDismiss: () -> Unit, onCon
     // Defaults to the usual method; this one payment may have gone another way.
     var payment by remember { mutableStateOf(item.paymentChoice) }
     var showPicker by remember { mutableStateOf(false) }
-    val cents = Money.parse(amount) ?: 0L
+    // The amount can be worked out on the spot, such as "11,00×2".
+    val cents = AmountMath.evaluate(amount) ?: 0L
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -266,7 +272,16 @@ private fun RegisterNowSheet(item: RecurringEntity, onDismiss: () -> Unit, onCon
                 }
             }
             FormLabel("Importo")
-            AmountField(amount, { amount = it })
+            AmountField(amount, { amount = it }, operations = true)
+            OperationKeys(amount, { amount = it })
+            AnimatedVisibility(AmountMath.hasOperation(amount)) {
+                Text(
+                    "= ${Money.format(cents)}",
+                    style = Ui.type.titleSmall,
+                    color = c.ink,
+                    modifier = Modifier.padding(top = 10.dp, start = 4.dp),
+                )
+            }
             FormLabel("Data")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill("Oggi", date == today, { date = today })
@@ -388,27 +403,55 @@ private fun SortRow(sort: RecurringSort, onSort: (RecurringSort) -> Unit, modifi
 private fun PaymentTotals(items: List<RecurringEntity>, yearly: Boolean, onYearly: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     val c = Ui.colors
     val payments = LocalPayments.current
+    fun cost(it: RecurringEntity) = if (yearly) it.frequency.yearlyCents(it.amountCents) else it.frequency.monthlyCents(it.amountCents)
     val totals = items.groupBy { it.paymentChoice }
-        .map { (choice, list) ->
-            choice to list.sumOf { if (yearly) it.frequency.yearlyCents(it.amountCents) else it.frequency.monthlyCents(it.amountCents) }
-        }
-        .sortedByDescending { it.second }
+        .map { (choice, list) -> Triple(choice, list.size, list.sumOf(::cost)) }
+        .sortedByDescending { it.third }
+    val total = totals.sumOf { it.third }.coerceAtLeast(1)
+    val unit = if (yearly) "/anno" else "/mese"
     Column(modifier) {
         SectionTitle("Per metodo di pagamento")
-        SoftCard {
-            Segmented(listOf("Al mese", "All'anno"), if (yearly) 1 else 0, { onYearly(it == 1) })
-            totals.forEach { (choice, cents) ->
-                val count = items.count { it.paymentChoice == choice }
-                Spacer(Modifier.height(14.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(AppIcons[payments.icon(choice)], null, tint = c.inkSoft, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.size(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(payments.label(choice), style = Ui.type.bodyStrong, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (count == 1) "1 voce" else "$count voci", style = Ui.type.caption, color = c.inkFaint)
+        Segmented(listOf("Al mese", "All'anno"), if (yearly) 1 else 0, { onYearly(it == 1) })
+        Spacer(Modifier.height(12.dp))
+        SoftCard(padding = 0.dp) {
+            totals.forEachIndexed { i, (choice, count, cents) ->
+                if (i > 0) Box(Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(1.dp).background(c.surfaceHigh))
+                val color = choice.customId?.let { payments.custom[it] }?.let { Color(it.color) } ?: c.accent
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(42.dp).clip(CircleShape).background(color.copy(alpha = 0.22f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(AppIcons[payments.icon(choice)], null, tint = c.ink, modifier = Modifier.size(22.dp))
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(payments.label(choice), style = Ui.type.bodyStrong, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                (if (count == 1) "1 voce" else "$count voci") + " · ${cents * 100 / total}%",
+                                style = Ui.type.caption,
+                                color = c.inkSoft,
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(Money.format(cents), style = Ui.type.bodyStrong, color = c.ink)
+                            Text(unit, style = Ui.type.caption, color = c.inkFaint)
+                        }
                     }
-                    Text(Money.format(cents), style = Ui.type.amount, color = c.ink)
-                    Text(if (yearly) "/anno" else "/mese", style = Ui.type.caption, color = c.inkFaint, modifier = Modifier.padding(start = 4.dp))
+                    Spacer(Modifier.height(12.dp))
+                    SoftProgress(cents.toFloat() / total, color)
+                }
+            }
+            if (totals.size > 1) {
+                Row(
+                    Modifier.fillMaxWidth().background(c.surfaceHigh.copy(alpha = 0.5f)).padding(horizontal = 20.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Totale", style = Ui.type.bodyStrong, color = c.ink, modifier = Modifier.weight(1f))
+                    Text(Money.format(totals.sumOf { it.third }), style = Ui.type.bodyStrong, color = c.ink)
+                    Text(unit, style = Ui.type.caption, color = c.inkFaint, modifier = Modifier.padding(start = 4.dp))
                 }
             }
         }

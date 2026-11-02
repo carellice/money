@@ -117,7 +117,19 @@ export type Transaction = {
   memberId: number | null
   /** Custom payment method; when set, payment is OTHER. */
   paymentId: number | null
+  /** How the expense counts when settling up between people: one of Settle. */
+  settle: number
 }
+
+/** States of Transaction.settle. */
+export const Settle = {
+  /** Counts the next time people settle up. */
+  OPEN: 0,
+  /** Never counts: the payer keeps it for themselves. */
+  EXCLUDED: 1,
+  /** Already settled up: counted once, not again. */
+  SETTLED: 2,
+} as const
 
 export type Recurring = {
   id: number

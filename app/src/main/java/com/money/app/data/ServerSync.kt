@@ -205,6 +205,11 @@ class ServerSync(
             id
         }
         is Change.DeleteTransaction -> delete(config, "/api/transactions/", outbox.id(TRANSACTIONS, change.id))
+        is Change.SettleTransactions -> {
+            val ids = change.ids.map { outbox.id(TRANSACTIONS, it) }
+            client.post(config, "/api/transactions/settle", JSONObject().put("ids", JSONArray(ids)))
+            0
+        }
         is Change.SaveRecurring -> {
             val item = remap(change.item)
             val image = remoteImage(config, item.imagePath, "logo")
@@ -291,6 +296,7 @@ class ServerSync(
         is Change.SaveTransaction -> JSONObject().put("type", "transaction").put("created", change.created)
             .put("row", change.tx.toJson().put("receiptPath", change.tx.receiptPath ?: JSONObject.NULL))
         is Change.DeleteTransaction -> JSONObject().put("type", "transaction.delete").put("id", change.id)
+        is Change.SettleTransactions -> JSONObject().put("type", "transaction.settle").put("ids", JSONArray(change.ids))
         is Change.SaveRecurring -> JSONObject().put("type", "recurring").put("created", change.created)
             .put("row", change.item.toJson().put("imagePath", change.item.imagePath ?: JSONObject.NULL))
         is Change.DeleteRecurring -> JSONObject().put("type", "recurring.delete").put("id", change.id)
@@ -310,6 +316,7 @@ class ServerSync(
         return when (val type = json.getString("type")) {
             "transaction" -> Change.SaveTransaction(json.getJSONObject("row").toTransaction(), created)
             "transaction.delete" -> Change.DeleteTransaction(id)
+            "transaction.settle" -> Change.SettleTransactions(json.getJSONArray("ids").let { ids -> (0 until ids.length()).map { ids.getLong(it) } })
             "recurring" -> Change.SaveRecurring(json.getJSONObject("row").toRecurring(), created)
             "recurring.delete" -> Change.DeleteRecurring(id)
             "category" -> Change.SaveCategory(
@@ -377,6 +384,7 @@ class ServerSync(
         .put("payment", payment.name).put("note", note).put("receiptPath", JSONObject.NULL)
         .put("recurringId", recurringId ?: JSONObject.NULL).put("createdAt", createdAt)
         .put("memberId", memberId ?: JSONObject.NULL).put("paymentId", paymentId ?: JSONObject.NULL)
+        .put("settle", settle)
 
     private fun JSONObject.toTransaction() = TransactionEntity(
         id = getLong("id"), type = TxType.valueOf(getString("type")), amountCents = getLong("amountCents"),
@@ -384,6 +392,7 @@ class ServerSync(
         payment = PaymentMethod.valueOf(getString("payment")), note = optString("note"),
         receiptPath = optStringOrNull("receiptPath"), recurringId = optLongOrNull("recurringId"),
         createdAt = optLong("createdAt"), memberId = optLongOrNull("memberId"), paymentId = optLongOrNull("paymentId"),
+        settle = optInt("settle"),
     )
 
     private fun MemberEntity.toJson() = JSONObject()

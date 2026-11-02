@@ -7,11 +7,12 @@ import {
 } from '../../../shared/model.ts'
 import { navigate } from '../lib/nav.ts'
 import { actions, updateSettings, usePaymentMethods, useStore } from '../lib/store.ts'
+import { amountOps, evaluateAmount, hasOperation } from '../lib/amountMath.ts'
 import { alpha, Ink } from '../lib/theme.ts'
 import { BlobLayer } from '../components/Blob.tsx'
 import {
   AmountField, AnimatedAmount, AppIcon, Bouncy, EmptyState, FormLabel, Icon, Pill, PrimaryButton, RecurringLogo, RoundIconButton, SectionTitle,
-  Segmented, SoftCard, Staggered,
+  Segmented, SoftCard, SoftProgress, Staggered,
 } from '../components/ui.tsx'
 import { DatePickerDialog, Sheet, toast } from '../components/overlays.tsx'
 import { PaymentPills } from '../components/Payments.tsx'
@@ -111,7 +112,7 @@ export function RecurringScreen() {
           await actions.saveTransaction({
             id: 0, type: 'EXPENSE', amountCents: cents, date, categoryId: item.categoryId, subcategoryId: item.subcategoryId,
             payment: method.method, paymentId: method.customId, note: item.name, receiptPath: null, recurringId: item.id,
-            createdAt: Date.now(), memberId: null,
+            createdAt: Date.now(), memberId: null, settle: 0,
           })
           setRegistering(null)
           toast(`${item.name} aggiunto ai movimenti del ${Dates.long(date)}`)
@@ -132,7 +133,8 @@ function RegisterNowSheet({ item, onDismiss, onConfirm }: {
   // Defaults to the usual method; this one payment may have gone another way.
   const [method, setMethod] = useState(paymentChoice(item))
   const [showPicker, setShowPicker] = useState(false)
-  const cents = Money.parse(amount) ?? 0
+  // The amount can be worked out on the spot, such as "11,00×2".
+  const cents = evaluateAmount(amount) ?? 0
   const other = date !== today && date !== today - 1
 
   return (
@@ -146,7 +148,19 @@ function RegisterNowSheet({ item, onDismiss, onConfirm }: {
           </div>
         </div>
         <FormLabel text="Importo" />
-        <AmountField value={amount} onChange={setAmount} />
+        <AmountField value={amount} onChange={setAmount} operations />
+        <div className="row" style={{ gap: 8, paddingTop: 10 }}>
+          {amountOps.map((op) => (
+            <Bouncy key={op} pressedScale={0.9} className="center flex1" aria-label={op}
+              onClick={() => { if (amount) setAmount(amount.replace(/[+\-−*×x/÷:]+$/, '') + op) }}
+              style={{ height: 46, borderRadius: 18, background: 'var(--surfaceHigh)' }}>
+              <span className="t-title" style={{ color: amount ? 'var(--ink)' : 'var(--inkFaint)' }}>{op}</span>
+            </Bouncy>
+          ))}
+        </div>
+        {hasOperation(amount) && (
+          <span className="t-titleSmall" style={{ color: 'var(--ink)', padding: '10px 4px 0' }}>= {Money.format(cents)}</span>
+        )}
         <FormLabel text="Data" />
         <div className="flow">
           <Pill text="Oggi" selected={date === today} onClick={() => setDate(today)} />
@@ -214,25 +228,48 @@ function PaymentTotals({ items, yearly, onYearly }: { items: Recurring[]; yearly
   const totals = groups
     .map((g) => ({ ...g, cents: g.items.reduce((acc, r) => acc + cost(r), 0) }))
     .sort((a, b) => b.cents - a.cents)
+  const total = Math.max(1, totals.reduce((acc, t) => acc + t.cents, 0))
+  const unit = yearly ? '/anno' : '/mese'
   return (
     <div className="col" style={{ paddingTop: 12 }}>
       <SectionTitle text="Per metodo di pagamento" />
-      <SoftCard style={{ gap: 14 }}>
-        <Segmented options={['Al mese', "All'anno"]} selected={yearly ? 1 : 0} onSelect={(i) => onYearly(i === 1)} />
-        {totals.map((t) => {
+      <Segmented options={['Al mese', "All'anno"]} selected={yearly ? 1 : 0} onSelect={(i) => onYearly(i === 1)} />
+      <SoftCard padding={0} style={{ marginTop: 12, overflow: 'hidden' }}>
+        {totals.map((t, i) => {
           const { label, icon } = paymentLabel(t.choice, custom)
+          const own = t.choice.customId != null ? custom.find((m) => m.id === t.choice.customId) : undefined
+          const color = own ? argb(own.color) : 'var(--accent)'
           return (
-            <div key={`${t.choice.method}:${t.choice.customId}`} className="row">
-              <AppIcon name={icon} size={20} color="var(--inkSoft)" />
-              <div className="col flex1" style={{ marginLeft: 12, minWidth: 0 }}>
-                <span className="t-bodyStrong ellipsis" style={{ color: 'var(--ink)' }}>{label}</span>
-                <span className="t-caption" style={{ color: 'var(--inkFaint)' }}>{t.items.length === 1 ? '1 voce' : `${t.items.length} voci`}</span>
+            <div key={`${t.choice.method}:${t.choice.customId}`}>
+              {i > 0 && <div style={{ height: 1, margin: '0 20px', background: 'var(--surfaceHigh)' }} />}
+              <div className="col" style={{ padding: '16px 20px', gap: 12 }}>
+                <div className="row">
+                  <div className="center" style={{ width: 42, height: 42, borderRadius: 21, flexShrink: 0, background: `color-mix(in srgb, ${color} 22%, transparent)` }}>
+                    <AppIcon name={icon} size={22} color="var(--ink)" />
+                  </div>
+                  <div className="col flex1" style={{ marginLeft: 14, minWidth: 0 }}>
+                    <span className="t-bodyStrong ellipsis" style={{ color: 'var(--ink)' }}>{label}</span>
+                    <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>
+                      {t.items.length === 1 ? '1 voce' : `${t.items.length} voci`} · {Math.trunc((t.cents * 100) / total)}%
+                    </span>
+                  </div>
+                  <div className="col" style={{ alignItems: 'flex-end', marginLeft: 12 }}>
+                    <span className="t-bodyStrong" style={{ color: 'var(--ink)', whiteSpace: 'nowrap' }}>{Money.format(t.cents)}</span>
+                    <span className="t-caption" style={{ color: 'var(--inkFaint)' }}>{unit}</span>
+                  </div>
+                </div>
+                <SoftProgress progress={t.cents / total} color={color} />
               </div>
-              <span className="t-amount" style={{ color: 'var(--ink)', whiteSpace: 'nowrap' }}>{Money.format(t.cents)}</span>
-              <span className="t-caption" style={{ color: 'var(--inkFaint)', marginLeft: 4 }}>{yearly ? '/anno' : '/mese'}</span>
             </div>
           )
         })}
+        {totals.length > 1 && (
+          <div className="row" style={{ padding: '14px 20px', background: 'color-mix(in srgb, var(--surfaceHigh) 50%, transparent)' }}>
+            <span className="t-bodyStrong flex1" style={{ color: 'var(--ink)' }}>Totale</span>
+            <span className="t-bodyStrong" style={{ color: 'var(--ink)' }}>{Money.format(totals.reduce((acc, t) => acc + t.cents, 0))}</span>
+            <span className="t-caption" style={{ color: 'var(--inkFaint)', marginLeft: 4 }}>{unit}</span>
+          </div>
+        )}
       </SoftCard>
     </div>
   )

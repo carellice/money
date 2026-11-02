@@ -14,7 +14,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
-import kotlinx.coroutines.joinAll
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -370,12 +372,12 @@ private fun LiquidCapsule(index: Int, centers: List<Float>, capsuleWidth: Dp, co
         val back = spring<Float>(dampingRatio = 0.7f, stiffness = 240f)
         val toRight = targetLeft > left.value
         launch { organic.animateTo(0f, tween(120)) }
-        val edges = listOf(
-            launch { left.animateTo(targetLeft, if (toRight) back else front) },
-            launch { right.animateTo(targetRight, if (toRight) front else back) },
-        )
-        edges.joinAll()
-        organic.animateTo(1f, tween(700))
+        launch { left.animateTo(targetLeft, if (toRight) back else front) }
+        launch { right.animateTo(targetRight, if (toRight) front else back) }
+        // As soon as both ends are about there, the blob takes over: the last wobble happens under it.
+        val near = 4f * density.density
+        snapshotFlow { abs(left.value - targetLeft) < near && abs(right.value - targetRight) < near }.first { it }
+        organic.animateTo(1f, tween(120))
     }
     val restWidth = half * 2
     val restHeight = with(density) { CapsuleHeight.toPx() }
@@ -459,9 +461,10 @@ private fun AddButton(onClick: () -> Unit) {
                 scaleY = breathe
             }
             .bouncyClick(pressedScale = 0.85f, onClick = onClick)
-            .blob(c.accent, seed = 3, amplitude = 0.09f, speed = 1.4f),
+            // Only the outline, so it doesn't look like the selected tab.
+            .blob(c.accent, seed = 3, amplitude = 0.09f, speed = 1.4f, stroke = 3.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Rounded.Add, "Aggiungi", tint = Ink, modifier = Modifier.size(32.dp))
+        Icon(Icons.Rounded.Add, "Aggiungi", tint = c.accentText, modifier = Modifier.size(32.dp))
     }
 }

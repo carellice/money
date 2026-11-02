@@ -1,5 +1,6 @@
 package com.money.app.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -82,7 +83,19 @@ data class TransactionEntity(
     val memberId: Long? = null,
     /** Custom payment method; when set, [payment] is [PaymentMethod.OTHER]. */
     val paymentId: Long? = null,
+    /** How the expense counts when settling up between people: one of [Settle]. */
+    @ColumnInfo(defaultValue = "0") val settle: Int = Settle.OPEN,
 )
+
+/** States of [TransactionEntity.settle]. */
+object Settle {
+    /** Counts the next time people settle up. */
+    const val OPEN = 0
+    /** Never counts: the payer keeps it for themselves. */
+    const val EXCLUDED = 1
+    /** Already settled up: counted once, not again. */
+    const val SETTLED = 2
+}
 
 /** Person of the household, used only to tell whose a movement is. All data stays shared. */
 @Entity(tableName = "members")

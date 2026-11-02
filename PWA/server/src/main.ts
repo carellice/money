@@ -196,6 +196,12 @@ route('POST', '/api/transactions', async (req, res) => {
   json(res, 200, data.saveTransaction({ ...tx, createdAt: tx.createdAt || Date.now() }))
 })
 
+route('POST', '/api/transactions/settle', async (req, res) => {
+  const { ids } = await readJson<{ ids: number[] }>(req)
+  data.settleTransactions((ids ?? []).map(Number).filter(Number.isFinite))
+  json(res, 200, { ok: true })
+})
+
 route('DELETE', '/api/transactions/:id', (_req, res, [id]) => {
   data.deleteTransaction(Number(id))
   json(res, 200, { ok: true })

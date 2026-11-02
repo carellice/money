@@ -3,14 +3,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { today as todayEpoch } from '../../../shared/date.ts'
 import { Dates, Money } from '../../../shared/format.ts'
-import { argb, type Category, type PaymentChoice, type Transaction, type TxType } from '../../../shared/model.ts'
+import { argb, Settle, type Category, type PaymentChoice, type Transaction, type TxType } from '../../../shared/model.ts'
+import {
+  calcBackspace, calcCents, calcExpression, calcOf, calcOperation, calcPending, calcPress, calcText, emptyCalc,
+  type AmountOp, type Calc,
+} from '../lib/amountMath.ts'
 import { api } from '../lib/api.ts'
 import { pickImage, shrinkToJpeg } from '../lib/images.ts'
 import { close, useBackHandler } from '../lib/nav.ts'
 import { actions, getStore, useStore } from '../lib/store.ts'
 import { alpha, Ink } from '../lib/theme.ts'
 import { BlobBox, BlobLayer, PX } from '../components/Blob.tsx'
-import { Bouncy, CategoryBadge, Icon, NoteField, Pill, PrimaryButton, RoundIconButton, Segmented, Staggered, TopBar, categoryLabel } from '../components/ui.tsx'
+import { Bouncy, CategoryBadge, Icon, NoteField, Pill, PrimaryButton, RoundIconButton, Segmented, Staggered, SwitchRow, TopBar, categoryLabel } from '../components/ui.tsx'
 import { AlertDialog, DatePickerDialog, toast } from '../components/overlays.tsx'
 import { MemberAvatar } from './Settings.tsx'
 import { PaymentPills } from '../components/Payments.tsx'
@@ -25,8 +29,8 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
   const isEdit = id !== 0
 
   const [type, setType] = useState<TxType>(original?.type ?? initialType)
-  /** Digits typed on the keypad, POS style: the last two are always the cents ("1250" is 12,50 €). */
-  const [digits, setDigits] = useState(original ? String(original.amountCents) : '')
+  /** The keypad's amount, POS style (the last two digits are the cents), with operations. */
+  const [calc, setCalc] = useState<Calc>(original ? calcOf(original.amountCents) : emptyCalc)
   const [categoryId, setCategoryId] = useState<number | null>(original?.categoryId ?? null)
   const [subcategoryId, setSubcategoryId] = useState<number | null>(original?.subcategoryId ?? null)
   const [date, setDate] = useState(original?.date ?? todayEpoch())
@@ -36,6 +40,8 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
   const [note, setNote] = useState(original?.note ?? '')
   const [receiptPath, setReceiptPath] = useState<string | null>(original?.receiptPath ?? null)
   const [memberId, setMemberId] = useState<number | null>(original ? original.memberId : getStore().data?.members[0]?.id ?? null)
+  /** The payer keeps this expense for themselves: it doesn't count when settling up. */
+  const [excluded, setExcluded] = useState(original?.settle === Settle.EXCLUDED)
   const [step, setStepRaw] = useState(isEdit ? 2 : 0)
   const [direction, setDirection] = useState(1)
   const [saved, setSaved] = useState(false)
@@ -58,17 +64,12 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
 
   useBackHandler(step > 0 && !isEdit, useCallback(() => setStep(step - 1), [step, setStep]))
 
-  const amountCents = Number(digits || '0')
-  const amountText = digits ? `${Math.trunc(amountCents / 100)},${String(amountCents % 100).padStart(2, '0')}` : ''
+  const amountCents = calcCents(calc)
+  const amountText = calcText(calc)
   const accent = type === 'EXPENSE' ? 'var(--expense)' : 'var(--income)'
   /** With people set up, every movement must say whose it is. */
   const memberChosen = members.length === 0 || members.some((m) => m.id === memberId)
 
-  /** A digit (or "00") enters from the right, as on a card terminal; up to 9.999.999,99 €. */
-  const press = (key: string) => {
-    const next = (digits + key).replace(/^0+/, '')
-    if (next.length <= 9) setDigits(next)
-  }
 
   const switchType = (newType: TxType) => {
     if (newType === type) return
@@ -140,6 +141,9 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
       recurringId: original?.recurringId ?? null,
       createdAt: original?.createdAt ?? Date.now(),
       memberId: members.some((m) => m.id === memberId) ? memberId : null,
+      settle: type !== 'EXPENSE' ? Settle.OPEN
+        : excluded ? Settle.EXCLUDED
+          : original?.settle === Settle.SETTLED ? Settle.SETTLED : Settle.OPEN,
     }
     try {
       await actions.saveTransaction(tx)
@@ -197,8 +201,14 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
             >
               {step === 0 && (
                 <AmountStep type={type} isEdit={isEdit} accent={accent} amountText={amountText} amountCents={amountCents}
-                  onType={switchType} onKey={press} onBackspace={() => setDigits(digits.slice(0, -1))}
-                  onClear={() => setDigits('')} onNext={() => setStep(1)} />
+                  expression={calcExpression(calc)} pending={calcPending(calc)}
+                  onType={switchType} onKey={(k) => setCalc(calcPress(calc, k))} onOperation={(op) => setCalc(calcOperation(calc, op))}
+                  onBackspace={() => setCalc(calcBackspace(calc))} onClear={() => setCalc(emptyCalc)}
+                  onNext={() => {
+                    // Moving on keeps only the result of the operations.
+                    setCalc(calcOf(amountCents))
+                    setStep(1)
+                  }} />
               )}
               {step === 1 && (
                 <CategoryStep type={type} categories={categories} categoryId={categoryId} subcategoryId={subcategoryId}
@@ -217,6 +227,7 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
                 <DetailsStep type={type} accent={accent} isEdit={isEdit} date={date} setDate={setDate} method={method} setMethod={setMethod}
                   note={note} setNote={setNote} receiptPath={receiptPath} onCamera={() => addReceipt(true)} onGallery={() => addReceipt(false)}
                   onRemoveReceipt={() => setReceipt(null)} memberId={memberId} setMemberId={setMemberId}
+                  excluded={excluded} setExcluded={setExcluded}
                   canSave={amountCents > 0 && categoryId != null && memberChosen} onSave={save} onDelete={remove} />
               )}
             </motion.div>
@@ -247,8 +258,11 @@ function AmountStep(p: {
   accent: string
   amountText: string
   amountCents: number
+  expression: string | null
+  pending: AmountOp | null
   onType: (t: TxType) => void
   onKey: (k: string) => void
+  onOperation: (op: AmountOp) => void
   onBackspace: () => void
   onClear: () => void
   onNext: () => void
@@ -262,10 +276,21 @@ function AmountStep(p: {
       <div style={{ flex: 1 }} />
       <span className="t-bodyStrong" style={{ color: 'var(--inkSoft)' }}>{p.type === 'EXPENSE' ? 'Quanto hai speso?' : 'Quanto hai ricevuto?'}</span>
       <BlobBox width="100%" height={170} color={alpha(p.type === 'EXPENSE' ? '#FF8A7A' : '#8FE3C0', 0.22)} seed={5} amplitude={0.1}>
-        <AmountDisplay text={p.amountText} />
+        <div className="col" style={{ alignItems: 'center' }}>
+          <AmountDisplay text={p.amountText} />
+          {/* The operation being typed, under the result that already follows it. */}
+          <AnimatePresence>
+            {p.expression && (
+              <motion.span key="expr" className="t-bodyStrong" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }} style={{ color: 'var(--inkSoft)', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                {p.expression}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
       </BlobBox>
       <div style={{ flex: 1 }} />
-      <Keypad onKey={p.onKey} onBackspace={p.onBackspace} onClear={p.onClear} />
+      <Keypad onKey={p.onKey} onOperation={p.onOperation} pending={p.pending} onBackspace={p.onBackspace} onClear={p.onClear} />
       <div style={{ height: 16 }} />
       <PrimaryButton text="Avanti" onClick={p.onNext} enabled={p.amountCents > 0} color={p.accent} />
       <div style={{ height: 12 }} />
@@ -306,8 +331,16 @@ function PopChar({ ch, faint, still }: { ch: string; faint: boolean; still: bool
   )
 }
 
-function Keypad({ onKey, onBackspace, onClear }: { onKey: (k: string) => void; onBackspace: () => void; onClear: () => void }) {
+function Keypad({ onKey, onOperation, pending, onBackspace, onClear }: {
+  onKey: (k: string) => void
+  onOperation: (op: AmountOp) => void
+  pending: AmountOp | null
+  onBackspace: () => void
+  onClear: () => void
+}) {
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '<']
+  // Operations sit in a slimmer column on the right, as on a calculator.
+  const ops: AmountOp[] = ['÷', '×', '−', '+']
   return (
     <div className="col" style={{ gap: 10, width: '100%' }}>
       {[0, 1, 2, 3].map((r) => (
@@ -318,6 +351,13 @@ function Keypad({ onKey, onBackspace, onClear }: { onKey: (k: string) => void; o
               {k === '<' ? <Icon name="backspace" color="var(--ink)" label="Cancella" /> : <span className="t-title" style={{ color: 'var(--ink)' }}>{k}</span>}
             </Bouncy>
           ))}
+          <Bouncy pressedScale={0.88} onClick={() => onOperation(ops[r])} className="center" aria-label={ops[r]}
+            style={{
+              flex: 0.7, height: 62, borderRadius: 24, transition: 'background-color 0.2s',
+              background: pending === ops[r] ? 'var(--accent)' : 'var(--surfaceHigh)',
+            }}>
+            <span className="t-title" style={{ color: pending === ops[r] ? Ink : 'var(--ink)' }}>{ops[r]}</span>
+          </Bouncy>
         </div>
       ))}
       <div className="t-caption" role="button" onClick={onClear} style={{ textAlign: 'center', color: 'var(--inkFaint)', padding: 4, cursor: 'pointer' }}>Azzera</div>
@@ -422,6 +462,8 @@ function DetailsStep(p: {
   onRemoveReceipt: () => void
   memberId: number | null
   setMemberId: (id: number) => void
+  excluded: boolean
+  setExcluded: (v: boolean) => void
   canSave: boolean
   onSave: () => void
   onDelete: () => void
@@ -446,6 +488,11 @@ function DetailsStep(p: {
                   leading={<MemberAvatar member={m} size={24} />} />
               ))}
             </div>
+            {p.type === 'EXPENSE' && members.length >= 2 && members.some((m) => m.id === p.memberId) && (
+              <SwitchRow title="Escludi da Para i conti"
+                subtitle={`La paga solo ${members.find((m) => m.id === p.memberId)!.name}: non si divide con gli altri`}
+                checked={p.excluded} onChange={p.setExcluded} style={{ marginTop: 4 }} />
+            )}
           </>
         )}
 

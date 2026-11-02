@@ -8,6 +8,8 @@ type BlobProps = Fill & {
   amplitude?: number
   animated?: boolean
   speed?: number
+  /** Width of the outline: drawn instead of filling the blob. */
+  stroke?: number
 }
 
 function useSize(ref: React.RefObject<Element | null>) {
@@ -30,7 +32,7 @@ function useSize(ref: React.RefObject<Element | null>) {
 
 /** Draws a living blob filling its parent (Modifier.blob). Only the path changes each frame. */
 export function BlobLayer(props: BlobProps) {
-  const { seed = 1, amplitude = 0.07, animated = true, speed = 1 } = props
+  const { seed = 1, amplitude = 0.07, animated = true, speed = 1, stroke } = props
   const svg = useRef<SVGSVGElement>(null)
   const path = useRef<SVGPathElement>(null)
   const size = useSize(svg)
@@ -40,7 +42,9 @@ export function BlobLayer(props: BlobProps) {
   useEffect(() => {
     const el = path.current
     if (!el || size.w === 0) return
-    const draw = (time: number) => el.setAttribute('d', spec.path(size.w, size.h, animated ? time * speed : 0))
+    // An outline stays inside the box: the path is inset by half its width.
+    const inset = stroke ? stroke / 2 : 0
+    const draw = (time: number) => el.setAttribute('d', spec.path(size.w - inset * 2, size.h - inset * 2, animated ? time * speed : 0, inset, inset))
     draw(blobTime())
     if (!animated) return
     let stop: (() => void) | null = null
@@ -57,7 +61,7 @@ export function BlobLayer(props: BlobProps) {
       observer.disconnect()
       stop?.()
     }
-  }, [spec, size.w, size.h, animated, speed])
+  }, [spec, size.w, size.h, animated, speed, stroke])
 
   const gradient = 'gradient' in props ? props.gradient : null
   return (
@@ -70,7 +74,9 @@ export function BlobLayer(props: BlobProps) {
           </linearGradient>
         </defs>
       )}
-      <path ref={path} fill={gradient ? `url(#${gradientId})` : (props as { color: string }).color} />
+      {stroke
+        ? <path ref={path} fill="none" stroke={(props as { color: string }).color} strokeWidth={stroke} />
+        : <path ref={path} fill={gradient ? `url(#${gradientId})` : (props as { color: string }).color} />}
     </svg>
   )
 }
