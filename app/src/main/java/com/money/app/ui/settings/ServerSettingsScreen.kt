@@ -112,6 +112,7 @@ class ServerSettingsViewModel(private val container: AppContainer) : ViewModel()
         runCatching {
             val phone = repo.snapshot()
             withContext(Dispatchers.IO) { repo.localCopy.writeText(sync.encode(phone)) }
+            sync.forget()
             sync.store.save(config.url, config.username, config.token)
             try {
                 if (upload) sync.upload(phone) else sync.pull(force = true)
@@ -139,6 +140,7 @@ class ServerSettingsViewModel(private val container: AppContainer) : ViewModel()
         busy = true
         config.value?.let { config -> container.scope.launch { sync.client.logout(config) } }
         sync.store.clear()
+        sync.forget()
         runCatching {
             withContext(Dispatchers.IO) {
                 if (restore && repo.localCopy.exists()) repo.replaceLocally(sync.decode(repo.localCopy.readText()))
@@ -185,7 +187,7 @@ fun ServerSettingsScreen(onBack: () -> Unit) {
                 Text(
                     if (current != null) {
                         "${current.username} su ${current.url}. Ogni modifica va al server e le modifiche fatte dalla PWA o da altri telefoni arrivano qui. " +
-                            "Senza connessione vedi i dati, ma per cambiarli serve il server."
+                            "Senza connessione le modifiche restano sul telefono e partono da sole appena il server risponde."
                     } else {
                         "Se hai installato Money sul tuo server CasaOS, collega l'app al tuo account: telefono e PWA vedono gli stessi dati. " +
                             "Spento, tutto resta solo sul telefono come sempre."
@@ -235,7 +237,7 @@ fun ServerSettingsScreen(onBack: () -> Unit) {
                         status.error != null -> status.error.orEmpty()
                         status.lastSync > 0 -> "Aggiornato alle " + TIME.format(Instant.ofEpochMilli(status.lastSync).atZone(ZoneId.systemDefault()))
                         else -> "In attesa del primo aggiornamento"
-                    },
+                    } + pendingText(status.pending),
                     style = Ui.type.label,
                     color = if (status.error != null && !status.syncing) c.expenseText else c.inkSoft,
                 )
@@ -302,11 +304,17 @@ fun ServerSettingsScreen(onBack: () -> Unit) {
             title = { Text("Scollegare il server?") },
             text = {
                 Text(
-                    if (vm.hasLocalCopy) {
-                        "Puoi tenere sul telefono i dati attuali del server oppure tornare a quelli che avevi prima di collegarlo. " +
-                            "I dati sul server restano dove sono."
+                    (
+                        if (vm.hasLocalCopy) {
+                            "Puoi tenere sul telefono i dati attuali del server oppure tornare a quelli che avevi prima di collegarlo. " +
+                                "I dati sul server restano dove sono."
+                        } else {
+                            "I dati attuali restano sul telefono e da qui in poi le modifiche restano solo qui. I dati sul server restano dove sono."
+                        }
+                    ) + if (status.pending > 0) {
+                        "\n\n${pendingText(status.pending).trim()}: scollegando non arriveranno più al server."
                     } else {
-                        "I dati attuali restano sul telefono e da qui in poi le modifiche restano solo qui. I dati sul server restano dove sono."
+                        ""
                     }
                 )
             },
@@ -320,3 +328,10 @@ fun ServerSettingsScreen(onBack: () -> Unit) {
 }
 
 private val TIME = DateTimeFormatter.ofPattern("HH:mm")
+
+/** Changes made offline still waiting for the server, as a short sentence (empty when there are none). */
+private fun pendingText(count: Int) = when (count) {
+    0 -> ""
+    1 -> "\n1 modifica fatta senza connessione da inviare"
+    else -> "\n$count modifiche fatte senza connessione da inviare"
+}

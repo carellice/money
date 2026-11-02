@@ -260,10 +260,11 @@ export function deleteRecurring(id: number) {
   if (item?.imagePath) deleteImage(item.imagePath)
 }
 
-export function saveMember(member: Member) {
-  transaction(() => {
+/** Returns the id of the person. */
+export function saveMember(member: Member): number {
+  return transaction(() => {
     const sortOrder = member.id === 0 ? members().length : member.sortOrder
-    upsert('members', memberColumns, { ...member, sortOrder })
+    return upsert('members', memberColumns, { ...member, sortOrder })
   })
 }
 
@@ -292,9 +293,12 @@ export function deletePaymentMethod(id: number) {
   })
 }
 
-/** Saves a top level category with its subcategories (missing ones are removed). */
-export function saveCategory(category: Category, subs: Category[]) {
-  transaction(() => {
+/**
+ * Saves a top level category with its subcategories (missing ones are removed).
+ * Returns the ids of the category and of its subcategories, in the order given.
+ */
+export function saveCategory(category: Category, subs: Category[]): { id: number; subIds: number[] } {
+  return transaction(() => {
     const id = upsert('categories', categoryColumns, category)
     const existing = categories().filter((c) => c.parentId === id)
     const keep = new Set(subs.filter((s) => s.id !== 0).map((s) => s.id))
@@ -302,9 +306,9 @@ export function saveCategory(category: Category, subs: Category[]) {
       db.prepare('UPDATE transactions SET subcategoryId = NULL WHERE subcategoryId = ?').run(old.id)
       db.prepare('DELETE FROM categories WHERE id = ?').run(old.id)
     }
-    subs.forEach((sub, index) => {
-      upsert('categories', categoryColumns, { ...sub, parentId: id, type: category.type, color: category.color, icon: category.icon, sortOrder: index })
-    })
+    const subIds = subs.map((sub, index) =>
+      upsert('categories', categoryColumns, { ...sub, parentId: id, type: category.type, color: category.color, icon: category.icon, sortOrder: index }))
+    return { id, subIds }
   })
 }
 

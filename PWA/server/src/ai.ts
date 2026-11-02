@@ -1,8 +1,8 @@
 import { currentMonth, isoDate, monthEnd, monthKey, monthOf, monthStart, plusYears, today, type Month } from '../../shared/date.ts'
 import { Dates, Money, percent } from '../../shared/format.ts'
-import { frequency, paymentChoice, paymentLabel, type Category, type CustomPayment, type Recurring, type Transaction, type TxType } from '../../shared/model.ts'
+import { frequency, paymentChoice, paymentLabel, paymentMethods as builtInPayments, type Category, type PaymentChoice, type CustomPayment, type Recurring, type Transaction, type TxType } from '../../shared/model.ts'
 import { buildReport, type MonthReport } from '../../shared/report.ts'
-import { categories, db, getMeta, paymentMethods, recurring, setMeta, transactionsBetween } from './db.ts'
+import { categories, db, getMeta, members, paymentMethods, recurring, setMeta, transactionsBetween } from './db.ts'
 
 export class AiError extends Error {}
 
@@ -172,7 +172,8 @@ function chatContext(): string {
   const now = today()
   const txs = transactionsBetween(monthStart(currentMonth() - 11), plusYears(now, 1))
   const cats = new Map(categories().map((c) => [c.id, c]))
-  const active = recurring().filter((r) => r.active)
+  const items = recurring()
+  const memberNames = new Map(members().map((m) => [m.id, m.name]))
   const lines: string[] = []
 
   lines.push('## Totali per mese (ultimi 12 mesi)')
@@ -201,14 +202,40 @@ function chatContext(): string {
     }
   }
 
-  const recentFrom = monthStart(currentMonth() - 1)
+  // Totals by payment method and by person, so questions about them work beyond the last two months too.
   const custom = paymentMethods()
-  lines.push('', '## Movimenti del mese corrente e precedente')
-  txs.filter((t) => t.date >= recentFrom).sort((a, b) => a.date - b.date).slice(-300).forEach((t) => lines.push(line(t, cats, custom)))
+  const sum = (l: Transaction[]) => l.reduce((acc, t) => acc + t.amountCents, 0)
+  const expensesByMonth = (by: (t: Transaction) => string) => {
+    const months = new Map<Month, Map<string, Transaction[]>>()
+    for (const t of txs.filter((t) => t.type === 'EXPENSE')) {
+      const m = monthOf(t.date)
+      const groups = months.get(m) ?? new Map<string, Transaction[]>()
+      groups.set(by(t), [...(groups.get(by(t)) ?? []), t])
+      months.set(m, groups)
+    }
+    for (const m of [...months.keys()].sort((a, b) => a - b)) {
+      lines.push(`${monthKey(m)}: ${[...months.get(m)!].map(([name, l]) => `${name} ${Money.format(sum(l))}`).join(', ')}`)
+    }
+  }
+  const allMethods: PaymentChoice[] = [
+    ...builtInPayments.map((p) => ({ method: p.id, customId: null })),
+    ...custom.map((c): PaymentChoice => ({ method: 'OTHER', customId: c.id })),
+  ]
+  lines.push('', "## Metodi di pagamento dell'utente", allMethods.map((c) => paymentLabel(c, custom).label).join(', '))
+  lines.push('', '## Uscite per metodo di pagamento, per mese')
+  expensesByMonth((t) => paymentLabel(paymentChoice(t), custom).label)
+  if (memberNames.size) {
+    lines.push('', `## Persone della famiglia: ${[...memberNames.values()].join(', ')}`, 'Uscite per persona, per mese:')
+    expensesByMonth((t) => (t.memberId != null ? memberNames.get(t.memberId) : undefined) ?? 'nessuno')
+  }
 
-  if (active.length) {
-    lines.push('', '## Spese fisse e abbonamenti attivi')
-    active.forEach((r) => lines.push(recurringLine(r, cats)))
+  const recentFrom = monthStart(currentMonth() - 1)
+  lines.push('', '## Movimenti del mese corrente e precedente (data, importo, categoria, nota, metodo di pagamento, persona)')
+  txs.filter((t) => t.date >= recentFrom).sort((a, b) => a.date - b.date).slice(-300).forEach((t) => lines.push(line(t, cats, custom, memberNames)))
+
+  if (items.length) {
+    lines.push('', '## Spese fisse e abbonamenti')
+    ;[...items].sort((a, b) => Number(b.active) - Number(a.active)).forEach((r) => lines.push(recurringLine(r, cats, custom)))
   }
   const budgets = [...cats.values()].filter((c) => c.budgetCents != null)
   if (budgets.length) {
@@ -284,14 +311,20 @@ function describe(r: MonthReport): string {
   return out.join('\n') + '\n'
 }
 
-function line(t: Transaction, cats: Map<number, Category>, custom: CustomPayment[]): string {
+function line(t: Transaction, cats: Map<number, Category>, custom: CustomPayment[], memberNames = new Map<number, string>()): string {
   const category = [cats.get(t.categoryId)?.name, t.subcategoryId != null ? cats.get(t.subcategoryId)?.name : undefined].filter(Boolean).join(' > ')
   const sign = t.type === 'INCOME' ? '+' : '-'
   const note = t.note.trim() ? ` "${t.note}"` : ''
   const fixed = t.recurringId != null ? ' [fissa]' : ''
-  return `- ${isoDate(t.date)} ${sign}${Money.format(t.amountCents)} ${category}${note} (${paymentLabel(paymentChoice(t), custom).label})${fixed}`
+  const member = t.memberId != null && memberNames.has(t.memberId) ? `, ${memberNames.get(t.memberId)}` : ''
+  return `- ${isoDate(t.date)} ${sign}${Money.format(t.amountCents)} ${category}${note} (${paymentLabel(paymentChoice(t), custom).label}${member})${fixed}`
 }
 
-function recurringLine(r: Recurring, cats: Map<number, Category>): string {
-  return `- ${r.name}: ${Money.format(r.amountCents)} ${frequency(r.frequency).label.toLowerCase()}, categoria ${cats.get(r.categoryId)?.name}, prossimo addebito ${isoDate(r.nextDate)}`
+function recurringLine(r: Recurring, cats: Map<number, Category>, custom: CustomPayment[]): string {
+  let text = `- ${r.name} (${r.kind === 'SUBSCRIPTION' ? 'abbonamento' : 'spesa fissa'}${r.active ? '' : ', in pausa'}): `
+  text += `${Money.format(r.amountCents)} ${frequency(r.frequency).label.toLowerCase()}, categoria ${cats.get(r.categoryId)?.name}, `
+  text += `pagato con ${paymentLabel(paymentChoice(r), custom).label}, ${r.autoRegister ? 'registrato in automatico' : 'da registrare a mano'}`
+  if (r.active) text += `, prossimo addebito ${isoDate(r.nextDate)}`
+  if (r.note.trim()) text += `, nota "${r.note}"`
+  return text
 }

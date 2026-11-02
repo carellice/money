@@ -17,7 +17,10 @@ import java.net.URLEncoder
 /** Money server (the PWA hosted on CasaOS) the app keeps its data on, with the account logged in. */
 data class ServerConfig(val url: String, val username: String, val token: String)
 
-class ServerException(message: String, val status: Int = 0) : Exception(message)
+class ServerException(message: String, val status: Int = 0) : Exception(message) {
+    /** Server not reachable (no connection, Tailscale off, server or proxy down): worth trying again later. */
+    val offline: Boolean get() = status == 0 || status in 502..504
+}
 
 class ServerStore(context: Context) {
     private val prefs = context.getSharedPreferences("server", Context.MODE_PRIVATE)

@@ -5,7 +5,7 @@ import com.money.app.domain.Recurrence
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDate
@@ -24,17 +24,30 @@ class MoneyRepository(
     private val paymentDao = db.payments()
 
     /** Server mode (data on the CasaOS server, as for the PWA); off keeps everything on the phone. */
-    val server = ServerSync(db, serverStore) { imagesDir }
+    val server = ServerSync(db, serverStore, File(filesDir, "modifiche-da-inviare.json")) { imagesDir }
 
     private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 8)
-    /** Changes the server refused or couldn't receive, shown as a message. */
-    val errors: SharedFlow<String> = _errors
+    /** Changes the server refused, and what happens to the ones made offline, shown as a message. */
+    val errors: Flow<String> = merge(_errors, server.notices)
 
-    /** Runs [remote] in server mode, [local] otherwise; a failed remote change returns [failed]. */
-    private suspend fun <T> either(failed: T, remote: suspend ServerSync.() -> T, local: suspend () -> T): T {
+    /**
+     * Runs [remote] in server mode, [local] otherwise. When the server can't be reached, [offline]
+     * applies the change on the phone and queues it; without it (or for any other error) the
+     * change is not made and [failed] is returned.
+     */
+    private suspend fun <T> either(
+        failed: T,
+        remote: suspend ServerSync.() -> T,
+        offline: (suspend () -> T)? = null,
+        local: suspend () -> T,
+    ): T {
         if (!server.enabled) return local()
         return try {
             server.remote()
+        } catch (e: ServerException) {
+            if (e.offline && offline != null) return offline()
+            _errors.tryEmit("Modifica non salvata: ${e.message}")
+            failed
         } catch (e: Exception) {
             _errors.tryEmit("Modifica non salvata: ${e.message ?: "errore del server"}")
             failed
@@ -68,11 +81,18 @@ class MoneyRepository(
     suspend fun recurringItem(id: Long) = recurringDao.get(id)
 
     /** Returns the id of the movement, or -1 when the server didn't save it. */
-    suspend fun saveTransaction(tx: TransactionEntity): Long =
-        either(-1L, { saveTransaction(tx) }) { txDao.upsert(tx).let { if (tx.id == 0L) it else tx.id } }
+    suspend fun saveTransaction(tx: TransactionEntity): Long {
+        suspend fun local() = txDao.upsert(tx).let { if (tx.id == 0L) it else tx.id }
+        return either(-1L, { submit(Change.SaveTransaction(tx)) }, offline = {
+            local().also { server.enqueue(Change.SaveTransaction(tx.copy(id = it), created = tx.id == 0L)) }
+        }) { local() }
+    }
 
     suspend fun deleteTransaction(tx: TransactionEntity) {
-        either(Unit, { deleteTransaction(tx.id) }) { txDao.delete(tx) }
+        either(Unit, { submit(Change.DeleteTransaction(tx.id)) }, offline = {
+            txDao.delete(tx)
+            server.enqueue(Change.DeleteTransaction(tx.id))
+        }) { txDao.delete(tx) }
     }
 
     /** Called when an undo window has passed and the movement is gone for good. */
@@ -81,21 +101,36 @@ class MoneyRepository(
     }
 
     /** Returns the id of the fixed expense, or -1 when the server didn't save it. */
-    suspend fun saveRecurring(item: RecurringEntity): Long = either(-1L, { saveRecurring(item) }) {
-        val id = recurringDao.upsert(item)
-        if (item.id == 0L) id else item.id
+    suspend fun saveRecurring(item: RecurringEntity): Long {
+        suspend fun local() = recurringDao.upsert(item).let { if (item.id == 0L) it else item.id }
+        return either(-1L, { submit(Change.SaveRecurring(item)) }, offline = {
+            local().also { server.enqueue(Change.SaveRecurring(item.copy(id = it), created = item.id == 0L)) }
+        }) { local() }
     }
 
     suspend fun deleteRecurring(item: RecurringEntity) {
-        either(Unit, { deleteRecurring(item.id) }) { recurringDao.delete(item) }
+        either(Unit, { submit(Change.DeleteRecurring(item.id)) }, offline = {
+            recurringDao.delete(item)
+            server.enqueue(Change.DeleteRecurring(item.id))
+        }) { recurringDao.delete(item) }
         item.imagePath?.let { deleteImage(it) }
     }
 
     /** Saves a top level category with its subcategories (missing ones are removed). */
     suspend fun saveCategory(category: CategoryEntity, subs: List<CategoryEntity>) {
-        either(Unit, { saveCategory(category, subs) }) { saveCategoryLocally(category, subs) }
+        either(Unit, { submit(Change.SaveCategory(category, subs)) }, offline = {
+            val (id, subIds) = saveCategoryLocally(category, subs)
+            val created = buildSet {
+                if (category.id == 0L) add(id)
+                subs.forEachIndexed { i, sub -> if (sub.id == 0L) add(subIds[i]) }
+            }
+            server.enqueue(
+                Change.SaveCategory(category.copy(id = id), subs.mapIndexed { i, sub -> sub.copy(id = subIds[i], parentId = id) }, created)
+            )
+        }) { saveCategoryLocally(category, subs) }
     }
 
+    /** Returns the id of the category and of its subcategories, in the order given. */
     private suspend fun saveCategoryLocally(category: CategoryEntity, subs: List<CategoryEntity>) = db.withTransaction {
         val id = if (category.id == 0L) categoryDao.insert(category) else category.also { categoryDao.upsert(it) }.id
         val existing = categoryDao.all().filter { it.parentId == id }
@@ -104,17 +139,28 @@ class MoneyRepository(
             txDao.clearSubcategory(it.id)
             categoryDao.delete(it)
         }
-        subs.forEachIndexed { index, sub ->
-            categoryDao.upsert(
+        val subIds = subs.mapIndexed { index, sub ->
+            val saved = categoryDao.upsert(
                 sub.copy(parentId = id, type = category.type, color = category.color, icon = category.icon, sortOrder = index)
             )
+            if (sub.id == 0L) saved else sub.id
         }
+        id to subIds
     }
 
     /** Returns false when the category is still used by movements or fixed expenses. */
     suspend fun deleteCategory(category: CategoryEntity): Boolean =
         // A change the server couldn't receive is reported as such, not as "category in use".
-        either(true, { deleteCategory(category.id) }) { deleteCategoryLocally(category) }
+        either(true, {
+            try {
+                submit(Change.DeleteCategory(category.id))
+                true
+            } catch (e: ServerException) {
+                if (e.status == 409) false else throw e
+            }
+        }, offline = {
+            deleteCategoryLocally(category).also { if (it) server.enqueue(Change.DeleteCategory(category.id)) }
+        }) { deleteCategoryLocally(category) }
 
     private suspend fun deleteCategoryLocally(category: CategoryEntity): Boolean = db.withTransaction {
         if (txDao.countForCategory(category.id) > 0 || recurringDao.countForCategory(category.id) > 0) {
@@ -127,36 +173,49 @@ class MoneyRepository(
     }
 
     suspend fun saveMember(member: MemberEntity) {
-        either(Unit, { saveMember(member) }) {
-            memberDao.upsert(if (member.id == 0L) member.copy(sortOrder = memberDao.all().size) else member)
+        suspend fun local(): MemberEntity {
+            val saved = if (member.id == 0L) member.copy(sortOrder = memberDao.all().size) else member
+            return memberDao.upsert(saved).let { saved.copy(id = if (member.id == 0L) it else member.id) }
         }
+        either(Unit, { submit(Change.SaveMember(member)) }, offline = {
+            server.enqueue(Change.SaveMember(local(), created = member.id == 0L))
+        }) { local() }
     }
 
     /** Movements of the removed person stay, just without an owner. */
     suspend fun deleteMember(member: MemberEntity) {
-        either(Unit, { deleteMember(member.id) }) {
-            db.withTransaction {
-                txDao.clearMember(member.id)
-                memberDao.delete(member)
-            }
+        suspend fun local() = db.withTransaction {
+            txDao.clearMember(member.id)
+            memberDao.delete(member)
         }
+        either(Unit, { submit(Change.DeleteMember(member.id)) }, offline = {
+            local()
+            server.enqueue(Change.DeleteMember(member.id))
+        }) { local() }
     }
 
     /** Returns the id of the payment method, or -1 when the server didn't save it. */
-    suspend fun saveCustomPayment(method: CustomPaymentEntity): Long = either(-1L, { saveCustomPayment(method) }) {
-        val id = paymentDao.upsert(if (method.id == 0L) method.copy(sortOrder = paymentDao.all().size) else method)
-        if (method.id == 0L) id else method.id
+    suspend fun saveCustomPayment(method: CustomPaymentEntity): Long {
+        suspend fun local(): CustomPaymentEntity {
+            val saved = if (method.id == 0L) method.copy(sortOrder = paymentDao.all().size) else method
+            return paymentDao.upsert(saved).let { saved.copy(id = if (method.id == 0L) it else method.id) }
+        }
+        return either(-1L, { submit(Change.SavePayment(method)) }, offline = {
+            local().also { server.enqueue(Change.SavePayment(it, created = method.id == 0L)) }.id
+        }) { local().id }
     }
 
     /** Movements and fixed expenses paid that way stay, as "Altro". */
     suspend fun deleteCustomPayment(method: CustomPaymentEntity) {
-        either(Unit, { deleteCustomPayment(method.id) }) {
-            db.withTransaction {
-                txDao.clearPayment(method.id)
-                recurringDao.clearPayment(method.id)
-                paymentDao.delete(method)
-            }
+        suspend fun local() = db.withTransaction {
+            txDao.clearPayment(method.id)
+            recurringDao.clearPayment(method.id)
+            paymentDao.delete(method)
         }
+        either(Unit, { submit(Change.DeletePayment(method.id)) }, offline = {
+            local()
+            server.enqueue(Change.DeletePayment(method.id))
+        }) { local() }
     }
 
     /** The server seeds new accounts itself. */
@@ -243,9 +302,15 @@ class MoneyRepository(
         val file = File(path)
         if (file.parentFile != imagesDir) return
         file.delete()
-        val config = server.config
-        if (config != null && ServerSync.isServerImage(file.name)) {
-            scope.launch { runCatching { server.client.deleteImage(config, "/images/${file.name}") } }
+        if (server.enabled && ServerSync.isServerImage(file.name)) {
+            val change = Change.DeleteImage("/images/${file.name}")
+            scope.launch {
+                try {
+                    server.submit(change)
+                } catch (e: ServerException) {
+                    if (e.offline) server.enqueue(change)
+                }
+            }
         }
     }
 

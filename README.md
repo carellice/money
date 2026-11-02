@@ -42,7 +42,7 @@ Facoltativo. Se hai installato la PWA sul tuo server CasaOS (vedi [`PWA/`](PWA/)
 - inserisci lo stesso indirizzo con cui apri la PWA (es. `https://casaos.tailXXXX.ts.net`), nome utente e password;
 - se sia il telefono che il server hanno già dei dati, scegli quali tenere: quelli del telefono vengono comunque salvati in una copia.
 
-Da lì in poi ogni modifica va al server e quelle fatte dalla PWA o da altri telefoni arrivano nell'app, all'apertura e ogni 30 secondi mentre è aperta. Senza connessione vedi i dati ma non puoi modificarli. Spese fisse e promemoria li gestisce il server. Scollegando il server puoi tenere i dati attuali o tornare a quelli di prima.
+Da lì in poi ogni modifica va al server e quelle fatte dalla PWA o da altri telefoni arrivano nell'app, all'apertura e ogni 30 secondi mentre è aperta. Senza connessione le modifiche si salvano sul telefono e partono da sole appena il server torna raggiungibile (se intanto la stessa cosa è stata cambiata anche dalla PWA, vale l'ultima modifica arrivata). Spese fisse e promemoria li gestisce il server. Scollegando il server puoi tenere i dati attuali o tornare a quelli di prima.
 
 Con il certificato locale (modalità 2 dell'installazione) installa prima il certificato sul telefono; con Tailscale serve l'app Tailscale attiva.
 

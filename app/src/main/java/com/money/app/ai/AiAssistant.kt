@@ -2,7 +2,10 @@ package com.money.app.ai
 
 import com.money.app.data.CategoryEntity
 import com.money.app.data.MoneyRepository
+import com.money.app.data.PaymentChoice
+import com.money.app.data.PaymentMethod
 import com.money.app.data.Payments
+import com.money.app.data.RecurringKind
 import com.money.app.data.RecurringEntity
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
@@ -97,7 +100,8 @@ class AiAssistant(
         val txs = repo.transactionsBetweenOnce(from, today.plusYears(1))
         val cats = repo.allCategories().associateBy { it.id }
         val payments = repo.payments()
-        val recurring = repo.recurring.first().filter { it.active }
+        val recurring = repo.recurring.first()
+        val members = repo.members.first().associate { it.id to it.name }
         val sb = StringBuilder()
 
         sb.appendLine("## Totali per mese (ultimi 12 mesi)")
@@ -115,13 +119,34 @@ class AiAssistant(
             }
         }
 
+        // Totals by payment method and by person, so questions about them work beyond the last two months too.
+        val methods = PaymentMethod.entries.map { PaymentChoice(it) } +
+            payments.custom.values.sortedBy { it.sortOrder }.map { PaymentChoice.custom(it.id) }
+        sb.appendLine().appendLine("## Metodi di pagamento dell'utente")
+        sb.appendLine(methods.joinToString(", ") { payments.label(it) })
+        sb.appendLine().appendLine("## Uscite per metodo di pagamento, per mese")
+        txs.filter { it.type == TxType.EXPENSE }.groupBy { YearMonth.from(LocalDate.ofEpochDay(it.date)) }.toSortedMap().forEach { (m, list) ->
+            val byMethod = list.groupBy { PaymentChoice(it.payment, it.paymentId) }
+                .map { (choice, l) -> "${payments.label(choice)} ${Money.format(l.sumOf { it.amountCents })}" }
+            sb.appendLine("$m: ${byMethod.joinToString(", ")}")
+        }
+        if (members.isNotEmpty()) {
+            sb.appendLine().appendLine("## Persone della famiglia: ${members.values.joinToString(", ")}")
+            sb.appendLine("Uscite per persona, per mese:")
+            txs.filter { it.type == TxType.EXPENSE }.groupBy { YearMonth.from(LocalDate.ofEpochDay(it.date)) }.toSortedMap().forEach { (m, list) ->
+                val byMember = list.groupBy { it.memberId }
+                    .map { (id, l) -> "${id?.let { members[it] } ?: "nessuno"} ${Money.format(l.sumOf { it.amountCents })}" }
+                sb.appendLine("$m: ${byMember.joinToString(", ")}")
+            }
+        }
+
         val recentFrom = YearMonth.from(today).minusMonths(1).atDay(1).toEpochDay()
-        sb.appendLine().appendLine("## Movimenti del mese corrente e precedente")
-        txs.filter { it.date >= recentFrom }.sortedBy { it.date }.takeLast(300).forEach { sb.appendLine(line(it, cats, payments)) }
+        sb.appendLine().appendLine("## Movimenti del mese corrente e precedente (data, importo, categoria, nota, metodo di pagamento, persona)")
+        txs.filter { it.date >= recentFrom }.sortedBy { it.date }.takeLast(300).forEach { sb.appendLine(line(it, cats, payments, members)) }
 
         if (recurring.isNotEmpty()) {
-            sb.appendLine().appendLine("## Spese fisse e abbonamenti attivi")
-            recurring.forEach { sb.appendLine(recurringLine(it, cats)) }
+            sb.appendLine().appendLine("## Spese fisse e abbonamenti")
+            recurring.sortedByDescending { it.active }.forEach { sb.appendLine(recurringLine(it, cats, payments)) }
         }
         val budgets = cats.values.filter { it.budgetCents != null }
         if (budgets.isNotEmpty()) {
@@ -189,15 +214,27 @@ class AiAssistant(
         r.top.forEach { appendLine(line(it, r.categories, r.paymentNames)) }
     }
 
-    private fun line(tx: TransactionEntity, cats: Map<Long, CategoryEntity>, payments: Payments): String {
+    private fun line(
+        tx: TransactionEntity,
+        cats: Map<Long, CategoryEntity>,
+        payments: Payments,
+        members: Map<Long, String> = emptyMap(),
+    ): String {
         val category = listOfNotNull(cats[tx.categoryId]?.name, tx.subcategoryId?.let { cats[it]?.name }).joinToString(" > ")
         val sign = if (tx.type == TxType.INCOME) "+" else "-"
         val note = tx.note.takeIf { it.isNotBlank() }?.let { " \"$it\"" } ?: ""
         val fixed = if (tx.recurringId != null) " [fissa]" else ""
-        return "- ${LocalDate.ofEpochDay(tx.date)} $sign${Money.format(tx.amountCents)} $category$note (${payments.label(tx)})$fixed"
+        val member = tx.memberId?.let { members[it] }?.let { ", $it" } ?: ""
+        return "- ${LocalDate.ofEpochDay(tx.date)} $sign${Money.format(tx.amountCents)} $category$note (${payments.label(tx)}$member)$fixed"
     }
 
-    private fun recurringLine(item: RecurringEntity, cats: Map<Long, CategoryEntity>) =
-        "- ${item.name}: ${Money.format(item.amountCents)} ${item.frequency.label.lowercase()}, categoria ${cats[item.categoryId]?.name}, " +
-            "prossimo addebito ${LocalDate.ofEpochDay(item.nextDate)}"
+    private fun recurringLine(item: RecurringEntity, cats: Map<Long, CategoryEntity>, payments: Payments) = buildString {
+        append("- ${item.name} (${if (item.kind == RecurringKind.SUBSCRIPTION) "abbonamento" else "spesa fissa"}")
+        if (!item.active) append(", in pausa")
+        append("): ${Money.format(item.amountCents)} ${item.frequency.label.lowercase()}, categoria ${cats[item.categoryId]?.name}, ")
+        append("pagato con ${payments.label(PaymentChoice(item.payment, item.paymentId))}, ")
+        append(if (item.autoRegister) "registrato in automatico" else "da registrare a mano")
+        if (item.active) append(", prossimo addebito ${LocalDate.ofEpochDay(item.nextDate)}")
+        if (item.note.isNotBlank()) append(", nota \"${item.note}\"")
+    }
 }

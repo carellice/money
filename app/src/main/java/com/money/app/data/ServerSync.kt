@@ -1,7 +1,9 @@
 package com.money.app.data
 
 import androidx.room.withTransaction
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -10,24 +12,32 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** How the copy on the phone stands compared with the server. */
-data class SyncStatus(val lastSync: Long = 0, val error: String? = null, val syncing: Boolean = false)
+/** How the copy on the phone stands compared with the server; [pending] changes are waiting to be sent. */
+data class SyncStatus(val lastSync: Long = 0, val error: String? = null, val syncing: Boolean = false, val pending: Int = 0)
 
 /**
  * Server mode: the account on the Money server holds the data, as for the PWA. Room stays as the
  * local copy every screen reads (so it works offline too); every change goes to the server first
- * and the copy is then reloaded from it.
+ * and the copy is then reloaded from it. Without a connection changes are applied on the phone
+ * and wait in the [outbox]: they are sent first, in order, before anything else is sent or
+ * reloaded, so a reload never wipes them.
  */
 class ServerSync(
     private val db: MoneyDatabase,
     val store: ServerStore,
+    outboxFile: File,
     private val imagesDir: () -> File,
 ) {
     val client = ServerClient()
     private val mutex = Mutex()
+    private val outbox = Outbox(outboxFile)
 
-    private val _status = MutableStateFlow(SyncStatus())
+    private val _status = MutableStateFlow(SyncStatus(pending = outbox.size))
     val status: StateFlow<SyncStatus> = _status.asStateFlow()
+
+    private val _notices = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    /** What happened to the changes made offline, shown as a message. */
+    val notices: SharedFlow<String> = _notices
 
     val config: ServerConfig? get() = store.config.value
     val enabled: Boolean get() = config != null
@@ -35,10 +45,28 @@ class ServerSync(
     /** Reloads the local copy when the server has changed (or always, with [force]). */
     suspend fun pull(force: Boolean = false) = mutex.withLock { pullLocked(requireConfig(), force) }
 
-    /** Sends one change, then reloads the local copy. */
+    /** Sends the changes still waiting, then [change]; returns the id the server gave the row. */
+    suspend fun submit(change: Change): Long = write { send(it, change) }
+
+    /** Keeps [change], already applied on the phone, until the server can be reached. */
+    fun enqueue(change: Change) {
+        val first = outbox.size == 0
+        outbox.add(encode(change))
+        _status.value = _status.value.copy(pending = outbox.size)
+        if (first) _notices.tryEmit("Server non raggiungibile: salvato sul telefono, lo invio appena torna la connessione")
+    }
+
+    /** Server mode turned on or off: changes for the previous account are dropped. */
+    fun forget() {
+        outbox.clear()
+        _status.value = SyncStatus()
+    }
+
+    /** Sends one change (after the ones still waiting), then reloads the local copy. */
     suspend fun <T> write(block: suspend ServerSync.(ServerConfig) -> T): T = mutex.withLock {
         val config = requireConfig()
         val result = try {
+            flushLocked(config)
             block(config)
         } catch (e: ServerException) {
             _status.value = _status.value.copy(error = e.message)
@@ -48,17 +76,39 @@ class ServerSync(
         result
     }
 
-    private fun requireConfig() = config ?: throw ServerException("Server CasaOS non configurato")
+    private fun requireConfig() = config ?: throw ServerException("Server CasaOS non configurato", status = -1)
+
+    /**
+     * Sends the changes made offline, oldest first. Stops (throwing) while the server can't be
+     * reached or the session has expired; a change the server refuses is dropped with a message.
+     */
+    private suspend fun flushLocked(config: ServerConfig) {
+        while (true) {
+            val json = outbox.first() ?: break
+            try {
+                send(config, decode(json))
+            } catch (e: ServerException) {
+                if (e.offline || e.status == 401) throw e
+                _notices.tryEmit("Una modifica fatta senza connessione non è stata accettata dal server: ${e.message}")
+            } catch (e: Exception) {
+                _notices.tryEmit("Una modifica fatta senza connessione non si è potuta inviare: ${e.message}")
+            }
+            outbox.removeFirst()
+            _status.value = _status.value.copy(pending = outbox.size)
+        }
+    }
 
     private suspend fun pullLocked(config: ServerConfig, force: Boolean) {
         _status.value = _status.value.copy(syncing = true)
         try {
+            flushLocked(config)
             val json = client.state(config, if (force) -1 else store.revision)
             if (!json.optBoolean("unchanged")) {
                 replaceLocal(fromServer(config, json))
+                outbox.forgetIds()
                 store.revision = json.getLong("revision")
             }
-            _status.value = SyncStatus(lastSync = System.currentTimeMillis())
+            _status.value = SyncStatus(lastSync = System.currentTimeMillis(), pending = outbox.size)
         } catch (e: ServerException) {
             _status.value = _status.value.copy(error = e.message, syncing = false)
             throw e
@@ -135,51 +185,147 @@ class ServerSync(
     private fun adopt(local: String?, remote: String?) {
         if (local == null || remote == null) return
         val file = File(local)
-        if (!isServerImage(file.name)) file.renameTo(File(imagesDir(), remote.removePrefix(IMAGES)))
+        if (isServerImage(file.name)) return
+        val renamed = File(imagesDir(), remote.removePrefix(IMAGES))
+        // Changes still waiting may point to the old name.
+        if (file.renameTo(renamed)) outbox.mapPath(local, renamed.path)
     }
 
     // --- writes -----------------------------------------------------------------------------
 
-    suspend fun saveTransaction(tx: TransactionEntity): Long = write { config ->
-        val image = remoteImage(config, tx.receiptPath, "receipt")
-        val id = client.post(config, "/api/transactions", tx.toJson().put("receiptPath", image ?: JSONObject.NULL)).getLong("id")
-        adopt(tx.receiptPath, image)
-        id
-    }
-
-    suspend fun deleteTransaction(id: Long) = write { client.delete(it, "/api/transactions/$id") }
-
-    suspend fun saveRecurring(item: RecurringEntity): Long = write { config ->
-        val image = remoteImage(config, item.imagePath, "logo")
-        val id = client.post(config, "/api/recurring", item.toJson().put("imagePath", image ?: JSONObject.NULL)).getLong("id")
-        adopt(item.imagePath, image)
-        id
-    }
-
-    suspend fun deleteRecurring(id: Long) = write { client.delete(it, "/api/recurring/$id") }
-
-    suspend fun saveCategory(category: CategoryEntity, subs: List<CategoryEntity>) = write {
-        client.post(it, "/api/categories", JSONObject().put("category", category.toJson()).put("subs", JSONArray(subs.map { s -> s.toJson() })))
-    }
-
-    /** False when the server refuses because the category is still in use. */
-    suspend fun deleteCategory(id: Long): Boolean = write {
-        try {
-            client.delete(it, "/api/categories/$id")
-            true
-        } catch (e: ServerException) {
-            if (e.status == 409) false else throw e
+    /** Sends [change] with the ids the server gave to rows created offline; returns the row's server id. */
+    private suspend fun send(config: ServerConfig, change: Change): Long = when (change) {
+        is Change.SaveTransaction -> {
+            val tx = remap(change.tx)
+            val image = remoteImage(config, tx.receiptPath, "receipt")
+            val body = tx.copy(id = if (change.created) 0 else tx.id).toJson().put("receiptPath", image ?: JSONObject.NULL)
+            val id = client.post(config, "/api/transactions", body).getLong("id")
+            adopt(tx.receiptPath, image)
+            if (change.created) outbox.mapId(TRANSACTIONS, change.tx.id, id)
+            id
+        }
+        is Change.DeleteTransaction -> delete(config, "/api/transactions/", outbox.id(TRANSACTIONS, change.id))
+        is Change.SaveRecurring -> {
+            val item = remap(change.item)
+            val image = remoteImage(config, item.imagePath, "logo")
+            val body = item.copy(id = if (change.created) 0 else item.id).toJson().put("imagePath", image ?: JSONObject.NULL)
+            val id = client.post(config, "/api/recurring", body).getLong("id")
+            adopt(item.imagePath, image)
+            if (change.created) outbox.mapId(RECURRING, change.item.id, id)
+            id
+        }
+        is Change.DeleteRecurring -> delete(config, "/api/recurring/", outbox.id(RECURRING, change.id))
+        is Change.SaveCategory -> {
+            fun body(c: CategoryEntity) =
+                (if (c.id in change.created) c.copy(id = 0) else c.copy(id = outbox.id(CATEGORIES, c.id))).toJson()
+            val result = client.post(
+                config, "/api/categories",
+                JSONObject().put("category", body(change.category)).put("subs", JSONArray(change.subs.map { body(it) })),
+            )
+            // Servers before 1.3.0 don't say which ids they gave.
+            val id = result.optLong("id", change.category.id)
+            if (change.category.id in change.created) outbox.mapId(CATEGORIES, change.category.id, id)
+            result.optJSONArray("subIds")?.let { subIds ->
+                change.subs.forEachIndexed { i, sub ->
+                    if (sub.id in change.created && i < subIds.length()) outbox.mapId(CATEGORIES, sub.id, subIds.getLong(i))
+                }
+            }
+            id
+        }
+        is Change.DeleteCategory -> {
+            val id = outbox.id(CATEGORIES, change.id)
+            client.delete(config, "/api/categories/$id")
+            id
+        }
+        is Change.SaveMember -> {
+            val member = change.member.copy(id = if (change.created) 0 else outbox.id(MEMBERS, change.member.id))
+            val id = client.post(config, "/api/members", member.toJson()).optLong("id", member.id)
+            if (change.created) outbox.mapId(MEMBERS, change.member.id, id)
+            id
+        }
+        is Change.DeleteMember -> delete(config, "/api/members/", outbox.id(MEMBERS, change.id))
+        is Change.SavePayment -> {
+            val method = change.method.copy(id = if (change.created) 0 else outbox.id(PAYMENTS, change.method.id))
+            val id = client.post(config, "/api/payment-methods", method.toJson()).getLong("id")
+            if (change.created) outbox.mapId(PAYMENTS, change.method.id, id)
+            id
+        }
+        is Change.DeletePayment -> delete(config, "/api/payment-methods/", outbox.id(PAYMENTS, change.id))
+        is Change.DeleteImage -> {
+            client.deleteImage(config, change.path)
+            0
         }
     }
 
-    suspend fun saveMember(member: MemberEntity) = write { client.post(it, "/api/members", member.toJson()) }
+    /** Deleting what is already gone is fine. */
+    private suspend fun delete(config: ServerConfig, path: String, id: Long): Long {
+        try {
+            client.delete(config, path + id)
+        } catch (e: ServerException) {
+            if (e.status != 404) throw e
+        }
+        return id
+    }
 
-    suspend fun deleteMember(id: Long) = write { client.delete(it, "/api/members/$id") }
+    private fun remap(tx: TransactionEntity) = tx.copy(
+        id = outbox.id(TRANSACTIONS, tx.id),
+        categoryId = outbox.id(CATEGORIES, tx.categoryId),
+        subcategoryId = tx.subcategoryId?.let { outbox.id(CATEGORIES, it) },
+        recurringId = tx.recurringId?.let { outbox.id(RECURRING, it) },
+        memberId = tx.memberId?.let { outbox.id(MEMBERS, it) },
+        paymentId = tx.paymentId?.let { outbox.id(PAYMENTS, it) },
+        receiptPath = outbox.path(tx.receiptPath),
+    )
 
-    suspend fun saveCustomPayment(method: CustomPaymentEntity): Long =
-        write { client.post(it, "/api/payment-methods", method.toJson()).getLong("id") }
+    private fun remap(item: RecurringEntity) = item.copy(
+        id = outbox.id(RECURRING, item.id),
+        categoryId = outbox.id(CATEGORIES, item.categoryId),
+        subcategoryId = item.subcategoryId?.let { outbox.id(CATEGORIES, it) },
+        paymentId = item.paymentId?.let { outbox.id(PAYMENTS, it) },
+        imagePath = outbox.path(item.imagePath),
+    )
 
-    suspend fun deleteCustomPayment(id: Long) = write { client.delete(it, "/api/payment-methods/$id") }
+    // --- changes kept in the outbox (rows with every field, image paths on the phone) --------
+
+    private fun encode(change: Change): JSONObject = when (change) {
+        is Change.SaveTransaction -> JSONObject().put("type", "transaction").put("created", change.created)
+            .put("row", change.tx.toJson().put("receiptPath", change.tx.receiptPath ?: JSONObject.NULL))
+        is Change.DeleteTransaction -> JSONObject().put("type", "transaction.delete").put("id", change.id)
+        is Change.SaveRecurring -> JSONObject().put("type", "recurring").put("created", change.created)
+            .put("row", change.item.toJson().put("imagePath", change.item.imagePath ?: JSONObject.NULL))
+        is Change.DeleteRecurring -> JSONObject().put("type", "recurring.delete").put("id", change.id)
+        is Change.SaveCategory -> JSONObject().put("type", "category").put("row", change.category.toJson())
+            .put("subs", JSONArray(change.subs.map { it.toJson() })).put("createdIds", JSONArray(change.created.toList()))
+        is Change.DeleteCategory -> JSONObject().put("type", "category.delete").put("id", change.id)
+        is Change.SaveMember -> JSONObject().put("type", "member").put("created", change.created).put("row", change.member.toJson())
+        is Change.DeleteMember -> JSONObject().put("type", "member.delete").put("id", change.id)
+        is Change.SavePayment -> JSONObject().put("type", "payment").put("created", change.created).put("row", change.method.toJson())
+        is Change.DeletePayment -> JSONObject().put("type", "payment.delete").put("id", change.id)
+        is Change.DeleteImage -> JSONObject().put("type", "image.delete").put("path", change.path)
+    }
+
+    private fun decode(json: JSONObject): Change {
+        val created = json.optBoolean("created")
+        val id = json.optLong("id")
+        return when (val type = json.getString("type")) {
+            "transaction" -> Change.SaveTransaction(json.getJSONObject("row").toTransaction(), created)
+            "transaction.delete" -> Change.DeleteTransaction(id)
+            "recurring" -> Change.SaveRecurring(json.getJSONObject("row").toRecurring(), created)
+            "recurring.delete" -> Change.DeleteRecurring(id)
+            "category" -> Change.SaveCategory(
+                json.getJSONObject("row").toCategory(),
+                json.getJSONArray("subs").objects().map { it.toCategory() },
+                json.getJSONArray("createdIds").let { ids -> (0 until ids.length()).map { ids.getLong(it) }.toSet() },
+            )
+            "category.delete" -> Change.DeleteCategory(id)
+            "member" -> Change.SaveMember(json.getJSONObject("row").toMember(), created)
+            "member.delete" -> Change.DeleteMember(id)
+            "payment" -> Change.SavePayment(json.getJSONObject("row").toPayment(), created)
+            "payment.delete" -> Change.DeletePayment(id)
+            "image.delete" -> Change.DeleteImage(json.getString("path"))
+            else -> throw IllegalArgumentException("modifica sconosciuta ($type)")
+        }
+    }
 
     /** Replaces the account's data with [snapshot], images included. */
     suspend fun upload(snapshot: MoneyRepository.Snapshot) = write { config ->
@@ -278,6 +424,11 @@ class ServerSync(
 
     companion object {
         private const val IMAGES = "/images/"
+        private const val TRANSACTIONS = "transactions"
+        private const val RECURRING = "recurring"
+        private const val CATEGORIES = "categories"
+        private const val MEMBERS = "members"
+        private const val PAYMENTS = "payments"
 
         /** Names the server gives to uploaded images; the app's own have no random suffix. */
         fun isServerImage(name: String) = name.matches(Regex("(receipt|logo)_\\d+_[0-9a-f]{6}\\.jpg"))

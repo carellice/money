@@ -214,8 +214,7 @@ route('DELETE', '/api/recurring/:id', (_req, res, [id]) => {
 
 route('POST', '/api/categories', async (req, res) => {
   const { category, subs } = await readJson<{ category: Category; subs: Category[] }>(req)
-  data.saveCategory(category, subs ?? [])
-  json(res, 200, { ok: true })
+  json(res, 200, { ok: true, ...data.saveCategory(category, subs ?? []) })
 })
 
 route('DELETE', '/api/categories/:id', (_req, res, [id]) => {
@@ -224,8 +223,7 @@ route('DELETE', '/api/categories/:id', (_req, res, [id]) => {
 })
 
 route('POST', '/api/members', async (req, res) => {
-  data.saveMember(await readJson<Member>(req))
-  json(res, 200, { ok: true })
+  json(res, 200, { ok: true, id: data.saveMember(await readJson<Member>(req)) })
 })
 
 route('DELETE', '/api/members/:id', (_req, res, [id]) => {
