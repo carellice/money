@@ -7,6 +7,8 @@ Set-Location $root
 function Step($text) { Write-Host "`n==> $text" -ForegroundColor Magenta }
 function Fail($text) { Write-Host "`nERRORE: $text" -ForegroundColor Red; exit 1 }
 function Run($exe, [string[]]$arguments) {
+    # Git writes warnings (line endings...) on stderr: only the exit code says whether it failed.
+    $ErrorActionPreference = "Continue"
     & $exe @arguments
     if ($LASTEXITCODE -ne 0) { Fail "$exe $($arguments -join ' ') non riuscito" }
 }
