@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { currentMonth, type Month } from '../../../shared/date.ts'
-import { Palette, type AppState, type Category, type CustomPayment, type Member, type Recurring, type Transaction } from '../../../shared/model.ts'
+import { Palette, type RecurringSort, type AppState, type Category, type CustomPayment, type Member, type Recurring, type Transaction } from '../../../shared/model.ts'
 import { api } from './api.ts'
 
 // --- device settings (theme, accent, lock): per phone, like the Android DataStore -----------
@@ -20,6 +20,7 @@ export type Settings = {
   /** ARGB of the app primary color. */
   accent: number
   onboarded: boolean
+  recurringSort: RecurringSort
 }
 
 // Every account keeps its own settings and data cache, so a shared tablet can switch between them.
@@ -41,7 +42,9 @@ function write(key: string, value: string | null) {
 let currentUser = read(LAST_USER_KEY) ?? ''
 
 function loadSettings(user: string): Settings {
-  const defaults: Settings = { theme: 'SYSTEM', lockCredential: null, remindersEnabled: false, accent: Palette.LILAC, onboarded: false }
+  const defaults: Settings = {
+    theme: 'SYSTEM', lockCredential: null, remindersEnabled: false, accent: Palette.LILAC, onboarded: false, recurringSort: 'NEXT',
+  }
   try {
     return { ...defaults, ...JSON.parse(read(settingsKey(user)) ?? '{}') }
   } catch {

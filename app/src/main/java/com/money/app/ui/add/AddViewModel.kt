@@ -37,8 +37,12 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
         runCatching { TxType.valueOf(handle.get<String>("type") ?: "") }.getOrDefault(TxType.EXPENSE)
     )
         private set
-    var amountText by mutableStateOf("")
-        private set
+    /** Digits typed on the keypad, POS style: the last two are always the cents ("1250" is 12,50 €). */
+    private var digits by mutableStateOf("")
+
+    /** The amount as shown above the keypad ("12,50"), empty before the first digit. */
+    val amountText: String
+        get() = digits.toLongOrNull()?.let { "%d,%02d".format(it / 100, it % 100) }.orEmpty()
     var categoryId by mutableStateOf<Long?>(null)
         private set
     var subcategoryId by mutableStateOf<Long?>(null)
@@ -64,7 +68,7 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
     val members: StateFlow<List<MemberEntity>> =
         repo.members.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val amountCents: Long get() = Money.parse(amountText) ?: 0L
+    val amountCents: Long get() = digits.toLongOrNull() ?: 0L
 
     /** With people set up, every movement must say whose it is. */
     val memberChosen: Boolean get() = members.value.isEmpty() || members.value.any { it.id == memberId }
@@ -75,7 +79,7 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
             repo.transaction(editId)?.let { tx ->
                 original = tx
                 type = tx.type
-                amountText = Money.toInput(tx.amountCents)
+                digits = tx.amountCents.toString()
                 categoryId = tx.categoryId
                 subcategoryId = tx.subcategoryId
                 date = LocalDate.ofEpochDay(tx.date)
@@ -88,24 +92,18 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
         }
     }
 
-    fun press(key: Char) {
-        val t = amountText
-        if (key == ',') {
-            if (!t.contains(',')) amountText = if (t.isEmpty()) "0," else "$t,"
-            return
-        }
-        if (t.contains(',')) {
-            if (t.substringAfter(',').length >= 2) return
-        } else if (t.length >= 7) return
-        amountText = if (t == "0") key.toString() else t + key
+    /** A digit (or "00") enters from the right, as on a card terminal. */
+    fun press(key: String) {
+        val next = (digits + key).trimStart('0')
+        if (next.length <= MAX_DIGITS) digits = next
     }
 
     fun backspace() {
-        amountText = amountText.dropLast(1)
+        digits = digits.dropLast(1)
     }
 
     fun clearAmount() {
-        amountText = ""
+        digits = ""
     }
 
     fun switchType(newType: TxType) {
@@ -209,5 +207,10 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
 
     override fun onCleared() {
         if (!saved) createdReceipts.forEach(repo::deleteImage)
+    }
+
+    private companion object {
+        /** Up to 9.999.999,99 €. */
+        const val MAX_DIGITS = 9
     }
 }

@@ -16,8 +16,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.rounded.SwapVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import com.money.app.data.PaymentChoice
+import com.money.app.data.Payments
+import com.money.app.data.RecurringSort
 import com.money.app.data.paymentChoice
+import com.money.app.ui.components.AppIcons
+import com.money.app.ui.components.LocalPayments
+import com.money.app.ui.components.SectionTitle
+import com.money.app.ui.components.SoftCard
 import com.money.app.ui.settings.PaymentPills
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
@@ -85,15 +94,32 @@ import com.money.app.ui.theme.Ui
 import com.money.app.ui.theme.blob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 
-class RecurringViewModel(container: AppContainer) : ViewModel() {
+class RecurringViewModel(private val container: AppContainer) : ViewModel() {
     private val repo = container.repository
-    val items: StateFlow<List<RecurringEntity>?> = repo.recurring
-        .map { list -> list.sortedWith(compareByDescending<RecurringEntity> { it.active }.thenBy { it.nextDate }) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val sort: StateFlow<RecurringSort> = container.settings.settings.map { it.recurringSort }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, RecurringSort.NEXT)
+
+    val items: StateFlow<List<RecurringEntity>?> = combine(repo.recurring, repo.customPayments, sort) { list, custom, sort ->
+        val payments = Payments(custom)
+        val order: Comparator<RecurringEntity> = when (sort) {
+            RecurringSort.NEXT -> compareBy { it.nextDate }
+            RecurringSort.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+            RecurringSort.COST_HIGH -> compareByDescending { it.frequency.monthlyCents(it.amountCents) }
+            RecurringSort.COST_LOW -> compareBy { it.frequency.monthlyCents(it.amountCents) }
+            RecurringSort.PAYMENT -> compareBy<RecurringEntity, String>(String.CASE_INSENSITIVE_ORDER) {
+                payments.label(it.paymentChoice)
+            }.thenBy { it.nextDate }
+        }
+        list.sortedWith(compareByDescending<RecurringEntity> { it.active }.then(order))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun setSort(sort: RecurringSort) = viewModelScope.launch { container.settings.setRecurringSort(sort) }
 
     /** Records one payment of [item] now, without touching its schedule. */
     fun registerNow(item: RecurringEntity, cents: Long, date: LocalDate, payment: PaymentChoice, onDone: () -> Unit) = viewModelScope.launch {
@@ -118,7 +144,9 @@ class RecurringViewModel(container: AppContainer) : ViewModel() {
 fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
     val vm = appViewModel { c, _ -> RecurringViewModel(c) }
     val all by vm.items.collectAsStateWithLifecycle()
+    val sort by vm.sort.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var yearly by rememberSaveable { mutableStateOf(false) }
     var registering by remember { mutableStateOf<RecurringEntity?>(null) }
     val context = LocalContext.current
     val c = Ui.colors
@@ -169,6 +197,9 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
                 modifier = Modifier.staggered(1),
             )
         }
+        if (visible.size > 1) {
+            item { SortRow(sort, vm::setSort, Modifier.staggered(1)) }
+        }
         if (visible.isEmpty()) {
             item {
                 EmptyState(
@@ -180,6 +211,11 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
         }
         items(visible, key = { it.id }) { item ->
             RecurringCard(item, Modifier.animateItem().staggered(2), onLongClick = { registering = item }) { onOpen(item.id) }
+        }
+        if (visible.any { it.active }) {
+            item(key = "payments") {
+                PaymentTotals(visible.filter { it.active }, yearly, { yearly = it }, Modifier.animateItem().padding(top = 12.dp))
+            }
         }
         if (visible.isNotEmpty()) {
             item {
@@ -285,6 +321,17 @@ private fun RecurringCard(item: RecurringEntity, modifier: Modifier, onLongClick
         Spacer(Modifier.size(14.dp))
         Column(Modifier.weight(1f)) {
             Text(item.name, style = Ui.type.bodyStrong, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val payments = LocalPayments.current
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(AppIcons[payments.icon(item.paymentChoice)], null, tint = c.inkFaint, modifier = Modifier.size(13.dp))
+                Text(
+                    " " + payments.label(item.paymentChoice),
+                    style = Ui.type.caption,
+                    color = c.inkSoft,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (item.autoRegister) Icon(Icons.Rounded.Autorenew, null, tint = c.inkFaint, modifier = Modifier.size(13.dp))
                 if (item.remindDaysBefore >= 0) Icon(Icons.Rounded.NotificationsActive, null, tint = c.inkFaint, modifier = Modifier.size(13.dp))
@@ -307,6 +354,62 @@ private fun RecurringCard(item: RecurringEntity, modifier: Modifier, onLongClick
                     color = Ink,
                     modifier = Modifier.clip(CircleShape).background(c.expense).padding(horizontal = 8.dp, vertical = 2.dp),
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SortRow(sort: RecurringSort, onSort: (RecurringSort) -> Unit, modifier: Modifier = Modifier) {
+    val c = Ui.colors
+    var open by remember { mutableStateOf(false) }
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("Ordina per", style = Ui.type.caption, color = c.inkSoft, modifier = Modifier.weight(1f))
+        Box {
+            Pill(sort.label, false, { open = true }, icon = Icons.Rounded.SwapVert)
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = c.surface) {
+                RecurringSort.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.label, style = Ui.type.label, color = c.ink) },
+                        trailingIcon = { if (option == sort) Icon(Icons.Rounded.Check, null, tint = c.accentText) },
+                        onClick = {
+                            open = false
+                            onSort(option)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** What the active fixed expenses cost on each payment method, per month or per year. */
+@Composable
+private fun PaymentTotals(items: List<RecurringEntity>, yearly: Boolean, onYearly: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val c = Ui.colors
+    val payments = LocalPayments.current
+    val totals = items.groupBy { it.paymentChoice }
+        .map { (choice, list) ->
+            choice to list.sumOf { if (yearly) it.frequency.yearlyCents(it.amountCents) else it.frequency.monthlyCents(it.amountCents) }
+        }
+        .sortedByDescending { it.second }
+    Column(modifier) {
+        SectionTitle("Per metodo di pagamento")
+        SoftCard {
+            Segmented(listOf("Al mese", "All'anno"), if (yearly) 1 else 0, { onYearly(it == 1) })
+            totals.forEach { (choice, cents) ->
+                val count = items.count { it.paymentChoice == choice }
+                Spacer(Modifier.height(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(AppIcons[payments.icon(choice)], null, tint = c.inkSoft, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.size(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(payments.label(choice), style = Ui.type.bodyStrong, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (count == 1) "1 voce" else "$count voci", style = Ui.type.caption, color = c.inkFaint)
+                    }
+                    Text(Money.format(cents), style = Ui.type.amount, color = c.ink)
+                    Text(if (yearly) "/anno" else "/mese", style = Ui.type.caption, color = c.inkFaint, modifier = Modifier.padding(start = 4.dp))
+                }
             }
         }
     }

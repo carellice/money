@@ -68,6 +68,23 @@ export function monthlyCents(id: Frequency, cents: number): number {
   return f.weeks > 0 ? Math.trunc((cents * 52) / 12) : Math.trunc(cents / f.months)
 }
 
+/** Cost over a year of something billed [cents] at this frequency. */
+export function yearlyCents(id: Frequency, cents: number): number {
+  const f = frequency(id)
+  return f.weeks > 0 ? cents * 52 : Math.trunc((cents * 12) / f.months)
+}
+
+/** Order of the fixed expenses list; paused ones always go last. */
+export type RecurringSort = 'NEXT' | 'NAME' | 'COST_HIGH' | 'COST_LOW' | 'PAYMENT'
+
+export const recurringSorts: { id: RecurringSort; label: string }[] = [
+  { id: 'NEXT', label: 'Prossimo addebito' },
+  { id: 'NAME', label: 'Nome' },
+  { id: 'COST_HIGH', label: 'Costo più alto' },
+  { id: 'COST_LOW', label: 'Costo più basso' },
+  { id: 'PAYMENT', label: 'Metodo di pagamento' },
+]
+
 export type Category = {
   id: number
   name: string

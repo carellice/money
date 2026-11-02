@@ -25,7 +25,8 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
   const isEdit = id !== 0
 
   const [type, setType] = useState<TxType>(original?.type ?? initialType)
-  const [amountText, setAmountText] = useState(original ? Money.toInput(original.amountCents) : '')
+  /** Digits typed on the keypad, POS style: the last two are always the cents ("1250" is 12,50 €). */
+  const [digits, setDigits] = useState(original ? String(original.amountCents) : '')
   const [categoryId, setCategoryId] = useState<number | null>(original?.categoryId ?? null)
   const [subcategoryId, setSubcategoryId] = useState<number | null>(original?.subcategoryId ?? null)
   const [date, setDate] = useState(original?.date ?? todayEpoch())
@@ -57,21 +58,16 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
 
   useBackHandler(step > 0 && !isEdit, useCallback(() => setStep(step - 1), [step, setStep]))
 
-  const amountCents = Money.parse(amountText) ?? 0
+  const amountCents = Number(digits || '0')
+  const amountText = digits ? `${Math.trunc(amountCents / 100)},${String(amountCents % 100).padStart(2, '0')}` : ''
   const accent = type === 'EXPENSE' ? 'var(--expense)' : 'var(--income)'
   /** With people set up, every movement must say whose it is. */
   const memberChosen = members.length === 0 || members.some((m) => m.id === memberId)
 
+  /** A digit (or "00") enters from the right, as on a card terminal; up to 9.999.999,99 €. */
   const press = (key: string) => {
-    const t = amountText
-    if (key === ',') {
-      if (!t.includes(',')) setAmountText(t === '' ? '0,' : `${t},`)
-      return
-    }
-    if (t.includes(',')) {
-      if (t.split(',')[1].length >= 2) return
-    } else if (t.length >= 7) return
-    setAmountText(t === '0' ? key : t + key)
+    const next = (digits + key).replace(/^0+/, '')
+    if (next.length <= 9) setDigits(next)
   }
 
   const switchType = (newType: TxType) => {
@@ -201,8 +197,8 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
             >
               {step === 0 && (
                 <AmountStep type={type} isEdit={isEdit} accent={accent} amountText={amountText} amountCents={amountCents}
-                  onType={switchType} onKey={press} onBackspace={() => setAmountText(amountText.slice(0, -1))}
-                  onClear={() => setAmountText('')} onNext={() => setStep(1)} />
+                  onType={switchType} onKey={press} onBackspace={() => setDigits(digits.slice(0, -1))}
+                  onClear={() => setDigits('')} onNext={() => setStep(1)} />
               )}
               {step === 1 && (
                 <CategoryStep type={type} categories={categories} categoryId={categoryId} subcategoryId={subcategoryId}
@@ -278,17 +274,18 @@ function AmountStep(p: {
 }
 
 function AmountDisplay({ text }: { text: string }) {
-  const shown = text || '0'
+  const shown = text || '0,00'
   const size = shown.length > 8 ? 44 : shown.length > 6 ? 52 : 64
   return (
     <div className="row t-hero" style={{ alignItems: 'flex-end', fontSize: size, lineHeight: `${size}px` }}>
-      {[...shown].map((ch, i) => <PopChar key={`${i}-${ch}`} ch={ch} still={!text} />)}
+      {/* Only the digit just typed pops in: the others slide left as on a card terminal. */}
+      {[...shown].map((ch, i) => <PopChar key={`${i}-${ch}`} ch={ch} faint={!text} still={!text || i !== shown.length - 1} />)}
       <span style={{ fontSize: size * 0.5, lineHeight: 1.15, color: 'var(--inkSoft)', paddingBottom: 8 }}>&nbsp;€</span>
     </div>
   )
 }
 
-function PopChar({ ch, still }: { ch: string; still: boolean }) {
+function PopChar({ ch, faint, still }: { ch: string; faint: boolean; still: boolean }) {
   const ref = useRef<HTMLSpanElement>(null)
   useEffect(() => {
     if (still) return
@@ -305,12 +302,12 @@ function PopChar({ ch, still }: { ch: string; still: boolean }) {
     return () => controls.stop()
   }, [still])
   return (
-    <span ref={ref} style={{ display: 'inline-block', color: still ? 'var(--inkFaint)' : 'var(--ink)', opacity: still ? 1 : 0, transformOrigin: 'center' }}>{ch}</span>
+    <span ref={ref} style={{ display: 'inline-block', color: faint ? 'var(--inkFaint)' : 'var(--ink)', opacity: still ? 1 : 0, transformOrigin: 'center' }}>{ch}</span>
   )
 }
 
 function Keypad({ onKey, onBackspace, onClear }: { onKey: (k: string) => void; onBackspace: () => void; onClear: () => void }) {
-  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '<']
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '<']
   return (
     <div className="col" style={{ gap: 10, width: '100%' }}>
       {[0, 1, 2, 3].map((r) => (

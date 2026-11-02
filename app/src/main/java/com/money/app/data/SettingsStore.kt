@@ -20,6 +20,7 @@ data class Settings(
     /** ARGB of the app primary color. */
     val accent: Long = Palette.LILAC,
     val onboarded: Boolean = false,
+    val recurringSort: RecurringSort = RecurringSort.NEXT,
 )
 
 private val Context.dataStore by preferencesDataStore("settings")
@@ -31,6 +32,7 @@ class SettingsStore(private val context: Context) {
         val reminders = booleanPreferencesKey("reminders")
         val accent = longPreferencesKey("accent")
         val onboarded = booleanPreferencesKey("onboarded")
+        val recurringSort = stringPreferencesKey("recurring_sort")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
@@ -42,6 +44,7 @@ class SettingsStore(private val context: Context) {
     suspend fun setReminders(enabled: Boolean) = context.dataStore.edit { it[Keys.reminders] = enabled }
     suspend fun setAccent(color: Long) = context.dataStore.edit { it[Keys.accent] = color }
     suspend fun setOnboarded() = context.dataStore.edit { it[Keys.onboarded] = true }
+    suspend fun setRecurringSort(sort: RecurringSort) = context.dataStore.edit { it[Keys.recurringSort] = sort.name }
 
     private fun Preferences.toSettings() = Settings(
         theme = this[Keys.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
@@ -49,5 +52,6 @@ class SettingsStore(private val context: Context) {
         remindersEnabled = this[Keys.reminders] ?: true,
         accent = this[Keys.accent] ?: Palette.LILAC,
         onboarded = this[Keys.onboarded] ?: false,
+        recurringSort = this[Keys.recurringSort]?.let { runCatching { RecurringSort.valueOf(it) }.getOrNull() } ?: RecurringSort.NEXT,
     )
 }

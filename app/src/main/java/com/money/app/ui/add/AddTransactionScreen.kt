@@ -244,7 +244,7 @@ private fun AmountStep(vm: AddViewModel, accent: Color) {
 @Composable
 private fun AmountDisplay(text: String) {
     val c = Ui.colors
-    val shown = text.ifEmpty { "0" }
+    val shown = text.ifEmpty { "0,00" }
     val size = when {
         shown.length > 8 -> 44.sp
         shown.length > 6 -> 52.sp
@@ -254,7 +254,8 @@ private fun AmountDisplay(text: String) {
     Row(verticalAlignment = Alignment.Bottom) {
         shown.forEachIndexed { i, ch ->
             key(i, ch) {
-                val pop = remember { Animatable(if (text.isEmpty()) 1f else 0f) }
+                // Only the digit just typed pops in: the others slide left as on a card terminal.
+                val pop = remember { Animatable(if (text.isEmpty() || i != shown.lastIndex) 1f else 0f) }
                 LaunchedEffect(Unit) { pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 600f)) }
                 Text(
                     ch.toString(),
@@ -274,9 +275,9 @@ private fun AmountDisplay(text: String) {
 }
 
 @Composable
-private fun Keypad(onKey: (Char) -> Unit, onBackspace: () -> Unit, onClear: () -> Unit) {
+private fun Keypad(onKey: (String) -> Unit, onBackspace: () -> Unit, onClear: () -> Unit) {
     val c = Ui.colors
-    val keys = listOf('1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '<')
+    val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "00", "0", "<")
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         keys.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -285,15 +286,15 @@ private fun Keypad(onKey: (Char) -> Unit, onBackspace: () -> Unit, onClear: () -
                         Modifier
                             .weight(1f)
                             .height(62.dp)
-                            .bouncyClick(pressedScale = 0.88f) { if (k == '<') onBackspace() else onKey(k) }
+                            .bouncyClick(pressedScale = 0.88f) { if (k == "<") onBackspace() else onKey(k) }
                             .clip(RoundedCornerShape(24.dp))
                             .background(c.surface),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (k == '<') {
+                        if (k == "<") {
                             Icon(Icons.AutoMirrored.Rounded.Backspace, "Cancella", tint = c.ink)
                         } else {
-                            Text(k.toString(), style = Ui.type.title, color = c.ink)
+                            Text(k, style = Ui.type.title, color = c.ink)
                         }
                     }
                 }

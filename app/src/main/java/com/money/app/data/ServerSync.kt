@@ -28,7 +28,7 @@ class ServerSync(
     outboxFile: File,
     private val imagesDir: () -> File,
 ) {
-    val client = ServerClient()
+    val client = ServerClient(store.connectivity)
     private val mutex = Mutex()
     private val outbox = Outbox(outboxFile)
 

@@ -1,8 +1,14 @@
 package com.money.app.data
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import com.money.app.ai.SecretBox
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,6 +16,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.net.InetAddress
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -22,8 +29,24 @@ class ServerException(message: String, val status: Int = 0) : Exception(message)
     val offline: Boolean get() = status == 0 || status in 502..504
 }
 
+/** Whether the phone has a network that could reach the server at all. */
+class Connectivity(context: Context) {
+    private val manager = context.getSystemService(ConnectivityManager::class.java)
+
+    /** A VPN alone (Tailscale with no Wi-Fi or mobile data under it) can't reach anything. */
+    @Suppress("DEPRECATION")
+    fun available(): Boolean = runCatching {
+        manager.allNetworks.any { network ->
+            val caps = manager.getNetworkCapabilities(network) ?: return@any false
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+        }
+    }.getOrDefault(true)
+}
+
 class ServerStore(context: Context) {
     private val prefs = context.getSharedPreferences("server", Context.MODE_PRIVATE)
+
+    val connectivity = Connectivity(context)
 
     private val _config = MutableStateFlow(load())
     /** Null while the app keeps its data only on the phone. */
@@ -74,10 +97,29 @@ class ServerStore(context: Context) {
 }
 
 /** The same HTTP API the PWA uses, with the session cookie of the account. */
-class ServerClient {
+class ServerClient(private val connectivity: Connectivity? = null) {
+    /** Name lookups run here, so a lookup that hangs without a connection can be left behind. */
+    private val lookups = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    /**
+     * Fails at once without a network, and after a few seconds when the server's name can't be
+     * resolved: without a connection the lookup can hang well past the connection timeout.
+     */
+    private suspend fun ensureReachable(url: String) {
+        if (connectivity?.available() == false) throw ServerException(UNREACHABLE)
+        val host = runCatching { URL(url).host }.getOrNull() ?: return
+        if (host.isEmpty() || host.first().isDigit() || host.contains(':')) return
+        val found = try {
+            withTimeoutOrNull(LOOKUP_MS) { lookups.async { InetAddress.getByName(host) }.await() }
+        } catch (e: IOException) {
+            null
+        }
+        if (found == null) throw ServerException(UNREACHABLE)
+    }
 
     /** Logs in (or creates the account) and returns the session token. */
     suspend fun login(url: String, username: String, password: String, register: Boolean): String = withContext(Dispatchers.IO) {
+        ensureReachable(url)
         val body = JSONObject().put("username", username).put("password", password).toString().toByteArray()
         val connection = open(url, if (register) "/api/register" else "/api/login", "POST", null)
         try {
@@ -125,6 +167,7 @@ class ServerClient {
     }
 
     suspend fun downloadImage(config: ServerConfig, path: String, target: File) = withContext(Dispatchers.IO) {
+        ensureReachable(config.url)
         val connection = open(config.url, path, "GET", config.token)
         try {
             val code = connection.responseCode
@@ -146,6 +189,7 @@ class ServerClient {
         body: ByteArray? = null,
         type: String? = null,
     ): String = withContext(Dispatchers.IO) {
+        ensureReachable(config.url)
         val connection = open(config.url, path, method, config.token)
         try {
             if (body != null) {
@@ -187,12 +231,14 @@ class ServerClient {
     private fun unreachable(e: IOException) = ServerException(
         when (e) {
             is javax.net.ssl.SSLException -> "Certificato HTTPS non valido: con il certificato locale installalo prima sul telefono"
-            else -> "Server non raggiungibile: controlla la connessione (e Tailscale, se lo usi)"
+            else -> UNREACHABLE
         }
     )
 
     companion object {
         private const val SESSION = "money_session"
+        private const val LOOKUP_MS = 5_000L
+        private const val UNREACHABLE = "Server non raggiungibile: controlla la connessione (e Tailscale, se lo usi)"
 
         /** "casaos.local:8095" → "https://casaos.local:8095", without the trailing slash. */
         fun normalizeUrl(input: String): String {

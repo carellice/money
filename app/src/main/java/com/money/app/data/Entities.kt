@@ -28,6 +28,19 @@ enum class Frequency(val label: String, val short: String, val months: Int, val 
     /** Average cost per month of something billed [cents] at this frequency. */
     fun monthlyCents(cents: Long): Long =
         if (weeks > 0) cents * 52 / 12 else cents / months
+
+    /** Cost over a year of something billed [cents] at this frequency. */
+    fun yearlyCents(cents: Long): Long =
+        if (weeks > 0) cents * 52 else cents * 12 / months
+}
+
+/** Order of the fixed expenses list; paused ones always go last. */
+enum class RecurringSort(val label: String) {
+    NEXT("Prossimo addebito"),
+    NAME("Nome"),
+    COST_HIGH("Costo più alto"),
+    COST_LOW("Costo più basso"),
+    PAYMENT("Metodo di pagamento"),
 }
 
 enum class RecurringKind { SUBSCRIPTION, FIXED }
