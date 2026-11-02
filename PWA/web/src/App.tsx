@@ -2,7 +2,7 @@ import { animate, AnimatePresence, motion, useMotionValue, useTransform } from '
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
 import { parseMonthKey } from '../../shared/date.ts'
 import { api, authEvents } from './lib/api.ts'
-import { blobTime, onFrame } from './lib/blob.ts'
+import { BlobSpec, blobTime, onFrame } from './lib/blob.ts'
 import { navigate, openDeepLink, sheetRoutes, switchTab, topLevel, useNav, type Entry, type Route } from './lib/nav.ts'
 import { getStore, loggedUser, refresh, setMonth, setUser, updateSettings, useStore } from './lib/store.ts'
 import { applyTheme, Ink, themeColors } from './lib/theme.ts'
@@ -225,14 +225,15 @@ function tabDirection(from: Route, to: Route): number {
   return a < 0 || b < 0 ? 0 : Math.sign(b - a)
 }
 
-const CAPSULE_W = 56
-const CAPSULE_H = 34
+/** The capsule wraps the whole selected tab, icon and label, with a little air around it. */
+const CAPSULE_INSET = 2
+const CAPSULE_H = 64
 
 function BottomBar({ route }: { route: Route }) {
   const rowRef = useRef<HTMLDivElement>(null)
-  const icons = useRef<(HTMLDivElement | null)[]>([])
-  // Stable refs: a new callback each render would detach the icons right when the capsule measures them.
-  const iconRefs = useMemo(() => tabs.map((_, i) => (el: HTMLDivElement | null) => { icons.current[i] = el }), [])
+  const slots = useRef<(HTMLDivElement | null)[]>([])
+  // Stable refs: a new callback each render would detach the tabs right when the capsule measures them.
+  const slotRefs = useMemo(() => tabs.map((_, i) => (el: HTMLDivElement | null) => { slots.current[i] = el }), [])
   const selected = tabs.findIndex((t) => t.route === route)
   return (
     <div className="center nav-pad" style={{ position: 'relative' }}>
@@ -242,12 +243,12 @@ function BottomBar({ route }: { route: Route }) {
           boxShadow: '0 12px 28px rgba(21,18,31,0.22), 0 2px 8px rgba(21,18,31,0.12)',
         }}>
           {tabs.map((t, i) => (
-            <TabSlot key={t.route} gap={i === 2}>
-              <TabItem tab={t} selected={route === t.route} iconRef={iconRefs[i]} />
+            <TabSlot key={t.route} gap={i === 2} slotRef={slotRefs[i]}>
+              <TabItem tab={t} selected={route === t.route} />
             </TabSlot>
           ))}
-          {/* After the tabs, so their icons are in place when it measures them; it still sits behind. */}
-          <LiquidCapsule index={selected} rowRef={rowRef} icons={icons} />
+          {/* After the tabs, so they are in place when it measures them; it still sits behind. */}
+          <LiquidCapsule index={selected} rowRef={rowRef} slots={slots} />
         </div>
         <div className="center" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
           <AddButton />
@@ -258,54 +259,74 @@ function BottomBar({ route }: { route: Route }) {
 }
 
 /** Room for the add button goes before the third tab. */
-function TabSlot({ gap, children }: { gap: boolean; children: ReactNode }) {
+function TabSlot({ gap, slotRef, children }: { gap: boolean; slotRef: (el: HTMLDivElement | null) => void; children: ReactNode }) {
   return (
     <>
       {gap && <div style={{ width: 80, flexShrink: 0 }} />}
-      {children}
+      <div ref={slotRef} className="flex1" style={{ height: '100%', minWidth: 0, position: 'relative', zIndex: 1 }}>{children}</div>
     </>
   )
 }
 
 /**
- * The capsule behind the selected icon. Its two ends move on their own springs: the one in front
+ * The capsule behind the selected tab. Its two ends move on their own springs: the one in front
  * runs ahead and the one behind catches up later, so it stretches like a drop on the way and
- * settles back with a small bounce.
+ * settles back with a small bounce. Once it stops it slowly turns into a living blob, like the
+ * add button, and goes back to a smooth capsule as soon as it moves again.
  */
-function LiquidCapsule({ index, rowRef, icons }: {
+function LiquidCapsule({ index, rowRef, slots }: {
   index: number
   rowRef: RefObject<HTMLDivElement | null>
-  icons: RefObject<(HTMLDivElement | null)[]>
+  slots: RefObject<(HTMLDivElement | null)[]>
 }) {
   const left = useMotionValue(0)
-  const right = useMotionValue(CAPSULE_W)
-  const top = useMotionValue(0)
-  // Hidden until it knows where the first icon is.
+  const right = useMotionValue(0)
+  const rest = useMotionValue(1)
+  const middle = useMotionValue(0)
+  // Hidden until it knows where the first tab is.
   const opacity = useMotionValue(0)
   const placed = useRef(false)
-  const width = useTransform(() => Math.max(right.get() - left.get(), 44))
+  const width = useTransform(() => Math.max(right.get() - left.get(), rest.get() * 0.78))
   const x = useTransform(() => (left.get() + right.get()) / 2 - width.get() / 2)
   // Stretched it gets a little thinner, squeezed a little taller, like a drop of liquid.
-  const height = useTransform(() => Math.min(Math.max(CAPSULE_H * Math.pow(CAPSULE_W / width.get(), 0.25), CAPSULE_H * 0.78), CAPSULE_H * 1.12))
-  const y = useTransform(() => top.get() + CAPSULE_H / 2 - height.get() / 2)
+  const height = useTransform(() => Math.min(Math.max(CAPSULE_H * Math.pow(rest.get() / width.get(), 0.25), CAPSULE_H * 0.82), CAPSULE_H * 1.08))
+  const y = useTransform(() => middle.get() - height.get() / 2)
+  const radius = useTransform(() => Math.min(width.get(), height.get()) / 2)
+  // 0 smooth capsule, 1 blob: the capsule shrinks inside the blob while the blob grows over it.
+  const organic = useMotionValue(0)
+  const capsuleScale = useTransform(() => 1 - 0.4 * organic.get())
+  const capsuleOpacity = useTransform(() => (organic.get() > 0.99 ? 0 : 1))
+  const blobScale = useTransform(() => 0.75 + 0.25 * organic.get())
+  const blobOpacity = useTransform(() => (organic.get() < 0.01 ? 0 : opacity.get()))
+  const blobX = useTransform(() => (left.get() + right.get()) / 2 - rest.get() / 2)
+  const blobY = useTransform(() => middle.get() - CAPSULE_H / 2)
+  const blobWidth = useTransform(() => rest.get())
+  const blobPath = useRef<SVGPathElement>(null)
+  const spec = useMemo(() => new BlobSpec(11 + Math.max(index, 0), 7, 0.09), [index])
+
+  useEffect(() => onFrame((time) => {
+    if (organic.get() < 0.01 || !blobPath.current) return
+    blobPath.current.setAttribute('d', spec.path(rest.get(), CAPSULE_H, time * 1.4))
+  }), [spec, organic, rest])
 
   useLayoutEffect(() => {
     const row = rowRef.current
     if (!row || index < 0) return
+    // Layout offsets, not on-screen boxes: a tab shrinks a little while pressed.
     const target = () => {
-      const icon = icons.current?.[index]
-      if (!icon) return null
-      const r = row.getBoundingClientRect()
-      const b = icon.getBoundingClientRect()
-      return { center: b.left - r.left + b.width / 2, top: b.top - r.top }
+      const slot = slots.current?.[index]
+      if (!slot) return null
+      return { center: slot.offsetLeft + slot.offsetWidth / 2, half: slot.offsetWidth / 2 - CAPSULE_INSET }
     }
     const place = () => {
       const t = target()
       if (!t) return
-      top.set(t.top)
-      left.set(t.center - CAPSULE_W / 2)
-      right.set(t.center + CAPSULE_W / 2)
+      middle.set(row.clientHeight / 2)
+      rest.set(t.half * 2)
+      left.set(t.center - t.half)
+      right.set(t.center + t.half)
       opacity.set(1)
+      organic.set(1)
       placed.current = true
     }
     const controls: { stop: () => void }[] = []
@@ -313,13 +334,18 @@ function LiquidCapsule({ index, rowRef, icons }: {
     if (!t) return
     if (!placed.current) place()
     else {
-      top.set(t.top)
-      const toLeft = t.center - CAPSULE_W / 2
+      const toLeft = t.center - t.half
       const front = spring(0.8, 900)
       const back = spring(0.7, 240)
       const goingRight = toLeft > left.get()
-      controls.push(animate(left, toLeft, goingRight ? back : front))
-      controls.push(animate(right, t.center + CAPSULE_W / 2, goingRight ? front : back))
+      controls.push(animate(organic, 0, tween(120)))
+      const edges = [animate(left, toLeft, goingRight ? back : front), animate(right, t.center + t.half, goingRight ? front : back)]
+      controls.push(...edges)
+      let stopped = false
+      controls.push({ stop: () => { stopped = true } })
+      Promise.all(edges).then(() => {
+        if (!stopped) controls.push(animate(organic, 1, tween(700)))
+      })
     }
     // A new width (rotation, resize) puts it straight in place.
     let width = row.clientWidth
@@ -334,16 +360,28 @@ function LiquidCapsule({ index, rowRef, icons }: {
       observer.disconnect()
       controls.forEach((c) => c.stop())
     }
-  }, [index, rowRef, icons, left, right, top, opacity])
+  }, [index, rowRef, slots, left, right, rest, middle, opacity, organic])
 
   return (
-    <motion.div style={{
-      position: 'absolute', left: 0, top: 0, zIndex: 0, x, y, width, height, opacity, borderRadius: 999, background: 'var(--accent)', pointerEvents: 'none',
-    }} />
+    <>
+      <motion.div style={{
+        position: 'absolute', left: 0, top: 0, zIndex: 0, x, y, width, height, opacity, pointerEvents: 'none',
+      }}>
+        <motion.div style={{
+          width: '100%', height: '100%', borderRadius: radius, background: 'var(--accent)', scale: capsuleScale, opacity: capsuleOpacity,
+        }} />
+      </motion.div>
+      <motion.svg aria-hidden style={{
+        position: 'absolute', left: 0, top: 0, zIndex: 0, x: blobX, y: blobY, width: blobWidth, height: CAPSULE_H,
+        scale: blobScale, opacity: blobOpacity, overflow: 'visible', pointerEvents: 'none',
+      }}>
+        <path ref={blobPath} fill="var(--accent)" />
+      </motion.svg>
+    </>
   )
 }
 
-function TabItem({ tab, selected, iconRef }: { tab: (typeof tabs)[number]; selected: boolean; iconRef: (el: HTMLDivElement | null) => void }) {
+function TabItem({ tab, selected }: { tab: (typeof tabs)[number]; selected: boolean }) {
   const icon = useRef<HTMLDivElement>(null)
   const armed = useRef(false)
   // Chosen: the icon shrinks at once, then springs back to size wobbling side to side.
@@ -355,11 +393,10 @@ function TabItem({ tab, selected, iconRef }: { tab: (typeof tabs)[number]; selec
     armed.current = true
   }, [selected])
   return (
-    <Bouncy pressedScale={0.9} onClick={() => switchTab(tab.route)} className="col flex1" style={{ height: '100%', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
-      <div ref={iconRef} className="center" style={{ width: CAPSULE_W, height: CAPSULE_H }}>
-        <div ref={icon} className="center"><Icon name={tab.icon} size={24} color={selected ? Ink : 'var(--inkSoft)'} /></div>
-      </div>
-      <span className="t-caption" style={{ marginTop: 4, color: selected ? 'var(--ink)' : 'var(--inkSoft)', transition: 'color 0.25s', whiteSpace: 'nowrap' }}>
+    <Bouncy pressedScale={0.9} onClick={() => switchTab(tab.route)} className="col" style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+      <div ref={icon} className="center"><Icon name={tab.icon} size={24} color={selected ? Ink : 'var(--inkSoft)'} /></div>
+      {/* On the capsule both stay dark, as on every accent fill. */}
+      <span className="t-caption" style={{ marginTop: 4, color: selected ? Ink : 'var(--inkSoft)', transition: 'color 0.25s', whiteSpace: 'nowrap' }}>
         {tab.label}
       </span>
     </Bouncy>

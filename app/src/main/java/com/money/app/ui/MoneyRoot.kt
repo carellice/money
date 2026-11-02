@@ -7,18 +7,21 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.onPlaced
-import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.withTransform
+import com.money.app.ui.theme.BlobSpec
+import androidx.compose.ui.unit.Dp
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sign
 import androidx.compose.animation.animateColorAsState
@@ -290,8 +293,9 @@ private fun tabEnter(dir: Int): EnterTransition =
 private fun tabExit(dir: Int): ExitTransition =
     slideOutHorizontally(spring(dampingRatio = 0.85f, stiffness = 380f)) { -dir * it / 4 } + fadeOut(tween(160))
 
-private val CapsuleWidth = 56.dp
-private val CapsuleHeight = 34.dp
+/** The capsule wraps the whole selected tab, icon and label, with a little air around it. */
+private val CapsuleInset = 2.dp
+private val CapsuleHeight = 64.dp
 
 @Composable
 private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> Unit) {
@@ -318,13 +322,12 @@ private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> U
             val centers = with(density) {
                 tabs.indices.map { i -> (10.dp + slot * (i + 0.5f) + if (i >= 2) 80.dp else 0.dp).toPx() }
             }
-            var iconTop by remember { mutableFloatStateOf(Float.NaN) }
-            LiquidCapsule(selected, centers, iconTop, c.accent)
+            LiquidCapsule(selected, centers, slot - CapsuleInset * 2, c.accent)
             Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 // Every tab owns an equal slice of the full bar height, so the touch target is large.
                 tabs.forEachIndexed { i, tab ->
                     if (i == 2) Spacer(Modifier.width(80.dp))
-                    TabItem(tab, i == selected, Modifier.weight(1f), { iconTop = it }) { onSelect(tab.route) }
+                    TabItem(tab, i == selected, Modifier.weight(1f)) { onSelect(tab.route) }
                 }
             }
         }
@@ -333,53 +336,81 @@ private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> U
 }
 
 /**
- * The capsule behind the selected icon. Its two ends move on their own springs: the one in front
+ * The capsule behind the selected tab. Its two ends move on their own springs: the one in front
  * runs ahead and the one behind catches up later, so it stretches like a drop on the way and
- * settles back with a small bounce.
+ * settles back with a small bounce. Once it stops it slowly turns into a living blob, like the
+ * add button, and goes back to a smooth capsule as soon as it moves again.
  */
 @Composable
-private fun LiquidCapsule(index: Int, centers: List<Float>, top: Float, color: Color) {
+private fun LiquidCapsule(index: Int, centers: List<Float>, capsuleWidth: Dp, color: Color) {
     val density = LocalDensity.current
-    val half = with(density) { CapsuleWidth.toPx() / 2 }
+    val half = with(density) { capsuleWidth.toPx() / 2 }
     val left = remember { Animatable(Float.NaN) }
     val right = remember { Animatable(Float.NaN) }
-    LaunchedEffect(index, centers) {
+    val placedHalf = remember { floatArrayOf(Float.NaN) }
+    // 0 smooth capsule, 1 blob: the capsule shrinks inside the blob while the blob grows over it.
+    val organic = remember { Animatable(0f) }
+    val spec = remember(index) { BlobSpec(11 + max(index, 0), amplitude = 0.09f) }
+    val blobPath = remember { Path() }
+    val time = LocalBlobTime.current
+    LaunchedEffect(index, centers, half) {
         if (index < 0) return@LaunchedEffect
         val center = centers[index]
         val targetLeft = center - half
         val targetRight = center + half
-        if (left.value.isNaN()) {
+        // First time, or a new bar width: straight in place.
+        if (half != placedHalf[0]) {
+            placedHalf[0] = half
             left.snapTo(targetLeft)
             right.snapTo(targetRight)
+            organic.snapTo(1f)
             return@LaunchedEffect
         }
         val front = spring<Float>(dampingRatio = 0.8f, stiffness = 900f)
         val back = spring<Float>(dampingRatio = 0.7f, stiffness = 240f)
         val toRight = targetLeft > left.value
-        launch { left.animateTo(targetLeft, if (toRight) back else front) }
-        launch { right.animateTo(targetRight, if (toRight) front else back) }
+        launch { organic.animateTo(0f, tween(120)) }
+        val edges = listOf(
+            launch { left.animateTo(targetLeft, if (toRight) back else front) },
+            launch { right.animateTo(targetRight, if (toRight) front else back) },
+        )
+        edges.joinAll()
+        organic.animateTo(1f, tween(700))
     }
-    val minWidth = with(density) { 44.dp.toPx() }
-    val restWidth = with(density) { CapsuleWidth.toPx() }
+    val restWidth = half * 2
     val restHeight = with(density) { CapsuleHeight.toPx() }
     Box(
         Modifier.fillMaxSize().drawBehind {
-            if (left.value.isNaN() || top.isNaN()) return@drawBehind
-            val width = max(right.value - left.value, minWidth)
+            if (left.value.isNaN()) return@drawBehind
+            val width = max(right.value - left.value, restWidth * 0.78f)
             // Stretched it gets a little thinner, squeezed a little taller, like a drop of liquid.
-            val height = (restHeight * (restWidth / width).pow(0.25f)).coerceIn(restHeight * 0.78f, restHeight * 1.12f)
-            val x = (left.value + right.value) / 2 - width / 2
-            val y = top + restHeight / 2 - height / 2
-            drawRoundRect(color, Offset(x, y), Size(width, height), CornerRadius(height / 2))
+            val height = (restHeight * (restWidth / width).pow(0.25f)).coerceIn(restHeight * 0.82f, restHeight * 1.08f)
+            val center = (left.value + right.value) / 2
+            val o = organic.value
+            if (o < 0.99f) {
+                val k = 1f - 0.4f * o
+                val w = width * k
+                val h = height * k
+                drawRoundRect(color, Offset(center - w / 2, size.height / 2 - h / 2), Size(w, h), CornerRadius(min(w, h) / 2))
+            }
+            if (o > 0.01f) {
+                val k = 0.75f + 0.25f * o
+                spec.path(Size(restWidth, restHeight), time.value * 1.4f, blobPath)
+                withTransform({
+                    translate(center - restWidth / 2, size.height / 2 - restHeight / 2)
+                    scale(k, k, Offset(restWidth / 2, restHeight / 2))
+                }) { drawPath(blobPath, color) }
+            }
         },
     )
 }
 
 @Composable
-private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier, onIconTop: (Float) -> Unit, onClick: () -> Unit) {
+private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = Ui.colors
     val fg by animateColorAsState(if (selected) Ink else c.inkSoft, label = "tabFg")
-    val label by animateColorAsState(if (selected) c.ink else c.inkSoft, label = "tabLabel")
+    // On the capsule both stay dark, as on every accent fill.
+    val label by animateColorAsState(if (selected) Ink else c.inkSoft, label = "tabLabel")
     val scale = remember { Animatable(1f) }
     val tilt = remember { Animatable(0f) }
     var armed by remember { mutableStateOf(false) }
@@ -400,23 +431,16 @@ private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier, onIconTop: 
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Box(
-            Modifier
-                .size(width = CapsuleWidth, height = CapsuleHeight)
-                .onPlaced { onIconTop(it.positionInParent().y) },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                tab.icon, null, tint = fg,
-                modifier = Modifier
-                    .size(24.dp)
-                    .graphicsLayer {
-                        scaleX = scale.value
-                        scaleY = scale.value
-                        rotationZ = tilt.value
-                    },
-            )
-        }
+        Icon(
+            tab.icon, null, tint = fg,
+            modifier = Modifier
+                .size(24.dp)
+                .graphicsLayer {
+                    scaleX = scale.value
+                    scaleY = scale.value
+                    rotationZ = tilt.value
+                },
+        )
         Spacer(Modifier.height(4.dp))
         Text(tab.label, style = Ui.type.caption, color = label, maxLines = 1)
     }
