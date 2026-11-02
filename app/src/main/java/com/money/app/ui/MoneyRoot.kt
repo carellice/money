@@ -4,6 +4,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -297,6 +300,12 @@ private fun tabExit(dir: Int): ExitTransition =
 
 /** The capsule wraps the whole selected tab, icon and label, with a little air around it. */
 private val CapsuleInset = 2.dp
+
+/** How much bigger than the capsule the resting blob is. */
+private object BlobGrowth {
+    const val width = 1.22f
+    const val height = 1.14f
+}
 private val CapsuleHeight = 64.dp
 
 @Composable
@@ -324,12 +333,13 @@ private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> U
             val centers = with(density) {
                 tabs.indices.map { i -> (10.dp + slot * (i + 0.5f) + if (i >= 2) 80.dp else 0.dp).toPx() }
             }
-            LiquidCapsule(selected, centers, slot - CapsuleInset * 2, c.accent)
+            val labelWidths = remember { mutableStateListOf(0f, 0f, 0f, 0f) }
+            LiquidCapsule(selected, centers, slot - CapsuleInset * 2, { labelWidths.getOrElse(selected) { 0f } }, c.accent)
             Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 // Every tab owns an equal slice of the full bar height, so the touch target is large.
                 tabs.forEachIndexed { i, tab ->
                     if (i == 2) Spacer(Modifier.width(80.dp))
-                    TabItem(tab, i == selected, Modifier.weight(1f)) { onSelect(tab.route) }
+                    TabItem(tab, i == selected, Modifier.weight(1f), { labelWidths[i] = it }) { onSelect(tab.route) }
                 }
             }
         }
@@ -344,7 +354,7 @@ private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> U
  * add button, and goes back to a smooth capsule as soon as it moves again.
  */
 @Composable
-private fun LiquidCapsule(index: Int, centers: List<Float>, capsuleWidth: Dp, color: Color) {
+private fun LiquidCapsule(index: Int, centers: List<Float>, capsuleWidth: Dp, labelWidth: () -> Float, color: Color) {
     val density = LocalDensity.current
     val half = with(density) { capsuleWidth.toPx() / 2 }
     val left = remember { Animatable(Float.NaN) }
@@ -352,7 +362,7 @@ private fun LiquidCapsule(index: Int, centers: List<Float>, capsuleWidth: Dp, co
     val placedHalf = remember { floatArrayOf(Float.NaN) }
     // 0 smooth capsule, 1 blob: the capsule shrinks inside the blob while the blob grows over it.
     val organic = remember { Animatable(0f) }
-    val spec = remember(index) { BlobSpec(11 + max(index, 0), amplitude = 0.09f) }
+    val spec = remember(index) { BlobSpec(11 + max(index, 0), amplitude = 0.06f) }
     val blobPath = remember { Path() }
     val time = LocalBlobTime.current
     LaunchedEffect(index, centers, half) {
@@ -375,9 +385,9 @@ private fun LiquidCapsule(index: Int, centers: List<Float>, capsuleWidth: Dp, co
         launch { left.animateTo(targetLeft, if (toRight) back else front) }
         launch { right.animateTo(targetRight, if (toRight) front else back) }
         // As soon as both ends are about there, the blob takes over: the last wobble happens under it.
-        val near = 4f * density.density
+        val near = 8f * density.density
         snapshotFlow { abs(left.value - targetLeft) < near && abs(right.value - targetRight) < near }.first { it }
-        organic.animateTo(1f, tween(120))
+        organic.animateTo(1f, tween(260, easing = FastOutSlowInEasing))
     }
     val restWidth = half * 2
     val restHeight = with(density) { CapsuleHeight.toPx() }
@@ -389,6 +399,8 @@ private fun LiquidCapsule(index: Int, centers: List<Float>, capsuleWidth: Dp, co
             val height = (restHeight * (restWidth / width).pow(0.25f)).coerceIn(restHeight * 0.82f, restHeight * 1.08f)
             val center = (left.value + right.value) / 2
             val o = organic.value
+            // The capsule shrinks inside the blob while the blob grows over it, both following the
+            // capsule as it is right now: the shape changes without jumping anywhere.
             if (o < 0.99f) {
                 val k = 1f - 0.4f * o
                 val w = width * k
@@ -396,11 +408,17 @@ private fun LiquidCapsule(index: Int, centers: List<Float>, capsuleWidth: Dp, co
                 drawRoundRect(color, Offset(center - w / 2, size.height / 2 - h / 2), Size(w, h), CornerRadius(min(w, h) / 2))
             }
             if (o > 0.01f) {
-                val k = 0.75f + 0.25f * o
-                spec.path(Size(restWidth, restHeight), time.value * 1.4f, blobPath)
+                // Bigger than the capsule: a blob is round, and the label must stay inside it.
+                // Wide enough for the label too, which sits low where the blob is narrower.
+                val blob = Size(
+                    max(width * BlobGrowth.width, labelWidth() / 0.8f + 8.dp.toPx()),
+                    min(height * BlobGrowth.height, size.height - 6.dp.toPx()),
+                )
+                val k = 0.72f + 0.28f * o
+                spec.path(blob, time.value * 1.4f, blobPath)
                 withTransform({
-                    translate(center - restWidth / 2, size.height / 2 - restHeight / 2)
-                    scale(k, k, Offset(restWidth / 2, restHeight / 2))
+                    translate(center - blob.width / 2, size.height / 2 - blob.height / 2)
+                    scale(k, k, Offset(blob.width / 2, blob.height / 2))
                 }) { drawPath(blobPath, color) }
             }
         },
@@ -408,7 +426,7 @@ private fun LiquidCapsule(index: Int, centers: List<Float>, capsuleWidth: Dp, co
 }
 
 @Composable
-private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier, onLabelWidth: (Float) -> Unit, onClick: () -> Unit) {
     val c = Ui.colors
     val fg by animateColorAsState(if (selected) Ink else c.inkSoft, label = "tabFg")
     // On the capsule both stay dark, as on every accent fill.
@@ -444,7 +462,7 @@ private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier, onClick: ()
                 },
         )
         Spacer(Modifier.height(4.dp))
-        Text(tab.label, style = Ui.type.caption, color = label, maxLines = 1)
+        Text(tab.label, style = Ui.type.caption, color = label, maxLines = 1, modifier = Modifier.onSizeChanged { onLabelWidth(it.width.toFloat()) })
     }
 }
 

@@ -228,6 +228,9 @@ function tabDirection(from: Route, to: Route): number {
 /** The capsule wraps the whole selected tab, icon and label, with a little air around it. */
 const CAPSULE_INSET = 2
 const CAPSULE_H = 64
+/** How much bigger than the capsule the resting blob is. */
+const BLOB_W = 1.22
+const BLOB_H = 1.14
 
 function BottomBar({ route }: { route: Route }) {
   const rowRef = useRef<HTMLDivElement>(null)
@@ -296,18 +299,23 @@ function LiquidCapsule({ index, rowRef, slots }: {
   const organic = useMotionValue(0)
   const capsuleScale = useTransform(() => 1 - 0.4 * organic.get())
   const capsuleOpacity = useTransform(() => (organic.get() > 0.99 ? 0 : 1))
-  const blobScale = useTransform(() => 0.75 + 0.25 * organic.get())
+  const blobScale = useTransform(() => 0.72 + 0.28 * organic.get())
   const blobOpacity = useTransform(() => (organic.get() < 0.01 ? 0 : opacity.get()))
-  const blobX = useTransform(() => (left.get() + right.get()) / 2 - rest.get() / 2)
-  const blobY = useTransform(() => middle.get() - CAPSULE_H / 2)
-  const blobWidth = useTransform(() => rest.get())
+  // Bigger than the capsule and following it as it is right now: a blob is round, and the label
+  // must stay inside it; the shape changes without jumping anywhere.
+  // Wide enough for the label too, which sits low where the blob is narrower.
+  const labelWidth = useMotionValue(0)
+  const blobWidth = useTransform(() => Math.max(width.get() * BLOB_W, labelWidth.get() / 0.8 + 8))
+  const blobHeight = useTransform(() => Math.min(height.get() * BLOB_H, middle.get() * 2 - 6))
+  const blobX = useTransform(() => (left.get() + right.get()) / 2 - blobWidth.get() / 2)
+  const blobY = useTransform(() => middle.get() - blobHeight.get() / 2)
   const blobPath = useRef<SVGPathElement>(null)
-  const spec = useMemo(() => new BlobSpec(11 + Math.max(index, 0), 7, 0.09), [index])
+  const spec = useMemo(() => new BlobSpec(11 + Math.max(index, 0), 7, 0.06), [index])
 
   useEffect(() => onFrame((time) => {
     if (organic.get() < 0.01 || !blobPath.current) return
-    blobPath.current.setAttribute('d', spec.path(rest.get(), CAPSULE_H, time * 1.4))
-  }), [spec, organic, rest])
+    blobPath.current.setAttribute('d', spec.path(blobWidth.get(), blobHeight.get(), time * 1.4))
+  }), [spec, organic, blobWidth, blobHeight])
 
   useLayoutEffect(() => {
     const row = rowRef.current
@@ -316,13 +324,15 @@ function LiquidCapsule({ index, rowRef, slots }: {
     const target = () => {
       const slot = slots.current?.[index]
       if (!slot) return null
-      return { center: slot.offsetLeft + slot.offsetWidth / 2, half: slot.offsetWidth / 2 - CAPSULE_INSET }
+      const label = slot.querySelector<HTMLElement>('.t-caption')
+      return { center: slot.offsetLeft + slot.offsetWidth / 2, half: slot.offsetWidth / 2 - CAPSULE_INSET, label: label?.offsetWidth ?? 0 }
     }
     const place = () => {
       const t = target()
       if (!t) return
       middle.set(row.clientHeight / 2)
       rest.set(t.half * 2)
+      labelWidth.set(t.label)
       left.set(t.center - t.half)
       right.set(t.center + t.half)
       opacity.set(1)
@@ -335,6 +345,7 @@ function LiquidCapsule({ index, rowRef, slots }: {
     if (!placed.current) place()
     else {
       const toLeft = t.center - t.half
+      labelWidth.set(t.label)
       const toRight = t.center + t.half
       const front = spring(0.8, 900)
       const back = spring(0.7, 240)
@@ -344,9 +355,9 @@ function LiquidCapsule({ index, rowRef, slots }: {
       // As soon as both ends are about there, the blob takes over: the last wobble happens under it.
       let morphed = false
       const check = () => {
-        if (morphed || Math.abs(left.get() - toLeft) >= 4 || Math.abs(right.get() - toRight) >= 4) return
+        if (morphed || Math.abs(left.get() - toLeft) >= 8 || Math.abs(right.get() - toRight) >= 8) return
         morphed = true
-        controls.push(animate(organic, 1, tween(120)))
+        controls.push(animate(organic, 1, tween(260)))
       }
       const offLeft = left.on('change', check)
       const offRight = right.on('change', check)
@@ -365,7 +376,7 @@ function LiquidCapsule({ index, rowRef, slots }: {
       observer.disconnect()
       controls.forEach((c) => c.stop())
     }
-  }, [index, rowRef, slots, left, right, rest, middle, opacity, organic])
+  }, [index, rowRef, slots, left, right, rest, middle, opacity, organic, labelWidth])
 
   return (
     <>
@@ -377,7 +388,7 @@ function LiquidCapsule({ index, rowRef, slots }: {
         }} />
       </motion.div>
       <motion.svg aria-hidden style={{
-        position: 'absolute', left: 0, top: 0, zIndex: 0, x: blobX, y: blobY, width: blobWidth, height: CAPSULE_H,
+        position: 'absolute', left: 0, top: 0, zIndex: 0, x: blobX, y: blobY, width: blobWidth, height: blobHeight,
         scale: blobScale, opacity: blobOpacity, overflow: 'visible', pointerEvents: 'none',
       }}>
         <path ref={blobPath} fill="var(--accent)" />
