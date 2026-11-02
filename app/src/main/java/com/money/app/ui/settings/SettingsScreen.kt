@@ -202,6 +202,9 @@ fun SettingsScreen(onBack: () -> Unit, onOpenCategories: () -> Unit, onOpenAi: (
             FormLabel("Persone")
             MembersSection(members, vm::saveMember, vm::deleteMember)
 
+            FormLabel("Metodi di pagamento")
+            PaymentsSection()
+
             FormLabel("Organizza")
             NavRow(Icons.Rounded.Category, "Categorie e budget", "Sottocategorie, icone, colori e limiti mensili", onOpenCategories)
             val widgets = remember { AppWidgetManager.getInstance(context) }

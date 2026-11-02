@@ -1,8 +1,9 @@
 import { monthKey, monthYear, today } from '../../../shared/date.ts'
 import { Dates, Money, percent } from '../../../shared/format.ts'
-import { argb, Palette, payment } from '../../../shared/model.ts'
+import { argb, Palette, paymentChoice, paymentLabel } from '../../../shared/model.ts'
 import type { MonthReport } from '../../../shared/report.ts'
 import { BlobSpec } from './blob.ts'
+import { getStore } from './store.ts'
 
 // Draws the monthly report as a multi page A4 PDF and as a social card image, like ReportExport on Android.
 
@@ -352,7 +353,7 @@ class Pdf {
       ctx.fillText(ellipsize(ctx, [cat?.name, sub?.name].filter(Boolean).join(' · '), cols[2] - cols[1] - 8), cols[1], this.y + 9)
       ctx.fillText(ellipsize(ctx, tx.note, cols[3] - cols[2] - 8), cols[2], this.y + 9)
       font(ctx, 9, 400, INK_SOFT)
-      ctx.fillText(payment(tx.payment).label, cols[3], this.y + 9)
+      ctx.fillText(ellipsize(ctx, paymentLabel(paymentChoice(tx), getStore().data?.paymentMethods ?? []).label, rx - cols[3] - 60), cols[3], this.y + 9)
       const income = tx.type === 'INCOME'
       font(ctx, 9, 600, income ? '#1E8A63' : INK)
       right(ctx, Money.format(income ? tx.amountCents : -tx.amountCents, true), rx, this.y + 9)

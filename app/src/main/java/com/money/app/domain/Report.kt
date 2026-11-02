@@ -2,7 +2,9 @@ package com.money.app.domain
 
 import com.money.app.data.CategoryEntity
 import com.money.app.data.Palette
-import com.money.app.data.PaymentMethod
+import com.money.app.data.CustomPaymentEntity
+import com.money.app.data.PaymentChoice
+import com.money.app.data.Payments
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
 import com.money.app.domain.Dates.cap
@@ -58,7 +60,7 @@ data class MonthReport(
     /** Expense per day of month, index 0 = day 1. */
     val daily: List<Long>,
     val fixedExpense: Long,
-    val payments: List<Pair<PaymentMethod, Long>>,
+    val payments: List<Pair<PaymentChoice, Long>>,
     val top: List<TransactionEntity>,
     val prevIncome: Long,
     val prevExpense: Long,
@@ -68,6 +70,8 @@ data class MonthReport(
     val insights: List<Insight>,
     val transactions: List<TransactionEntity>,
     val categories: Map<Long, CategoryEntity>,
+    /** Names and icons of the payment methods, custom ones included. */
+    val paymentNames: Payments = Payments.builtIn,
 ) {
     val balance: Long get() = income - expense
     val variableExpense: Long get() = expense - fixedExpense
@@ -83,6 +87,7 @@ object ReportBuilder {
         month: YearMonth,
         all: List<TransactionEntity>,
         categories: List<CategoryEntity>,
+        customPayments: List<CustomPaymentEntity> = emptyList(),
         trendMonths: Int = 6,
         today: LocalDate = LocalDate.now(),
     ): MonthReport {
@@ -126,7 +131,7 @@ object ReportBuilder {
         }
 
         val savingsRate = if (income > 0) (income - expense).toFloat() / income else null
-        val payments = expenses.groupBy { it.payment }
+        val payments = expenses.groupBy { PaymentChoice(it.payment, it.paymentId) }
             .map { (method, list) -> method to list.sumOf { it.amountCents } }
             .sortedByDescending { it.second }
 
@@ -150,6 +155,7 @@ object ReportBuilder {
             insights = emptyList(),
             transactions = current,
             categories = byId,
+            paymentNames = Payments(customPayments),
         )
         return report.copy(pagella = pagella(report), insights = insights(report))
     }

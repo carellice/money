@@ -21,6 +21,7 @@ class MoneyRepository(
     private val txDao = db.transactions()
     private val recurringDao = db.recurring()
     private val memberDao = db.members()
+    private val paymentDao = db.payments()
 
     /** Server mode (data on the CasaOS server, as for the PWA); off keeps everything on the phone. */
     val server = ServerSync(db, serverStore) { imagesDir }
@@ -48,6 +49,7 @@ class MoneyRepository(
     val categories: Flow<List<CategoryEntity>> = categoryDao.observeAll()
     val recurring: Flow<List<RecurringEntity>> = recurringDao.observeAll()
     val members: Flow<List<MemberEntity>> = memberDao.observeAll()
+    val customPayments: Flow<List<CustomPaymentEntity>> = paymentDao.observeAll()
 
     fun transactionsIn(month: YearMonth): Flow<List<TransactionEntity>> =
         transactionsBetween(month.atDay(1), month.atEndOfMonth())
@@ -61,6 +63,7 @@ class MoneyRepository(
         txDao.range(from.toEpochDay(), to.toEpochDay())
 
     suspend fun allCategories(): List<CategoryEntity> = categoryDao.all()
+    suspend fun payments(): Payments = Payments(paymentDao.all())
     suspend fun transaction(id: Long) = txDao.get(id)
     suspend fun recurringItem(id: Long) = recurringDao.get(id)
 
@@ -139,6 +142,23 @@ class MoneyRepository(
         }
     }
 
+    /** Returns the id of the payment method, or -1 when the server didn't save it. */
+    suspend fun saveCustomPayment(method: CustomPaymentEntity): Long = either(-1L, { saveCustomPayment(method) }) {
+        val id = paymentDao.upsert(if (method.id == 0L) method.copy(sortOrder = paymentDao.all().size) else method)
+        if (method.id == 0L) id else method.id
+    }
+
+    /** Movements and fixed expenses paid that way stay, as "Altro". */
+    suspend fun deleteCustomPayment(method: CustomPaymentEntity) {
+        either(Unit, { deleteCustomPayment(method.id) }) {
+            db.withTransaction {
+                txDao.clearPayment(method.id)
+                recurringDao.clearPayment(method.id)
+                paymentDao.delete(method)
+            }
+        }
+    }
+
     /** The server seeds new accounts itself. */
     suspend fun seedIfEmpty() {
         if (server.enabled || categoryDao.count() > 0) return
@@ -192,6 +212,7 @@ class MoneyRepository(
                             categoryId = original.categoryId,
                             subcategoryId = original.subcategoryId,
                             payment = original.payment,
+                            paymentId = original.paymentId,
                             note = original.name,
                             recurringId = original.id,
                         )
@@ -235,9 +256,11 @@ class MoneyRepository(
         val transactions: List<TransactionEntity>,
         val recurring: List<RecurringEntity>,
         val members: List<MemberEntity>,
+        val payments: List<CustomPaymentEntity> = emptyList(),
     )
 
-    suspend fun snapshot() = Snapshot(categoryDao.all(), txDao.all(), recurringDao.all(), memberDao.all())
+    suspend fun snapshot() =
+        Snapshot(categoryDao.all(), txDao.all(), recurringDao.all(), memberDao.all(), paymentDao.all())
 
     /** In server mode the backup replaces the account's data on the server. */
     suspend fun replaceAll(snapshot: Snapshot) {
@@ -249,8 +272,10 @@ class MoneyRepository(
         recurringDao.clear()
         categoryDao.clear()
         memberDao.clear()
+        paymentDao.clear()
         categoryDao.insertAll(snapshot.categories)
         memberDao.insertAll(snapshot.members)
+        paymentDao.insertAll(snapshot.payments)
         txDao.insertAll(snapshot.transactions)
         recurringDao.insertAll(snapshot.recurring)
     }

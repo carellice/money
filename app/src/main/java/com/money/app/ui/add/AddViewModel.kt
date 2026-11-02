@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.money.app.AppContainer
 import com.money.app.data.CategoryEntity
 import com.money.app.data.MemberEntity
+import com.money.app.data.PaymentChoice
 import com.money.app.data.PaymentMethod
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
@@ -42,7 +43,7 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
         private set
     var subcategoryId by mutableStateOf<Long?>(null)
     var date by mutableStateOf(LocalDate.now())
-    var payment by mutableStateOf(if (type == TxType.INCOME) PaymentMethod.TRANSFER else PaymentMethod.CARD)
+    var payment by mutableStateOf(PaymentChoice(if (type == TxType.INCOME) PaymentMethod.TRANSFER else PaymentMethod.CARD))
     var note by mutableStateOf("")
     var receiptPath by mutableStateOf<String?>(null)
         private set
@@ -78,7 +79,7 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
                 categoryId = tx.categoryId
                 subcategoryId = tx.subcategoryId
                 date = LocalDate.ofEpochDay(tx.date)
-                payment = tx.payment
+                payment = PaymentChoice(tx.payment, tx.paymentId)
                 note = tx.note
                 receiptPath = tx.receiptPath
                 memberId = tx.memberId
@@ -112,7 +113,7 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
         type = newType
         categoryId = null
         subcategoryId = null
-        payment = if (newType == TxType.INCOME) PaymentMethod.TRANSFER else PaymentMethod.CARD
+        payment = PaymentChoice(if (newType == TxType.INCOME) PaymentMethod.TRANSFER else PaymentMethod.CARD)
     }
 
     fun selectCategory(id: Long) {
@@ -180,7 +181,8 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
                 date = date.toEpochDay(),
                 categoryId = category,
                 subcategoryId = subcategoryId,
-                payment = payment,
+                payment = payment.method,
+                paymentId = payment.customId,
                 note = note.trim(),
                 receiptPath = receiptPath,
                 recurringId = original?.recurringId,

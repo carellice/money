@@ -19,6 +19,33 @@ export function payment(id: PaymentMethod) {
   return paymentMethods.find((p) => p.id === id) ?? paymentMethods[6]
 }
 
+/** Payment method added by the user (a specific card, a voucher...), next to the built-in ones. */
+export type CustomPayment = {
+  id: number
+  name: string
+  icon: string
+  /** ARGB color. */
+  color: number
+  sortOrder: number
+}
+
+/**
+ * What something was paid with: a built-in method, or the custom one [customId]
+ * (stored as OTHER, so versions without custom methods still read it).
+ */
+export type PaymentChoice = { method: PaymentMethod; customId: number | null }
+
+export const paymentChoice = (row: { payment: PaymentMethod; paymentId: number | null }): PaymentChoice =>
+  ({ method: row.payment, customId: row.paymentId })
+
+export const sameChoice = (a: PaymentChoice, b: PaymentChoice) => a.method === b.method && a.customId === b.customId
+
+/** Name and icon of a payment method, custom ones included. */
+export function paymentLabel(choice: PaymentChoice, custom: CustomPayment[]): { label: string; icon: string } {
+  const own = choice.customId != null ? custom.find((c) => c.id === choice.customId) : undefined
+  return own ? { label: own.name, icon: own.icon } : payment(choice.method)
+}
+
 export type Frequency = 'WEEKLY' | 'MONTHLY' | 'BIMONTHLY' | 'QUARTERLY' | 'SEMIANNUAL' | 'YEARLY' | 'BIENNIAL'
 
 export const frequencies: { id: Frequency; label: string; short: string; months: number; weeks: number }[] = [
@@ -71,6 +98,8 @@ export type Transaction = {
   createdAt: number
   /** Person of the household the movement belongs to. */
   memberId: number | null
+  /** Custom payment method; when set, payment is OTHER. */
+  paymentId: number | null
 }
 
 export type Recurring = {
@@ -96,6 +125,8 @@ export type Recurring = {
   notifiedFor: number | null
   active: boolean
   note: string
+  /** Custom payment method; when set, payment is OTHER. */
+  paymentId: number | null
 }
 
 export type Member = {
@@ -110,6 +141,7 @@ export type AppState = {
   transactions: Transaction[]
   recurring: Recurring[]
   members: Member[]
+  paymentMethods: CustomPayment[]
 }
 
 /** Pastel palette shared by categories and fixed expenses. */

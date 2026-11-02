@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.money.app.data.CategoryEntity
 import com.money.app.data.MemberEntity
+import com.money.app.data.Payments
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
 import com.money.app.domain.Money
@@ -56,6 +57,9 @@ fun Modifier.staggered(index: Int, step: Long = 55L): Modifier {
 /** People of the household by id, provided once at the root for every movement row. */
 val LocalMembers = compositionLocalOf<Map<Long, MemberEntity>> { emptyMap() }
 
+/** Payment method names, custom ones included. */
+val LocalPayments = compositionLocalOf { Payments.builtIn }
+
 @Composable
 fun TransactionRow(
     tx: TransactionEntity,
@@ -69,11 +73,12 @@ fun TransactionRow(
     val sub = tx.subcategoryId?.let { categories[it] }
     val title = tx.note.ifBlank { sub?.name ?: category?.name ?: "Movimento" }
     val member = tx.memberId?.let { LocalMembers.current[it] }
+    val payments = LocalPayments.current
     val subtitle = buildList {
         member?.let { add(it.name) }
         if (tx.note.isNotBlank()) add(sub?.name ?: category?.name ?: "")
         else if (sub != null) add(category?.name ?: "")
-        add(tx.payment.label)
+        add(payments.label(tx))
         showDate?.let { add(it) }
     }.filter { it.isNotBlank() }.joinToString(" · ")
     Row(

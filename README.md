@@ -22,6 +22,7 @@
 | | |
 |---|---|
 | 🫧 **Inserimento in 3 tocchi** | Importo sul tastierino, categoria e sottocategoria, poi data, metodo di pagamento, nota e foto dello scontrino. |
+| 💳 **Metodi di pagamento tuoi** | Oltre a carta, contanti e gli altri, aggiungi i tuoi (una carta specifica, i buoni pasto...) con nome, icona e colore: dalle impostazioni o al volo mentre inserisci una spesa. |
 | 🔁 **Spese fisse e abbonamenti** | Netflix, Spotify, affitto, palestra: logo preimpostato o immagine tua, registrazione automatica alla scadenza e promemoria prima del rinnovo. |
 | 📊 **Report del mese** | Pagella da A a F, grafico per categoria, calendario delle spese, trend di 6 mesi, confronto col mese prima, budget. Esporta in PDF o come immagine. |
 | 🤖 **Assistente AI** | Con Cloudflare Workers AI: commento del mese con consigli, chat sulle tue spese, categoria automatica dalla descrizione, resoconto di fine mese. |

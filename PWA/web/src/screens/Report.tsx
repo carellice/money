@@ -2,12 +2,12 @@ import { motion } from 'framer-motion'
 import { useEffect, useMemo, useState } from 'react'
 import { monthEnd, monthKey, monthStart } from '../../../shared/date.ts'
 import { Dates, Money, percent } from '../../../shared/format.ts'
-import { argb, paletteAll, Palette, payment } from '../../../shared/model.ts'
+import { argb, paletteAll, Palette, paymentLabel } from '../../../shared/model.ts'
 import { buildReport, type MonthReport, type Pagella, type Slice } from '../../../shared/report.ts'
 import { api } from '../lib/api.ts'
 import { navigate } from '../lib/nav.ts'
 import { cardBlob, download, fileName, pdfBlob, shareOrDownload } from '../lib/reportExport.ts'
-import { setMonth, useStore } from '../lib/store.ts'
+import { setMonth, usePaymentMethods, useStore } from '../lib/store.ts'
 import { alpha, Ink } from '../lib/theme.ts'
 import { BlobBox } from '../components/Blob.tsx'
 import { DonutChart, SpendingCalendar, TrendBars } from '../components/Charts.tsx'
@@ -25,6 +25,7 @@ type Commentary = { text: string; upToDate: boolean }
 export function ReportScreen() {
   const month = useStore((s) => s.month)
   const data = useStore((s) => s.data)
+  const custom = usePaymentMethods()
   const report = useMemo(() => {
     if (!data) return null
     const txs = data.transactions.filter((t) => t.date >= monthStart(month - 5) && t.date <= monthEnd(month))
@@ -158,10 +159,11 @@ export function ReportScreen() {
                 <SoftCard style={{ gap: 12 }}>
                   {r.payments.map(([method, cents], i) => {
                     const max = Math.max(1, ...r.payments.map((p) => p[1]))
+                    const { label, icon } = paymentLabel(method, custom)
                     return (
-                      <div key={method} className="row">
-                        <AppIcon name={payment(method).icon} size={18} color="var(--inkSoft)" />
-                        <span className="t-label" style={{ width: 110, marginLeft: 10, color: 'var(--ink)' }}>{payment(method).label}</span>
+                      <div key={`${method.method}:${method.customId}`} className="row">
+                        <AppIcon name={icon} size={18} color="var(--inkSoft)" />
+                        <span className="t-label ellipsis" style={{ width: 110, marginLeft: 10, color: 'var(--ink)' }}>{label}</span>
                         <SoftProgress progress={cents / max} color={argb(paletteAll[i % paletteAll.length])} height={8} style={{ flex: 1 }} />
                         <span className="t-caption" style={{ marginLeft: 10, color: 'var(--inkSoft)', whiteSpace: 'nowrap' }}>{Money.short(cents)}</span>
                       </div>

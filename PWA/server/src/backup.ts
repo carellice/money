@@ -1,4 +1,4 @@
-import type { AppState, Category, Member, Recurring, Transaction } from '../../shared/model.ts'
+import type { AppState, Category, CustomPayment, Member, Recurring, Transaction } from '../../shared/model.ts'
 import { replaceAll, state } from './db.ts'
 
 // JSON backup of the whole database, same format as the Android app, so files can move between the two.
@@ -12,7 +12,7 @@ const optNum = (o: Json, key: string) => (o[key] == null ? null : Number(o[key])
 const str = (o: Json, key: string, fallback = '') => (o[key] == null ? fallback : String(o[key]))
 
 export function exportBackup(): string {
-  const { categories, transactions, recurring, members } = state()
+  const { categories, transactions, recurring, members, paymentMethods } = state()
   return JSON.stringify({
     app: 'Money',
     version: VERSION,
@@ -24,15 +24,16 @@ export function exportBackup(): string {
     transactions: transactions.map((t) => ({
       id: t.id, type: t.type, amountCents: t.amountCents, date: t.date, categoryId: t.categoryId,
       subcategoryId: t.subcategoryId, payment: t.payment, note: t.note, recurringId: t.recurringId,
-      createdAt: t.createdAt, memberId: t.memberId,
+      createdAt: t.createdAt, memberId: t.memberId, paymentId: t.paymentId,
     })),
     recurring: recurring.map((r) => ({
       id: r.id, kind: r.kind, name: r.name, amountCents: r.amountCents, categoryId: r.categoryId,
       subcategoryId: r.subcategoryId, payment: r.payment, frequency: r.frequency, startDate: r.startDate,
       nextDate: r.nextDate, brandKey: r.brandKey, icon: r.icon, color: r.color, autoRegister: r.autoRegister,
-      remindDaysBefore: r.remindDaysBefore, active: r.active, note: r.note,
+      remindDaysBefore: r.remindDaysBefore, active: r.active, note: r.note, paymentId: r.paymentId,
     })),
     members: members.map((m) => ({ id: m.id, name: m.name, color: m.color, sortOrder: m.sortOrder })),
+    paymentMethods: paymentMethods.map((p) => ({ id: p.id, name: p.name, icon: p.icon, color: p.color, sortOrder: p.sortOrder })),
   }, null, 2)
 }
 
@@ -52,6 +53,15 @@ export function importBackup(text: string): number {
     id: Number(o.id), name: str(o, 'name'), color: Number(o.color), sortOrder: Number(o.sortOrder ?? 0),
   }))
   const known = new Set(members.map((m) => m.id))
+  // Custom payment methods came later still: without them, movements stay as "Altro".
+  const paymentMethods: CustomPayment[] = list('paymentMethods').map((o) => ({
+    id: Number(o.id), name: str(o, 'name'), icon: str(o, 'icon', 'card'), color: Number(o.color), sortOrder: Number(o.sortOrder ?? 0),
+  }))
+  const knownPayments = new Set(paymentMethods.map((p) => p.id))
+  const paymentId = (o: Json) => {
+    const id = optNum(o, 'paymentId')
+    return id != null && knownPayments.has(id) ? id : null
+  }
   const transactions: Transaction[] = list('transactions').map((o) => {
     const memberId = optNum(o, 'memberId')
     return {
@@ -60,6 +70,7 @@ export function importBackup(text: string): number {
       payment: str(o, 'payment') as Transaction['payment'], note: str(o, 'note'), receiptPath: null,
       recurringId: optNum(o, 'recurringId'), createdAt: Number(o.createdAt ?? 0),
       memberId: memberId != null && known.has(memberId) ? memberId : null,
+      paymentId: paymentId(o),
     }
   })
   const recurring: Recurring[] = list('recurring').map((o) => ({
@@ -68,10 +79,10 @@ export function importBackup(text: string): number {
     frequency: str(o, 'frequency') as Recurring['frequency'], startDate: Number(o.startDate), nextDate: Number(o.nextDate),
     brandKey: o.brandKey == null ? null : String(o.brandKey), imagePath: null, icon: str(o, 'icon', 'repeat'),
     color: Number(o.color), autoRegister: o.autoRegister !== false, remindDaysBefore: Number(o.remindDaysBefore ?? 2),
-    notifiedFor: null, active: o.active !== false, note: str(o, 'note'),
+    notifiedFor: null, active: o.active !== false, note: str(o, 'note'), paymentId: paymentId(o),
   }))
   if (!root.categories || !root.transactions || !root.recurring) throw new Error('Backup incompleto')
-  const snapshot: AppState = { categories, transactions, recurring, members }
+  const snapshot: AppState = { categories, transactions, recurring, members, paymentMethods }
   replaceAll(snapshot)
   return transactions.length
 }

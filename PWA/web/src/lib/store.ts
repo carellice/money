@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { currentMonth, type Month } from '../../../shared/date.ts'
-import { Palette, type AppState, type Category, type Member, type Recurring, type Transaction } from '../../../shared/model.ts'
+import { Palette, type AppState, type Category, type CustomPayment, type Member, type Recurring, type Transaction } from '../../../shared/model.ts'
 import { api } from './api.ts'
 
 // --- device settings (theme, accent, lock): per phone, like the Android DataStore -----------
@@ -95,6 +95,11 @@ export function useStore<T>(selector: (s: Store) => T): T {
 
 export const getStore = () => store
 
+const noPayments: CustomPayment[] = []
+
+/** Custom payment methods (data cached by an older version has none). */
+export const usePaymentMethods = () => useStore((s) => s.data?.paymentMethods ?? noPayments)
+
 export function setMonth(month: Month) {
   set({ month })
 }
@@ -170,6 +175,10 @@ export const actions = {
   deleteCategory: (category: Category) => mutate(() => api('/api/categories/' + category.id, { method: 'DELETE' })),
   saveMember: (member: Member) => mutate(() => api('/api/members', { method: 'POST', json: member })),
   deleteMember: (member: Member) => mutate(() => api('/api/members/' + member.id, { method: 'DELETE' })),
+  /** Returns the id of the payment method. */
+  savePaymentMethod: (method: CustomPayment) =>
+    mutate(() => api<{ id: number }>('/api/payment-methods', { method: 'POST', json: method })).then((r) => r.id),
+  deletePaymentMethod: (method: CustomPayment) => mutate(() => api('/api/payment-methods/' + method.id, { method: 'DELETE' })),
 
   async uploadImage(blob: Blob, prefix: 'receipt' | 'logo'): Promise<string> {
     const { path } = await api<{ path: string }>(`/api/images?prefix=${prefix}`, {

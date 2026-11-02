@@ -16,6 +16,7 @@ import com.money.app.brand.Brands
 import com.money.app.data.CategoryEntity
 import com.money.app.data.Frequency
 import com.money.app.data.Palette
+import com.money.app.data.PaymentChoice
 import com.money.app.data.PaymentMethod
 import com.money.app.data.RecurringEntity
 import com.money.app.data.RecurringKind
@@ -46,7 +47,7 @@ class RecurringEditViewModel(private val container: AppContainer, handle: SavedS
     var categoryId by mutableStateOf<Long?>(null)
         private set
     var subcategoryId by mutableStateOf<Long?>(null)
-    var payment by mutableStateOf(PaymentMethod.CARD)
+    var payment by mutableStateOf(PaymentChoice(PaymentMethod.CARD))
     var brandKey by mutableStateOf<String?>(null)
         private set
     var imagePath by mutableStateOf<String?>(null)
@@ -80,7 +81,7 @@ class RecurringEditViewModel(private val container: AppContainer, handle: SavedS
                 date = LocalDate.ofEpochDay(item.nextDate)
                 categoryId = item.categoryId
                 subcategoryId = item.subcategoryId
-                payment = item.payment
+                payment = PaymentChoice(item.payment, item.paymentId)
                 brandKey = item.brandKey
                 imagePath = item.imagePath
                 icon = item.icon
@@ -178,7 +179,8 @@ class RecurringEditViewModel(private val container: AppContainer, handle: SavedS
                 amountCents = cents,
                 categoryId = category,
                 subcategoryId = subcategoryId,
-                payment = payment,
+                payment = payment.method,
+                paymentId = payment.customId,
                 frequency = frequency,
                 startDate = if (reschedule || o == null) epoch else o.startDate,
                 nextDate = epoch,

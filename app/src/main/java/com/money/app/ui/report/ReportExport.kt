@@ -317,7 +317,8 @@ class ReportExport(private val context: Context) {
                 canvas.drawText(Dates.numeric(LocalDate.ofEpochDay(tx.date)), cols[0], y + 9f, body)
                 canvas.drawText(ellipsize(listOfNotNull(cat?.name, sub?.name).joinToString(" · "), body, cols[2] - cols[1] - 8f), cols[1], y + 9f, body)
                 canvas.drawText(ellipsize(tx.note, body, cols[3] - cols[2] - 8f), cols[2], y + 9f, body)
-                canvas.drawText(tx.payment.label, cols[3], y + 9f, paint(9f, color = INK_SOFT))
+                val method = paint(9f, color = INK_SOFT)
+                canvas.drawText(ellipsize(r.paymentNames.label(tx), method, right - cols[3] - 60f), cols[3], y + 9f, method)
                 val income = tx.type == TxType.INCOME
                 drawRight(
                     Money.format(if (income) tx.amountCents else -tx.amountCents, signed = true),

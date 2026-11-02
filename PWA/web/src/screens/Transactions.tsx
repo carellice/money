@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { monthOf } from '../../../shared/date.ts'
 import { Dates, Money } from '../../../shared/format.ts'
-import { payment, type Transaction } from '../../../shared/model.ts'
+import { paymentChoice, paymentLabel, type Transaction } from '../../../shared/model.ts'
 import { navigate } from '../lib/nav.ts'
 import { actions, setMonth, useStore } from '../lib/store.ts'
 import { EmptyState, Icon, MonthSwitcher, Segmented, Staggered } from '../components/ui.tsx'
@@ -24,7 +24,7 @@ export function TransactionsScreen() {
       (filter === 0 || (filter === 1 && tx.type === 'EXPENSE') || (filter === 2 && tx.type === 'INCOME')) &&
       (!needle || [
         tx.note, byId.get(tx.categoryId)?.name, tx.subcategoryId != null ? byId.get(tx.subcategoryId)?.name : undefined,
-        payment(tx.payment).label, tx.memberId != null ? memberNames.get(tx.memberId) : undefined,
+        paymentLabel(paymentChoice(tx), data.paymentMethods ?? []).label, tx.memberId != null ? memberNames.get(tx.memberId) : undefined,
       ].some((s) => s?.toLowerCase().includes(needle))))
     const groups: { date: number; items: Transaction[]; net: number }[] = []
     for (const tx of visible) {

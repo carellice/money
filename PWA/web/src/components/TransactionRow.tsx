@@ -1,8 +1,8 @@
 import { animate, motion, useMotionValue, useTransform } from 'framer-motion'
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import { Money } from '../../../shared/format.ts'
-import { argb, payment, type Category, type Transaction } from '../../../shared/model.ts'
-import { useStore } from '../lib/store.ts'
+import { argb, paymentChoice, paymentLabel, type Category, type Transaction } from '../../../shared/model.ts'
+import { usePaymentMethods, useStore } from '../lib/store.ts'
 import { Ink } from '../lib/theme.ts'
 import { Bouncy, CategoryBadge, Icon } from './ui.tsx'
 import { spring } from './motion.ts'
@@ -15,6 +15,7 @@ export function TransactionRow({ tx, categories, onClick, showDate, style }: {
   style?: CSSProperties
 }) {
   const members = useStore((s) => s.data?.members)
+  const custom = usePaymentMethods()
   const category = categories.get(tx.categoryId)
   const sub = tx.subcategoryId != null ? categories.get(tx.subcategoryId) : undefined
   const member = tx.memberId != null ? members?.find((m) => m.id === tx.memberId) : undefined
@@ -22,7 +23,7 @@ export function TransactionRow({ tx, categories, onClick, showDate, style }: {
   const subtitle = [
     member?.name,
     tx.note.trim() ? sub?.name ?? category?.name ?? '' : sub ? category?.name ?? '' : undefined,
-    payment(tx.payment).label,
+    paymentLabel(paymentChoice(tx), custom).label,
     showDate,
   ].filter((s): s is string => !!s && !!s.trim()).join(' · ')
   const income = tx.type === 'INCOME'

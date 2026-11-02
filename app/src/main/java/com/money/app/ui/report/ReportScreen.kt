@@ -112,7 +112,8 @@ class ReportViewModel(private val container: AppContainer) : ViewModel() {
         combine(
             container.repository.transactionsBetween(m.minusMonths(5).atDay(1), m.atEndOfMonth()),
             container.repository.categories,
-        ) { txs, cats -> ReportBuilder.build(m, txs, cats) }
+            container.repository.customPayments,
+        ) { txs, cats, payments -> ReportBuilder.build(m, txs, cats, payments) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun setMonth(m: YearMonth) {
@@ -328,9 +329,9 @@ fun ReportScreen(onOpenTransaction: (Long) -> Unit, onOpenChat: () -> Unit, onOp
                         r.payments.forEachIndexed { i, (method, cents) ->
                             if (i > 0) Spacer(Modifier.height(12.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(AppIcons[method.icon], null, tint = c.inkSoft, modifier = Modifier.size(18.dp))
+                                Icon(AppIcons[r.paymentNames.icon(method)], null, tint = c.inkSoft, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(10.dp))
-                                Text(method.label, style = Ui.type.label, color = c.ink, modifier = Modifier.width(110.dp))
+                                Text(r.paymentNames.label(method), maxLines = 1, overflow = TextOverflow.Ellipsis, style = Ui.type.label, color = c.ink, modifier = Modifier.width(110.dp))
                                 SoftProgress(cents.toFloat() / max, Color(Palette.all[i % Palette.all.size]), Modifier.weight(1f), height = 8.dp)
                                 Spacer(Modifier.width(10.dp))
                                 Text(Money.short(cents), style = Ui.type.caption, color = c.inkSoft)

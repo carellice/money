@@ -2,6 +2,7 @@ package com.money.app.ai
 
 import com.money.app.data.CategoryEntity
 import com.money.app.data.MoneyRepository
+import com.money.app.data.Payments
 import com.money.app.data.RecurringEntity
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
@@ -95,6 +96,7 @@ class AiAssistant(
         val from = YearMonth.from(today).minusMonths(11).atDay(1)
         val txs = repo.transactionsBetweenOnce(from, today.plusYears(1))
         val cats = repo.allCategories().associateBy { it.id }
+        val payments = repo.payments()
         val recurring = repo.recurring.first().filter { it.active }
         val sb = StringBuilder()
 
@@ -115,7 +117,7 @@ class AiAssistant(
 
         val recentFrom = YearMonth.from(today).minusMonths(1).atDay(1).toEpochDay()
         sb.appendLine().appendLine("## Movimenti del mese corrente e precedente")
-        txs.filter { it.date >= recentFrom }.sortedBy { it.date }.takeLast(300).forEach { sb.appendLine(line(it, cats)) }
+        txs.filter { it.date >= recentFrom }.sortedBy { it.date }.takeLast(300).forEach { sb.appendLine(line(it, cats, payments)) }
 
         if (recurring.isNotEmpty()) {
             sb.appendLine().appendLine("## Spese fisse e abbonamenti attivi")
@@ -166,7 +168,7 @@ class AiAssistant(
 
     suspend fun report(month: YearMonth): MonthReport {
         val txs = repo.transactionsBetweenOnce(month.minusMonths(5).atDay(1), month.atEndOfMonth())
-        return ReportBuilder.build(month, txs, repo.allCategories())
+        return ReportBuilder.build(month, txs, repo.allCategories(), repo.payments().custom.values.toList())
     }
 
     private fun describe(r: MonthReport): String = buildString {
@@ -184,15 +186,15 @@ class AiAssistant(
         if (r.incomeSlices.isNotEmpty()) appendLine("Entrate per fonte: " + r.incomeSlices.joinToString(", ") { "${it.category.name} ${Money.short(it.cents)}" })
         if (r.budgets.isNotEmpty()) appendLine("Budget: " + r.budgets.joinToString(", ") { "${it.category.name} ${Money.short(it.spent)} su ${Money.short(it.budget)}" })
         appendLine("Spese più grandi:")
-        r.top.forEach { appendLine(line(it, r.categories)) }
+        r.top.forEach { appendLine(line(it, r.categories, r.paymentNames)) }
     }
 
-    private fun line(tx: TransactionEntity, cats: Map<Long, CategoryEntity>): String {
+    private fun line(tx: TransactionEntity, cats: Map<Long, CategoryEntity>, payments: Payments): String {
         val category = listOfNotNull(cats[tx.categoryId]?.name, tx.subcategoryId?.let { cats[it]?.name }).joinToString(" > ")
         val sign = if (tx.type == TxType.INCOME) "+" else "-"
         val note = tx.note.takeIf { it.isNotBlank() }?.let { " \"$it\"" } ?: ""
         val fixed = if (tx.recurringId != null) " [fissa]" else ""
-        return "- ${LocalDate.ofEpochDay(tx.date)} $sign${Money.format(tx.amountCents)} $category$note (${tx.payment.label})$fixed"
+        return "- ${LocalDate.ofEpochDay(tx.date)} $sign${Money.format(tx.amountCents)} $category$note (${payments.label(tx)})$fixed"
     }
 
     private fun recurringLine(item: RecurringEntity, cats: Map<Long, CategoryEntity>) =

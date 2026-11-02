@@ -12,6 +12,7 @@ import type { UiIcon } from '../lib/icons.gen.ts'
 import { Bouncy, ColorSwatches, FormLabel, Icon, NoteField, PrimaryButton, Segmented, SwitchRow, TextField, TopBar } from '../components/ui.tsx'
 import { AlertDialog, Sheet, toast } from '../components/overlays.tsx'
 import { deviceLockAvailable, registerDeviceLock } from './Lock.tsx'
+import { PaymentsSection } from '../components/Payments.tsx'
 
 type UpdateState = 'idle' | 'checking' | 'upToDate' | 'available' | 'failed'
 
@@ -120,6 +121,9 @@ export function SettingsScreen() {
 
           <FormLabel text="Persone" />
           <MembersSection members={members} />
+
+          <FormLabel text="Metodi di pagamento" />
+          <PaymentsSection />
 
           <FormLabel text="Organizza" />
           <NavRow icon="category" title="Categorie e budget" subtitle="Sottocategorie, icone, colori e limiti mensili" onClick={() => navigate('categories')} />

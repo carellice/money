@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { today as todayEpoch } from '../../../shared/date.ts'
 import { Dates, Money } from '../../../shared/format.ts'
-import { argb, paymentMethods, type Category, type PaymentMethod, type Transaction, type TxType } from '../../../shared/model.ts'
+import { argb, type Category, type PaymentChoice, type Transaction, type TxType } from '../../../shared/model.ts'
 import { api } from '../lib/api.ts'
 import { pickImage, shrinkToJpeg } from '../lib/images.ts'
 import { close, useBackHandler } from '../lib/nav.ts'
@@ -13,6 +13,7 @@ import { BlobBox, BlobLayer, PX } from '../components/Blob.tsx'
 import { Bouncy, CategoryBadge, Icon, NoteField, Pill, PrimaryButton, RoundIconButton, Segmented, Staggered, TopBar, categoryLabel } from '../components/ui.tsx'
 import { AlertDialog, DatePickerDialog, toast } from '../components/overlays.tsx'
 import { MemberAvatar } from './Settings.tsx'
+import { PaymentPills } from '../components/Payments.tsx'
 import { ThinkingDots } from './Chat.tsx'
 import { Expand } from './RecurringEdit.tsx'
 import { fastOutSlowIn, spring, tween } from '../components/motion.ts'
@@ -28,7 +29,9 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
   const [categoryId, setCategoryId] = useState<number | null>(original?.categoryId ?? null)
   const [subcategoryId, setSubcategoryId] = useState<number | null>(original?.subcategoryId ?? null)
   const [date, setDate] = useState(original?.date ?? todayEpoch())
-  const [method, setMethod] = useState<PaymentMethod>(original?.payment ?? (initialType === 'INCOME' ? 'TRANSFER' : 'CARD'))
+  const [method, setMethod] = useState<PaymentChoice>(
+    original ? { method: original.payment, customId: original.paymentId } : { method: initialType === 'INCOME' ? 'TRANSFER' : 'CARD', customId: null },
+  )
   const [note, setNote] = useState(original?.note ?? '')
   const [receiptPath, setReceiptPath] = useState<string | null>(original?.receiptPath ?? null)
   const [memberId, setMemberId] = useState<number | null>(original ? original.memberId : getStore().data?.members[0]?.id ?? null)
@@ -76,7 +79,7 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
     setType(newType)
     setCategoryId(null)
     setSubcategoryId(null)
-    setMethod(newType === 'INCOME' ? 'TRANSFER' : 'CARD')
+    setMethod({ method: newType === 'INCOME' ? 'TRANSFER' : 'CARD', customId: null })
   }
 
   const selectCategory = (cid: number) => {
@@ -134,7 +137,8 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
       date,
       categoryId,
       subcategoryId,
-      payment: method,
+      payment: method.method,
+      paymentId: method.customId,
       note: note.trim(),
       receiptPath,
       recurringId: original?.recurringId ?? null,
@@ -411,8 +415,8 @@ function DetailsStep(p: {
   isEdit: boolean
   date: number
   setDate: (d: number) => void
-  method: PaymentMethod
-  setMethod: (m: PaymentMethod) => void
+  method: PaymentChoice
+  setMethod: (m: PaymentChoice) => void
   note: string
   setNote: (v: string) => void
   receiptPath: string | null
@@ -456,9 +460,7 @@ function DetailsStep(p: {
         </div>
 
         {label(p.type === 'EXPENSE' ? 'Come hai pagato?' : "Come l'hai ricevuto?")}
-        <div className="flow">
-          {paymentMethods.map((m) => <Pill key={m.id} text={m.label} selected={p.method === m.id} onClick={() => p.setMethod(m.id)} color={p.accent} appIcon={m.icon} />)}
-        </div>
+        <PaymentPills selected={p.method} onSelect={p.setMethod} color={p.accent} />
 
         {label('Nota')}
         <NoteField value={p.note} onChange={p.setNote} placeholder={p.type === 'EXPENSE' ? 'Es. pizza con gli amici' : 'Es. stipendio di ottobre'} />

@@ -8,6 +8,7 @@ import {
   defaultIncomeCategories,
   type AppState,
   type Category,
+  type CustomPayment,
   type Member,
   type Recurring,
   type Transaction,
@@ -27,7 +28,7 @@ CREATE INDEX IF NOT EXISTS index_categories_parentId ON categories (parentId);
 CREATE TABLE IF NOT EXISTS transactions (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, type TEXT NOT NULL, amountCents INTEGER NOT NULL, date INTEGER NOT NULL,
   categoryId INTEGER NOT NULL, subcategoryId INTEGER, payment TEXT NOT NULL, note TEXT NOT NULL, receiptPath TEXT,
-  recurringId INTEGER, createdAt INTEGER NOT NULL, memberId INTEGER);
+  recurringId INTEGER, createdAt INTEGER NOT NULL, memberId INTEGER, paymentId INTEGER);
 CREATE INDEX IF NOT EXISTS index_transactions_date ON transactions (date);
 CREATE INDEX IF NOT EXISTS index_transactions_categoryId ON transactions (categoryId);
 CREATE INDEX IF NOT EXISTS index_transactions_recurringId ON transactions (recurringId);
@@ -37,9 +38,12 @@ CREATE TABLE IF NOT EXISTS recurring (
   categoryId INTEGER NOT NULL, subcategoryId INTEGER, payment TEXT NOT NULL, frequency TEXT NOT NULL,
   startDate INTEGER NOT NULL, nextDate INTEGER NOT NULL, brandKey TEXT, imagePath TEXT, icon TEXT NOT NULL,
   color INTEGER NOT NULL, autoRegister INTEGER NOT NULL, remindDaysBefore INTEGER NOT NULL, notifiedFor INTEGER,
-  active INTEGER NOT NULL, note TEXT NOT NULL);
+  active INTEGER NOT NULL, note TEXT NOT NULL, paymentId INTEGER);
 CREATE TABLE IF NOT EXISTS members (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, color INTEGER NOT NULL, sortOrder INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS payment_methods (
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, icon TEXT NOT NULL, color INTEGER NOT NULL,
+  sortOrder INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY NOT NULL, json TEXT NOT NULL, reminders INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS ai_cache (month TEXT PRIMARY KEY NOT NULL, signature TEXT NOT NULL, text TEXT NOT NULL);
@@ -63,10 +67,19 @@ function open(userId: number): UserData {
   const db = new DatabaseSync(join(dir, 'money.db'))
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = OFF;')
   db.exec(schema)
+  migrate(db)
   const data = { id: userId, db, imagesDir }
   opened.set(userId, data)
   current.run(data, seedIfEmpty)
   return data
+}
+
+/** Columns added after the first release, for databases created before them. */
+function migrate(db: DatabaseSync) {
+  for (const table of ['transactions', 'recurring']) {
+    const columns = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name)
+    if (!columns.includes('paymentId')) db.exec(`ALTER TABLE ${table} ADD COLUMN paymentId INTEGER`)
+  }
 }
 
 /** Runs [work] on the data of [userId]: every function of this module then reads and writes there. */
@@ -142,7 +155,7 @@ const toTransaction = (r: Row): Transaction => ({
   id: num(r.id), type: r.type as TxType, amountCents: num(r.amountCents), date: num(r.date),
   categoryId: num(r.categoryId), subcategoryId: optNum(r.subcategoryId), payment: r.payment as Transaction['payment'],
   note: String(r.note), receiptPath: (r.receiptPath as string | null) ?? null, recurringId: optNum(r.recurringId),
-  createdAt: num(r.createdAt), memberId: optNum(r.memberId),
+  createdAt: num(r.createdAt), memberId: optNum(r.memberId), paymentId: optNum(r.paymentId),
 })
 
 const toRecurring = (r: Row): Recurring => ({
@@ -151,10 +164,18 @@ const toRecurring = (r: Row): Recurring => ({
   frequency: r.frequency as Recurring['frequency'], startDate: num(r.startDate), nextDate: num(r.nextDate),
   brandKey: (r.brandKey as string | null) ?? null, imagePath: (r.imagePath as string | null) ?? null, icon: String(r.icon),
   color: num(r.color), autoRegister: num(r.autoRegister) !== 0, remindDaysBefore: num(r.remindDaysBefore),
-  notifiedFor: optNum(r.notifiedFor), active: num(r.active) !== 0, note: String(r.note),
+  notifiedFor: optNum(r.notifiedFor), active: num(r.active) !== 0, note: String(r.note), paymentId: optNum(r.paymentId),
 })
 
 const toMember = (r: Row): Member => ({ id: num(r.id), name: String(r.name), color: num(r.color), sortOrder: num(r.sortOrder) })
+
+const toPayment = (r: Row): CustomPayment => ({
+  id: num(r.id), name: String(r.name), icon: String(r.icon), color: num(r.color), sortOrder: num(r.sortOrder),
+})
+
+export function paymentMethods(): CustomPayment[] {
+  return (db.prepare('SELECT * FROM payment_methods ORDER BY sortOrder, id').all() as Row[]).map(toPayment)
+}
 
 export function categories(): Category[] {
   return (db.prepare('SELECT * FROM categories ORDER BY sortOrder, name').all() as Row[]).map(toCategory)
@@ -187,15 +208,19 @@ export function members(): Member[] {
 }
 
 export function state(): AppState {
-  return { categories: categories(), transactions: transactions(), recurring: recurring(), members: members() }
+  return {
+    categories: categories(), transactions: transactions(), recurring: recurring(), members: members(),
+    paymentMethods: paymentMethods(),
+  }
 }
 
 // --- writes ----------------------------------------------------------------------------------
 
-const txColumns = ['type', 'amountCents', 'date', 'categoryId', 'subcategoryId', 'payment', 'note', 'receiptPath', 'recurringId', 'createdAt', 'memberId'] as const
-const recurringColumns = ['kind', 'name', 'amountCents', 'categoryId', 'subcategoryId', 'payment', 'frequency', 'startDate', 'nextDate', 'brandKey', 'imagePath', 'icon', 'color', 'autoRegister', 'remindDaysBefore', 'notifiedFor', 'active', 'note'] as const
+const txColumns = ['type', 'amountCents', 'date', 'categoryId', 'subcategoryId', 'payment', 'note', 'receiptPath', 'recurringId', 'createdAt', 'memberId', 'paymentId'] as const
+const recurringColumns = ['kind', 'name', 'amountCents', 'categoryId', 'subcategoryId', 'payment', 'frequency', 'startDate', 'nextDate', 'brandKey', 'imagePath', 'icon', 'color', 'autoRegister', 'remindDaysBefore', 'notifiedFor', 'active', 'note', 'paymentId'] as const
 const categoryColumns = ['name', 'icon', 'color', 'type', 'parentId', 'budgetCents', 'sortOrder'] as const
 const memberColumns = ['name', 'color', 'sortOrder'] as const
+const paymentColumns = ['name', 'icon', 'color', 'sortOrder'] as const
 
 type Sql = string | number | null
 
@@ -247,6 +272,23 @@ export function deleteMember(id: number) {
   transaction(() => {
     db.prepare('UPDATE transactions SET memberId = NULL WHERE memberId = ?').run(id)
     db.prepare('DELETE FROM members WHERE id = ?').run(id)
+  })
+}
+
+/** Returns the id of the payment method. */
+export function savePaymentMethod(method: CustomPayment): number {
+  return transaction(() => {
+    const sortOrder = method.id === 0 ? paymentMethods().length : method.sortOrder
+    return upsert('payment_methods', paymentColumns, { ...method, sortOrder })
+  })
+}
+
+/** Movements and fixed expenses paid that way stay, as "Altro". */
+export function deletePaymentMethod(id: number) {
+  transaction(() => {
+    db.prepare('UPDATE transactions SET paymentId = NULL WHERE paymentId = ?').run(id)
+    db.prepare('UPDATE recurring SET paymentId = NULL WHERE paymentId = ?').run(id)
+    db.prepare('DELETE FROM payment_methods WHERE id = ?').run(id)
   })
 }
 
@@ -313,7 +355,7 @@ export function processRecurring(today = todayEpoch()): Recurring[] {
           upsert('transactions', txColumns, {
             id: 0, type: 'EXPENSE', amountCents: original.amountCents, date: next, categoryId: original.categoryId,
             subcategoryId: original.subcategoryId, payment: original.payment, note: original.name, receiptPath: null,
-            recurringId: original.id, createdAt: Date.now(), memberId: null,
+            recurringId: original.id, createdAt: Date.now(), memberId: null, paymentId: original.paymentId,
           })
         }
         next = nextAfter(original.startDate, original.frequency, next)
@@ -350,9 +392,10 @@ export function deleteImage(path: string) {
 
 export function replaceAll(snapshot: AppState) {
   transaction(() => {
-    for (const table of ['transactions', 'recurring', 'categories', 'members']) db.exec(`DELETE FROM ${table}`)
+    for (const table of ['transactions', 'recurring', 'categories', 'members', 'payment_methods']) db.exec(`DELETE FROM ${table}`)
     snapshot.categories.forEach((c) => upsert('categories', categoryColumns, c))
     snapshot.members.forEach((m) => upsert('members', memberColumns, m))
+    snapshot.paymentMethods.forEach((p) => upsert('payment_methods', paymentColumns, p))
     snapshot.transactions.forEach((t) => upsert('transactions', txColumns, t))
     snapshot.recurring.forEach((r) => upsert('recurring', recurringColumns, r))
     db.exec('DELETE FROM ai_cache')

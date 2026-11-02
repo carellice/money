@@ -4,7 +4,7 @@ import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } f
 import { randomBytes } from 'node:crypto'
 import { extname, join, normalize } from 'node:path'
 import { parseMonthKey } from '../../shared/date.ts'
-import type { Category, Member, Recurring, Transaction, TxType } from '../../shared/model.ts'
+import type { Category, CustomPayment, Member, Recurring, Transaction, TxType } from '../../shared/model.ts'
 import * as data from './db.ts'
 import { exportBackup, importBackup } from './backup.ts'
 import * as ai from './ai.ts'
@@ -230,6 +230,15 @@ route('POST', '/api/members', async (req, res) => {
 
 route('DELETE', '/api/members/:id', (_req, res, [id]) => {
   data.deleteMember(Number(id))
+  json(res, 200, { ok: true })
+})
+
+route('POST', '/api/payment-methods', async (req, res) => {
+  json(res, 200, { id: data.savePaymentMethod(await readJson<CustomPayment>(req)) })
+})
+
+route('DELETE', '/api/payment-methods/:id', (_req, res, [id]) => {
+  data.deletePaymentMethod(Number(id))
   json(res, 200, { ok: true })
 })
 

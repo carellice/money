@@ -67,6 +67,8 @@ data class TransactionEntity(
     val createdAt: Long = System.currentTimeMillis(),
     /** Person of the household the movement belongs to; null when no one was chosen. */
     val memberId: Long? = null,
+    /** Custom payment method; when set, [payment] is [PaymentMethod.OTHER]. */
+    val paymentId: Long? = null,
 )
 
 /** Person of the household, used only to tell whose a movement is. All data stays shared. */
@@ -107,4 +109,47 @@ data class RecurringEntity(
     val notifiedFor: Long? = null,
     val active: Boolean = true,
     val note: String = "",
+    /** Custom payment method; when set, [payment] is [PaymentMethod.OTHER]. */
+    val paymentId: Long? = null,
 )
+
+/** Payment method added by the user (a specific card, a voucher...), next to the built-in ones. */
+@Entity(tableName = "payment_methods")
+data class CustomPaymentEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val icon: String,
+    /** ARGB color. */
+    val color: Long,
+    val sortOrder: Int = 0,
+)
+
+/**
+ * What something was paid with: a built-in [method], or the custom one [customId]
+ * (stored as [PaymentMethod.OTHER], so versions without custom methods still read it).
+ */
+data class PaymentChoice(val method: PaymentMethod, val customId: Long? = null) {
+    companion object {
+        fun custom(id: Long) = PaymentChoice(PaymentMethod.OTHER, id)
+    }
+}
+
+val TransactionEntity.paymentChoice get() = PaymentChoice(payment, paymentId)
+val RecurringEntity.paymentChoice get() = PaymentChoice(payment, paymentId)
+
+/** Names and icons of every payment method, custom ones included. */
+class Payments(custom: List<CustomPaymentEntity>) {
+    val custom: Map<Long, CustomPaymentEntity> = custom.associateBy { it.id }
+
+    fun label(choice: PaymentChoice): String =
+        choice.customId?.let { custom[it]?.name } ?: choice.method.label
+
+    fun icon(choice: PaymentChoice): String =
+        choice.customId?.let { custom[it]?.icon } ?: choice.method.icon
+
+    fun label(tx: TransactionEntity) = label(tx.paymentChoice)
+
+    companion object {
+        val builtIn = Payments(emptyList())
+    }
+}

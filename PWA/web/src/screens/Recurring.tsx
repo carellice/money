@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { today as todayEpoch } from '../../../shared/date.ts'
 import { Dates, Money } from '../../../shared/format.ts'
-import { argb, frequency, monthlyCents, paymentMethods, Palette, type PaymentMethod, type Recurring } from '../../../shared/model.ts'
+import { argb, frequency, monthlyCents, Palette, paymentChoice, type PaymentChoice, type Recurring } from '../../../shared/model.ts'
 import { navigate } from '../lib/nav.ts'
 import { actions, useStore } from '../lib/store.ts'
 import { alpha, Ink } from '../lib/theme.ts'
@@ -10,6 +10,7 @@ import {
   AmountField, AnimatedAmount, Bouncy, EmptyState, FormLabel, Icon, Pill, PrimaryButton, RecurringLogo, RoundIconButton, Segmented, Staggered,
 } from '../components/ui.tsx'
 import { DatePickerDialog, Sheet, toast } from '../components/overlays.tsx'
+import { PaymentPills } from '../components/Payments.tsx'
 
 export function RecurringScreen() {
   const data = useStore((s) => s.data)
@@ -68,7 +69,8 @@ export function RecurringScreen() {
           const item = registering
           await actions.saveTransaction({
             id: 0, type: 'EXPENSE', amountCents: cents, date, categoryId: item.categoryId, subcategoryId: item.subcategoryId,
-            payment: method, note: item.name, receiptPath: null, recurringId: item.id, createdAt: Date.now(), memberId: null,
+            payment: method.method, paymentId: method.customId, note: item.name, receiptPath: null, recurringId: item.id,
+            createdAt: Date.now(), memberId: null,
           })
           setRegistering(null)
           toast(`${item.name} aggiunto ai movimenti del ${Dates.long(date)}`)
@@ -81,13 +83,13 @@ export function RecurringScreen() {
 function RegisterNowSheet({ item, onDismiss, onConfirm }: {
   item: Recurring
   onDismiss: () => void
-  onConfirm: (cents: number, date: number, payment: PaymentMethod) => void
+  onConfirm: (cents: number, date: number, payment: PaymentChoice) => void
 }) {
   const today = todayEpoch()
   const [amount, setAmount] = useState(Money.toInput(item.amountCents))
   const [date, setDate] = useState(today)
   // Defaults to the usual method; this one payment may have gone another way.
-  const [method, setMethod] = useState(item.payment)
+  const [method, setMethod] = useState(paymentChoice(item))
   const [showPicker, setShowPicker] = useState(false)
   const cents = Money.parse(amount) ?? 0
   const other = date !== today && date !== today - 1
@@ -111,9 +113,7 @@ function RegisterNowSheet({ item, onDismiss, onConfirm }: {
           <Pill text={other ? Dates.long(date) : 'Altra data'} selected={other} onClick={() => setShowPicker(true)} icon="calendar_month" />
         </div>
         <FormLabel text="Metodo di pagamento" />
-        <div className="flow">
-          {paymentMethods.map((m) => <Pill key={m.id} text={m.label} selected={method === m.id} onClick={() => setMethod(m.id)} appIcon={m.icon} />)}
-        </div>
+        <PaymentPills selected={method} onSelect={setMethod} />
         <span className="t-caption" style={{ color: 'var(--inkFaint)', paddingTop: 12 }}>
           Il prossimo addebito programmato ({Dates.long(item.nextDate)}) resta invariato.
         </span>

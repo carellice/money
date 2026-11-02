@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { today } from '../../../shared/date.ts'
 import { Dates, Money } from '../../../shared/format.ts'
 import {
-  argb, frequencies, paletteAll, Palette, paymentMethods, type Category, type Frequency, type PaymentMethod, type Recurring, type RecurringKind,
+  argb, frequencies, paletteAll, Palette, type Category, type Frequency, type PaymentChoice, type Recurring, type RecurringKind,
 } from '../../../shared/model.ts'
 import { brandGroups, findBrand, groupOf, searchBrands, type Brand } from '../lib/brands.ts'
 import { pickImage, shrinkToJpeg } from '../lib/images.ts'
@@ -15,6 +15,7 @@ import {
 } from '../components/ui.tsx'
 import { AlertDialog, DatePickerDialog, Sheet, toast } from '../components/overlays.tsx'
 import { spring } from '../components/motion.ts'
+import { PaymentPills } from '../components/Payments.tsx'
 
 const reminderOptions: [number, string][] = [[-1, 'No'], [0, 'Il giorno stesso'], [1, '1 giorno prima'], [2, '2 giorni prima'], [3, '3 giorni prima'], [7, '1 settimana prima']]
 
@@ -44,7 +45,7 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
   const [date, setDate] = useState(original?.nextDate ?? today())
   const [categoryId, setCategoryId] = useState<number | null>(original?.categoryId ?? null)
   const [subcategoryId, setSubcategoryId] = useState<number | null>(original?.subcategoryId ?? null)
-  const [method, setMethod] = useState<PaymentMethod>(original?.payment ?? 'CARD')
+  const [method, setMethod] = useState<PaymentChoice>({ method: original?.payment ?? 'CARD', customId: original?.paymentId ?? null })
   const [brandKey, setBrandKey] = useState<string | null>(original?.brandKey ?? null)
   const [imagePath, setImagePath] = useState<string | null>(original?.imagePath ?? null)
   const [icon, setIcon] = useState(original?.icon ?? 'repeat')
@@ -146,7 +147,8 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
       amountCents,
       categoryId,
       subcategoryId,
-      payment: method,
+      payment: method.method,
+      paymentId: method.customId,
       frequency: freq,
       startDate: reschedule || !o ? date : o.startDate,
       nextDate: date,
@@ -278,9 +280,7 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
           </Expand>
 
           <FormLabel text="Metodo di pagamento" />
-          <div className="flow">
-            {paymentMethods.map((m) => <Pill key={m.id} text={m.label} selected={method === m.id} onClick={() => setMethod(m.id)} appIcon={m.icon} />)}
-          </div>
+          <PaymentPills selected={method} onSelect={setMethod} />
 
           <FormLabel text="Promemoria" />
           <div className="flow">

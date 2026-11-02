@@ -10,7 +10,7 @@ object Backup {
     private const val VERSION = 1
 
     suspend fun export(repo: MoneyRepository, out: OutputStream) {
-        val (categories, transactions, recurring, members) = repo.snapshot()
+        val (categories, transactions, recurring, members, payments) = repo.snapshot()
         val root = JSONObject()
             .put("app", "Money")
             .put("version", VERSION)
@@ -19,6 +19,7 @@ object Backup {
             .put("transactions", JSONArray(transactions.map { it.toJson() }))
             .put("recurring", JSONArray(recurring.map { it.toJson() }))
             .put("members", JSONArray(members.map { it.toJson() }))
+            .put("paymentMethods", JSONArray(payments.map { it.toJson() }))
         out.bufferedWriter().use { it.write(root.toString(2)) }
     }
 
@@ -32,12 +33,22 @@ object Backup {
         // Backups made before people were introduced have no members.
         val members = root.optJSONArray("members")?.objects()?.map { it.toMember() }.orEmpty()
         val known = members.map { it.id }.toSet()
+        // Custom payment methods came later still: without them, movements stay as "Altro".
+        val payments = root.optJSONArray("paymentMethods")?.objects()?.map { it.toPayment() }.orEmpty()
+        val knownPayments = payments.map { it.id }.toSet()
+        fun Long?.ifKnown() = this?.takeIf { it in knownPayments }
         repo.replaceAll(
             MoneyRepository.Snapshot(
                 categories,
-                transactions.map { if (it.memberId != null && it.memberId !in known) it.copy(memberId = null) else it },
-                recurring,
+                transactions.map {
+                    it.copy(
+                        memberId = it.memberId?.takeIf { id -> id in known },
+                        paymentId = it.paymentId.ifKnown(),
+                    )
+                },
+                recurring.map { it.copy(paymentId = it.paymentId.ifKnown()) },
                 members,
+                payments,
             )
         )
         return transactions.size
@@ -63,13 +74,14 @@ object Backup {
         .put("categoryId", categoryId).put("subcategoryId", subcategoryId ?: JSONObject.NULL)
         .put("payment", payment.name).put("note", note).put("recurringId", recurringId ?: JSONObject.NULL)
         .put("createdAt", createdAt).put("memberId", memberId ?: JSONObject.NULL)
+        .put("paymentId", paymentId ?: JSONObject.NULL)
 
     private fun JSONObject.toTransaction() = TransactionEntity(
         id = getLong("id"), type = TxType.valueOf(getString("type")), amountCents = getLong("amountCents"),
         date = getLong("date"), categoryId = getLong("categoryId"), subcategoryId = optLongOrNull("subcategoryId"),
         payment = PaymentMethod.valueOf(getString("payment")), note = optString("note"),
         recurringId = optLongOrNull("recurringId"), createdAt = optLong("createdAt"),
-        memberId = optLongOrNull("memberId"),
+        memberId = optLongOrNull("memberId"), paymentId = optLongOrNull("paymentId"),
     )
 
     private fun MemberEntity.toJson() = JSONObject()
@@ -79,13 +91,21 @@ object Backup {
         id = getLong("id"), name = getString("name"), color = getLong("color"), sortOrder = optInt("sortOrder"),
     )
 
+    private fun CustomPaymentEntity.toJson() = JSONObject()
+        .put("id", id).put("name", name).put("icon", icon).put("color", color).put("sortOrder", sortOrder)
+
+    private fun JSONObject.toPayment() = CustomPaymentEntity(
+        id = getLong("id"), name = getString("name"), icon = optString("icon", "card"), color = getLong("color"),
+        sortOrder = optInt("sortOrder"),
+    )
+
     private fun RecurringEntity.toJson() = JSONObject()
         .put("id", id).put("kind", kind.name).put("name", name).put("amountCents", amountCents)
         .put("categoryId", categoryId).put("subcategoryId", subcategoryId ?: JSONObject.NULL)
         .put("payment", payment.name).put("frequency", frequency.name).put("startDate", startDate)
         .put("nextDate", nextDate).put("brandKey", brandKey ?: JSONObject.NULL).put("icon", icon)
         .put("color", color).put("autoRegister", autoRegister).put("remindDaysBefore", remindDaysBefore)
-        .put("active", active).put("note", note)
+        .put("active", active).put("note", note).put("paymentId", paymentId ?: JSONObject.NULL)
 
     private fun JSONObject.toRecurring() = RecurringEntity(
         id = getLong("id"), kind = RecurringKind.valueOf(getString("kind")), name = getString("name"),
@@ -95,5 +115,6 @@ object Backup {
         nextDate = getLong("nextDate"), brandKey = optStringOrNull("brandKey"), icon = optString("icon", "repeat"),
         color = getLong("color"), autoRegister = optBoolean("autoRegister", true),
         remindDaysBefore = optInt("remindDaysBefore", 2), active = optBoolean("active", true), note = optString("note"),
+        paymentId = optLongOrNull("paymentId"),
     )
 }

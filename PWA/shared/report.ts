@@ -1,6 +1,6 @@
 import { dayOfWeek, monthDays, monthOf, monthStart, today as todayEpoch, ymd, type Month } from './date.ts'
 import { Dates, Money, percent } from './format.ts'
-import { Palette, type Category, type PaymentMethod, type Transaction } from './model.ts'
+import { Palette, type Category, type PaymentChoice, type Transaction } from './model.ts'
 
 export type SubSlice = { name: string; cents: number }
 
@@ -47,7 +47,7 @@ export type MonthReport = {
   /** Expense per day of month, index 0 = day 1. */
   daily: number[]
   fixedExpense: number
-  payments: [PaymentMethod, number][]
+  payments: [PaymentChoice, number][]
   top: Transaction[]
   prevIncome: number
   prevExpense: number
@@ -120,8 +120,8 @@ export function buildReport(
   }
 
   const savingsRate = income > 0 ? (income - expense) / income : null
-  const payments: [PaymentMethod, number][] = [...groupBy(expenses, (t) => t.payment)]
-    .map(([method, list]): [PaymentMethod, number] => [method, sum(list)])
+  const payments: [PaymentChoice, number][] = [...groupBy(expenses, (t) => `${t.payment}:${t.paymentId}`)]
+    .map(([, list]): [PaymentChoice, number] => [{ method: list[0].payment, customId: list[0].paymentId }, sum(list)])
     .sort(byDesc((p) => p[1]))
 
   const report: MonthReport = {

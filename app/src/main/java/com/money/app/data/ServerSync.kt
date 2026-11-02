@@ -74,6 +74,7 @@ class ServerSync(
         .put("transactions", JSONArray(snapshot.transactions.map { it.toJson().put("receiptPath", it.receiptPath ?: JSONObject.NULL) }))
         .put("recurring", JSONArray(snapshot.recurring.map { it.toJson().put("imagePath", it.imagePath ?: JSONObject.NULL) }))
         .put("members", JSONArray(snapshot.members.map { it.toJson() }))
+        .put("paymentMethods", JSONArray(snapshot.payments.map { it.toJson() }))
         .toString()
 
     fun decode(text: String): MoneyRepository.Snapshot {
@@ -83,16 +84,22 @@ class ServerSync(
             json.getJSONArray("transactions").objects().map { it.toTransaction() },
             json.getJSONArray("recurring").objects().map { it.toRecurring() },
             json.getJSONArray("members").objects().map { it.toMember() },
+            json.payments(),
         )
     }
+
+    /** Servers older than custom payment methods don't send them. */
+    private fun JSONObject.payments() = optJSONArray("paymentMethods")?.objects()?.map { it.toPayment() }.orEmpty()
 
     private suspend fun replaceLocal(snapshot: MoneyRepository.Snapshot) = db.withTransaction {
         db.transactions().clear()
         db.recurring().clear()
         db.categories().clear()
         db.members().clear()
+        db.payments().clear()
         db.categories().insertAll(snapshot.categories)
         db.members().insertAll(snapshot.members)
+        db.payments().insertAll(snapshot.payments)
         db.transactions().insertAll(snapshot.transactions)
         db.recurring().insertAll(snapshot.recurring)
     }
@@ -103,6 +110,7 @@ class ServerSync(
         json.getJSONArray("transactions").objects().map { it.toTransaction().let { tx -> tx.copy(receiptPath = localImage(config, tx.receiptPath)) } },
         json.getJSONArray("recurring").objects().map { it.toRecurring().let { r -> r.copy(imagePath = localImage(config, r.imagePath)) } },
         json.getJSONArray("members").objects().map { it.toMember() },
+        json.payments(),
     )
 
     private suspend fun localImage(config: ServerConfig, path: String?): String? {
@@ -168,6 +176,11 @@ class ServerSync(
 
     suspend fun deleteMember(id: Long) = write { client.delete(it, "/api/members/$id") }
 
+    suspend fun saveCustomPayment(method: CustomPaymentEntity): Long =
+        write { client.post(it, "/api/payment-methods", method.toJson()).getLong("id") }
+
+    suspend fun deleteCustomPayment(id: Long) = write { client.delete(it, "/api/payment-methods/$id") }
+
     /** Replaces the account's data with [snapshot], images included. */
     suspend fun upload(snapshot: MoneyRepository.Snapshot) = write { config ->
         val root = JSONObject()
@@ -178,6 +191,7 @@ class ServerSync(
             .put("transactions", JSONArray(snapshot.transactions.map { it.toJson() }))
             .put("recurring", JSONArray(snapshot.recurring.map { it.toJson() }))
             .put("members", JSONArray(snapshot.members.map { it.toJson() }))
+            .put("paymentMethods", JSONArray(snapshot.payments.map { it.toJson() }))
         client.importBackup(config, root.toString())
         // The backup format leaves images out: send them one by one, keeping the same ids.
         snapshot.transactions.filter { it.receiptPath != null }.forEach { tx ->
@@ -216,14 +230,14 @@ class ServerSync(
         .put("categoryId", categoryId).put("subcategoryId", subcategoryId ?: JSONObject.NULL)
         .put("payment", payment.name).put("note", note).put("receiptPath", JSONObject.NULL)
         .put("recurringId", recurringId ?: JSONObject.NULL).put("createdAt", createdAt)
-        .put("memberId", memberId ?: JSONObject.NULL)
+        .put("memberId", memberId ?: JSONObject.NULL).put("paymentId", paymentId ?: JSONObject.NULL)
 
     private fun JSONObject.toTransaction() = TransactionEntity(
         id = getLong("id"), type = TxType.valueOf(getString("type")), amountCents = getLong("amountCents"),
         date = getLong("date"), categoryId = getLong("categoryId"), subcategoryId = optLongOrNull("subcategoryId"),
         payment = PaymentMethod.valueOf(getString("payment")), note = optString("note"),
         receiptPath = optStringOrNull("receiptPath"), recurringId = optLongOrNull("recurringId"),
-        createdAt = optLong("createdAt"), memberId = optLongOrNull("memberId"),
+        createdAt = optLong("createdAt"), memberId = optLongOrNull("memberId"), paymentId = optLongOrNull("paymentId"),
     )
 
     private fun MemberEntity.toJson() = JSONObject()
@@ -233,6 +247,14 @@ class ServerSync(
         id = getLong("id"), name = getString("name"), color = getLong("color"), sortOrder = optInt("sortOrder"),
     )
 
+    private fun CustomPaymentEntity.toJson() = JSONObject()
+        .put("id", id).put("name", name).put("icon", icon).put("color", color).put("sortOrder", sortOrder)
+
+    private fun JSONObject.toPayment() = CustomPaymentEntity(
+        id = getLong("id"), name = getString("name"), icon = optString("icon", "card"), color = getLong("color"),
+        sortOrder = optInt("sortOrder"),
+    )
+
     private fun RecurringEntity.toJson() = JSONObject()
         .put("id", id).put("kind", kind.name).put("name", name).put("amountCents", amountCents)
         .put("categoryId", categoryId).put("subcategoryId", subcategoryId ?: JSONObject.NULL)
@@ -240,7 +262,7 @@ class ServerSync(
         .put("nextDate", nextDate).put("brandKey", brandKey ?: JSONObject.NULL).put("imagePath", JSONObject.NULL)
         .put("icon", icon).put("color", color).put("autoRegister", autoRegister)
         .put("remindDaysBefore", remindDaysBefore).put("notifiedFor", notifiedFor ?: JSONObject.NULL)
-        .put("active", active).put("note", note)
+        .put("active", active).put("note", note).put("paymentId", paymentId ?: JSONObject.NULL)
 
     private fun JSONObject.toRecurring() = RecurringEntity(
         id = getLong("id"), kind = RecurringKind.valueOf(getString("kind")), name = getString("name"),
@@ -251,6 +273,7 @@ class ServerSync(
         imagePath = optStringOrNull("imagePath"), icon = optString("icon", "repeat"), color = getLong("color"),
         autoRegister = optBoolean("autoRegister", true), remindDaysBefore = optInt("remindDaysBefore", 2),
         notifiedFor = optLongOrNull("notifiedFor"), active = optBoolean("active", true), note = optString("note"),
+        paymentId = optLongOrNull("paymentId"),
     )
 
     companion object {

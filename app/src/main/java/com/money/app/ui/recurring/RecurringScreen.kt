@@ -16,11 +16,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
-import com.money.app.data.PaymentMethod
+import com.money.app.data.PaymentChoice
+import com.money.app.data.paymentChoice
+import com.money.app.ui.settings.PaymentPills
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
 import com.money.app.ui.components.AmountField
-import com.money.app.ui.components.AppIcons
 import com.money.app.ui.components.FormLabel
 import com.money.app.ui.components.Pill
 import com.money.app.ui.components.PrimaryButton
@@ -95,7 +96,7 @@ class RecurringViewModel(container: AppContainer) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Records one payment of [item] now, without touching its schedule. */
-    fun registerNow(item: RecurringEntity, cents: Long, date: LocalDate, payment: PaymentMethod, onDone: () -> Unit) = viewModelScope.launch {
+    fun registerNow(item: RecurringEntity, cents: Long, date: LocalDate, payment: PaymentChoice, onDone: () -> Unit) = viewModelScope.launch {
         val savedId = repo.saveTransaction(
             TransactionEntity(
                 type = TxType.EXPENSE,
@@ -103,7 +104,8 @@ class RecurringViewModel(container: AppContainer) : ViewModel() {
                 date = date.toEpochDay(),
                 categoryId = item.categoryId,
                 subcategoryId = item.subcategoryId,
-                payment = payment,
+                payment = payment.method,
+                paymentId = payment.customId,
                 note = item.name,
                 recurringId = item.id,
             )
@@ -203,13 +205,13 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
 }
 
 @Composable
-private fun RegisterNowSheet(item: RecurringEntity, onDismiss: () -> Unit, onConfirm: (Long, LocalDate, PaymentMethod) -> Unit) {
+private fun RegisterNowSheet(item: RecurringEntity, onDismiss: () -> Unit, onConfirm: (Long, LocalDate, PaymentChoice) -> Unit) {
     val c = Ui.colors
     val today = LocalDate.now()
     var amount by remember { mutableStateOf(Money.toInput(item.amountCents)) }
     var date by remember { mutableStateOf(today) }
     // Defaults to the usual method; this one payment may have gone another way.
-    var payment by remember { mutableStateOf(item.payment) }
+    var payment by remember { mutableStateOf(item.paymentChoice) }
     var showPicker by remember { mutableStateOf(false) }
     val cents = Money.parse(amount) ?: 0L
 
@@ -237,9 +239,7 @@ private fun RegisterNowSheet(item: RecurringEntity, onDismiss: () -> Unit, onCon
                 Pill(if (other) Dates.long(date) else "Altra data", other, { showPicker = true }, icon = Icons.Rounded.CalendarMonth)
             }
             FormLabel("Metodo di pagamento")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                PaymentMethod.entries.forEach { m -> Pill(m.label, payment == m, { payment = m }, icon = AppIcons[m.icon]) }
-            }
+            PaymentPills(payment, { payment = it })
             Text(
                 "Il prossimo addebito programmato (${Dates.long(LocalDate.ofEpochDay(item.nextDate))}) resta invariato.",
                 style = Ui.type.caption,

@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [CategoryEntity::class, TransactionEntity::class, RecurringEntity::class, MemberEntity::class],
-    version = 2,
+    entities = [CategoryEntity::class, TransactionEntity::class, RecurringEntity::class, MemberEntity::class, CustomPaymentEntity::class],
+    version = 3,
     exportSchema = true,
 )
 abstract class MoneyDatabase : RoomDatabase() {
@@ -17,6 +17,7 @@ abstract class MoneyDatabase : RoomDatabase() {
     abstract fun transactions(): TransactionDao
     abstract fun recurring(): RecurringDao
     abstract fun members(): MemberDao
+    abstract fun payments(): CustomPaymentDao
 
     companion object {
         /** People of the household and whose each movement is. */
@@ -31,9 +32,21 @@ abstract class MoneyDatabase : RoomDatabase() {
             }
         }
 
+        /** Payment methods added by the user. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `payment_methods` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `icon` TEXT NOT NULL, `color` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL)"
+                )
+                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `paymentId` INTEGER")
+                db.execSQL("ALTER TABLE `recurring` ADD COLUMN `paymentId` INTEGER")
+            }
+        }
+
         fun build(context: Context): MoneyDatabase =
             Room.databaseBuilder(context, MoneyDatabase::class.java, "money.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

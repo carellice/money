@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.money.app.AppContainer
 import com.money.app.data.CategoryEntity
+import com.money.app.data.Payments
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
 import com.money.app.domain.Dates
@@ -86,14 +87,16 @@ class TransactionsViewModel(private val container: AppContainer) : ViewModel() {
     val filter = MutableStateFlow(0) // 0 all, 1 expenses, 2 incomes
 
     val state: StateFlow<TransactionsState?> = container.month.flatMapLatest { m ->
-        combine(repo.transactionsIn(m), repo.categories, repo.members, query, filter) { txs, cats, members, q, f ->
+        val names = combine(repo.members, repo.customPayments) { members, custom -> members to custom }
+        combine(repo.transactionsIn(m), repo.categories, names, query, filter) { txs, cats, (members, custom), q, f ->
             val byId = cats.associateBy { it.id }
             val memberNames = members.associate { it.id to it.name }
+            val payments = Payments(custom)
             val needle = q.trim().lowercase()
             val visible = txs.filter { tx ->
                 (f == 0 || (f == 1 && tx.type == TxType.EXPENSE) || (f == 2 && tx.type == TxType.INCOME)) &&
                     (needle.isEmpty() || listOfNotNull(
-                        tx.note, byId[tx.categoryId]?.name, tx.subcategoryId?.let { byId[it]?.name }, tx.payment.label,
+                        tx.note, byId[tx.categoryId]?.name, tx.subcategoryId?.let { byId[it]?.name }, payments.label(tx),
                         tx.memberId?.let { memberNames[it] },
                     ).any { it.lowercase().contains(needle) })
             }

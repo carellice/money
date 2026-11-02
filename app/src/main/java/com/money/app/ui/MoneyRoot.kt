@@ -74,6 +74,8 @@ import com.money.app.ui.settings.ServerSettingsScreen
 import com.money.app.ui.settings.SettingsScreen
 import com.money.app.ui.transactions.TransactionsScreen
 import com.money.app.ui.components.LocalMembers
+import com.money.app.ui.components.LocalPayments
+import com.money.app.data.Payments
 import com.money.app.ui.theme.Ink
 import com.money.app.ui.theme.LocalBlobTime
 import com.money.app.ui.theme.Ui
@@ -115,6 +117,8 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
     val c = Ui.colors
     val members by appContainer().repository.members.collectAsStateWithLifecycle(emptyList())
     val membersById = remember(members) { members.associateBy { it.id } }
+    val customPayments by appContainer().repository.customPayments.collectAsStateWithLifecycle(emptyList())
+    val payments = remember(customPayments) { Payments(customPayments) }
 
     LaunchedEffect(deepLinkRoute) {
         if (deepLinkRoute != null && deepLinkRoute in Routes.topLevel) {
@@ -137,7 +141,7 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize().background(c.bg)) {
-        CompositionLocalProvider(LocalMembers provides membersById) {
+        CompositionLocalProvider(LocalMembers provides membersById, LocalPayments provides payments) {
             NavHost(
                 navController = nav,
                 startDestination = Routes.HOME,

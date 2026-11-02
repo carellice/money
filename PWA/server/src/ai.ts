@@ -1,8 +1,8 @@
 import { currentMonth, isoDate, monthEnd, monthKey, monthOf, monthStart, plusYears, today, type Month } from '../../shared/date.ts'
 import { Dates, Money, percent } from '../../shared/format.ts'
-import { frequency, payment, type Category, type Recurring, type Transaction, type TxType } from '../../shared/model.ts'
+import { frequency, paymentChoice, paymentLabel, type Category, type CustomPayment, type Recurring, type Transaction, type TxType } from '../../shared/model.ts'
 import { buildReport, type MonthReport } from '../../shared/report.ts'
-import { categories, db, getMeta, recurring, setMeta, transactionsBetween } from './db.ts'
+import { categories, db, getMeta, paymentMethods, recurring, setMeta, transactionsBetween } from './db.ts'
 
 export class AiError extends Error {}
 
@@ -202,8 +202,9 @@ function chatContext(): string {
   }
 
   const recentFrom = monthStart(currentMonth() - 1)
+  const custom = paymentMethods()
   lines.push('', '## Movimenti del mese corrente e precedente')
-  txs.filter((t) => t.date >= recentFrom).sort((a, b) => a.date - b.date).slice(-300).forEach((t) => lines.push(line(t, cats)))
+  txs.filter((t) => t.date >= recentFrom).sort((a, b) => a.date - b.date).slice(-300).forEach((t) => lines.push(line(t, cats, custom)))
 
   if (active.length) {
     lines.push('', '## Spese fisse e abbonamenti attivi')
@@ -278,16 +279,17 @@ function describe(r: MonthReport): string {
   if (r.incomeSlices.length) out.push('Entrate per fonte: ' + r.incomeSlices.map((s) => `${s.category.name} ${Money.short(s.cents)}`).join(', '))
   if (r.budgets.length) out.push('Budget: ' + r.budgets.map((b) => `${b.category.name} ${Money.short(b.spent)} su ${Money.short(b.budget)}`).join(', '))
   out.push('Spese più grandi:')
-  r.top.forEach((t) => out.push(line(t, r.categories)))
+  const custom = paymentMethods()
+  r.top.forEach((t) => out.push(line(t, r.categories, custom)))
   return out.join('\n') + '\n'
 }
 
-function line(t: Transaction, cats: Map<number, Category>): string {
+function line(t: Transaction, cats: Map<number, Category>, custom: CustomPayment[]): string {
   const category = [cats.get(t.categoryId)?.name, t.subcategoryId != null ? cats.get(t.subcategoryId)?.name : undefined].filter(Boolean).join(' > ')
   const sign = t.type === 'INCOME' ? '+' : '-'
   const note = t.note.trim() ? ` "${t.note}"` : ''
   const fixed = t.recurringId != null ? ' [fissa]' : ''
-  return `- ${isoDate(t.date)} ${sign}${Money.format(t.amountCents)} ${category}${note} (${payment(t.payment).label})${fixed}`
+  return `- ${isoDate(t.date)} ${sign}${Money.format(t.amountCents)} ${category}${note} (${paymentLabel(paymentChoice(t), custom).label})${fixed}`
 }
 
 function recurringLine(r: Recurring, cats: Map<number, Category>): string {

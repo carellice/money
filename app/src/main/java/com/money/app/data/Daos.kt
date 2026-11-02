@@ -73,6 +73,9 @@ interface TransactionDao {
     @Query("UPDATE transactions SET memberId = NULL WHERE memberId = :memberId")
     suspend fun clearMember(memberId: Long)
 
+    @Query("UPDATE transactions SET paymentId = NULL WHERE paymentId = :paymentId")
+    suspend fun clearPayment(paymentId: Long)
+
     @Query("DELETE FROM transactions")
     suspend fun clear()
 }
@@ -106,6 +109,9 @@ interface RecurringDao {
     @Delete
     suspend fun delete(item: RecurringEntity)
 
+    @Query("UPDATE recurring SET paymentId = NULL WHERE paymentId = :paymentId")
+    suspend fun clearPayment(paymentId: Long)
+
     @Query("DELETE FROM recurring")
     suspend fun clear()
 }
@@ -128,5 +134,26 @@ interface MemberDao {
     suspend fun delete(member: MemberEntity)
 
     @Query("DELETE FROM members")
+    suspend fun clear()
+}
+
+@Dao
+interface CustomPaymentDao {
+    @Query("SELECT * FROM payment_methods ORDER BY sortOrder, id")
+    fun observeAll(): Flow<List<CustomPaymentEntity>>
+
+    @Query("SELECT * FROM payment_methods ORDER BY sortOrder, id")
+    suspend fun all(): List<CustomPaymentEntity>
+
+    @Upsert
+    suspend fun upsert(method: CustomPaymentEntity): Long
+
+    @Insert
+    suspend fun insertAll(methods: List<CustomPaymentEntity>)
+
+    @Delete
+    suspend fun delete(method: CustomPaymentEntity)
+
+    @Query("DELETE FROM payment_methods")
     suspend fun clear()
 }
