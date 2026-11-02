@@ -1,6 +1,26 @@
 package com.money.app.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.launch
+import kotlin.math.max
+import kotlin.math.pow
+import kotlin.math.sign
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -15,7 +35,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -145,10 +164,23 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
             NavHost(
                 navController = nav,
                 startDestination = Routes.HOME,
-                enterTransition = { fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 0.97f) },
-                exitTransition = { fadeOut(tween(180)) },
-                popEnterTransition = { fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 1.03f) },
-                popExitTransition = { fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.97f) },
+                // Between tabs the page slides the way the bar's capsule goes.
+                enterTransition = {
+                    val dir = tabDirection(initialState.destination.route, targetState.destination.route)
+                    if (dir != 0) tabEnter(dir) else fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 0.97f)
+                },
+                exitTransition = {
+                    val dir = tabDirection(initialState.destination.route, targetState.destination.route)
+                    if (dir != 0) tabExit(dir) else fadeOut(tween(180))
+                },
+                popEnterTransition = {
+                    val dir = tabDirection(initialState.destination.route, targetState.destination.route)
+                    if (dir != 0) tabEnter(dir) else fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 1.03f)
+                },
+                popExitTransition = {
+                    val dir = tabDirection(initialState.destination.route, targetState.destination.route)
+                    if (dir != 0) tabExit(dir) else fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.97f)
+                },
             ) {
                 composable(Routes.HOME) {
                     HomeScreen(
@@ -245,9 +277,27 @@ private val tabs = listOf(
     Tab(Routes.REPORT, "Report", Icons.Rounded.DonutLarge),
 )
 
+/** +1 when moving to a tab on the right, -1 to one on the left, 0 when either side is not a tab. */
+private fun tabDirection(from: String?, to: String?): Int {
+    val a = tabs.indexOfFirst { it.route == from }
+    val b = tabs.indexOfFirst { it.route == to }
+    return if (a < 0 || b < 0) 0 else (b - a).sign
+}
+
+private fun tabEnter(dir: Int): EnterTransition =
+    slideInHorizontally(spring(dampingRatio = 0.85f, stiffness = 380f)) { dir * it / 4 } + fadeIn(tween(200))
+
+private fun tabExit(dir: Int): ExitTransition =
+    slideOutHorizontally(spring(dampingRatio = 0.85f, stiffness = 380f)) { -dir * it / 4 } + fadeOut(tween(160))
+
+private val CapsuleWidth = 56.dp
+private val CapsuleHeight = 34.dp
+
 @Composable
 private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> Unit) {
     val c = Ui.colors
+    val density = LocalDensity.current
+    val selected = tabs.indexOfFirst { it.route == route }
     Box(
         Modifier
             .fillMaxWidth()
@@ -255,32 +305,94 @@ private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> U
             .padding(horizontal = 16.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Row(
+        BoxWithConstraints(
             Modifier
                 .fillMaxWidth()
                 .height(80.dp)
                 .shadow(24.dp, CircleShape, ambientColor = Ink, spotColor = Ink)
                 .clip(CircleShape)
-                .background(c.surface)
-                .padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .background(c.surface),
         ) {
-            // Every tab owns an equal slice of the full bar height, so the touch target is large.
-            tabs.take(2).forEach { TabItem(it, route == it.route, Modifier.weight(1f)) { onSelect(it.route) } }
-            Spacer(Modifier.width(80.dp))
-            tabs.drop(2).forEach { TabItem(it, route == it.route, Modifier.weight(1f)) { onSelect(it.route) } }
+            // Tabs share what the side padding and the room for the add button leave.
+            val slot = (maxWidth - 20.dp - 80.dp) / 4
+            val centers = with(density) {
+                tabs.indices.map { i -> (10.dp + slot * (i + 0.5f) + if (i >= 2) 80.dp else 0.dp).toPx() }
+            }
+            var iconTop by remember { mutableFloatStateOf(Float.NaN) }
+            LiquidCapsule(selected, centers, iconTop, c.accent)
+            Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Every tab owns an equal slice of the full bar height, so the touch target is large.
+                tabs.forEachIndexed { i, tab ->
+                    if (i == 2) Spacer(Modifier.width(80.dp))
+                    TabItem(tab, i == selected, Modifier.weight(1f), { iconTop = it }) { onSelect(tab.route) }
+                }
+            }
         }
         AddButton(onAdd)
     }
 }
 
+/**
+ * The capsule behind the selected icon. Its two ends move on their own springs: the one in front
+ * runs ahead and the one behind catches up later, so it stretches like a drop on the way and
+ * settles back with a small bounce.
+ */
 @Composable
-private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun LiquidCapsule(index: Int, centers: List<Float>, top: Float, color: Color) {
+    val density = LocalDensity.current
+    val half = with(density) { CapsuleWidth.toPx() / 2 }
+    val left = remember { Animatable(Float.NaN) }
+    val right = remember { Animatable(Float.NaN) }
+    LaunchedEffect(index, centers) {
+        if (index < 0) return@LaunchedEffect
+        val center = centers[index]
+        val targetLeft = center - half
+        val targetRight = center + half
+        if (left.value.isNaN()) {
+            left.snapTo(targetLeft)
+            right.snapTo(targetRight)
+            return@LaunchedEffect
+        }
+        val front = spring<Float>(dampingRatio = 0.8f, stiffness = 900f)
+        val back = spring<Float>(dampingRatio = 0.7f, stiffness = 240f)
+        val toRight = targetLeft > left.value
+        launch { left.animateTo(targetLeft, if (toRight) back else front) }
+        launch { right.animateTo(targetRight, if (toRight) front else back) }
+    }
+    val minWidth = with(density) { 44.dp.toPx() }
+    val restWidth = with(density) { CapsuleWidth.toPx() }
+    val restHeight = with(density) { CapsuleHeight.toPx() }
+    Box(
+        Modifier.fillMaxSize().drawBehind {
+            if (left.value.isNaN() || top.isNaN()) return@drawBehind
+            val width = max(right.value - left.value, minWidth)
+            // Stretched it gets a little thinner, squeezed a little taller, like a drop of liquid.
+            val height = (restHeight * (restWidth / width).pow(0.25f)).coerceIn(restHeight * 0.78f, restHeight * 1.12f)
+            val x = (left.value + right.value) / 2 - width / 2
+            val y = top + restHeight / 2 - height / 2
+            drawRoundRect(color, Offset(x, y), Size(width, height), CornerRadius(height / 2))
+        },
+    )
+}
+
+@Composable
+private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier, onIconTop: (Float) -> Unit, onClick: () -> Unit) {
     val c = Ui.colors
-    val bg by animateColorAsState(if (selected) c.accent else c.surface, label = "tabBg")
     val fg by animateColorAsState(if (selected) Ink else c.inkSoft, label = "tabFg")
     val label by animateColorAsState(if (selected) c.ink else c.inkSoft, label = "tabLabel")
-    val width by animateDpAsState(if (selected) 56.dp else 40.dp, spring(dampingRatio = 0.6f, stiffness = 500f), label = "tabPill")
+    val scale = remember { Animatable(1f) }
+    val tilt = remember { Animatable(0f) }
+    var armed by remember { mutableStateOf(false) }
+    // Chosen: the icon shrinks at once, then springs back to size wobbling side to side.
+    LaunchedEffect(selected) {
+        if (armed && selected) {
+            scale.snapTo(0.62f)
+            launch { scale.animateTo(1f, spring(dampingRatio = 0.38f, stiffness = 420f)) }
+            tilt.snapTo(0f)
+            tilt.animateTo(0f, spring(dampingRatio = 0.22f, stiffness = 320f), initialVelocity = 420f)
+        }
+        armed = true
+    }
     Column(
         modifier
             .fillMaxHeight()
@@ -290,12 +402,20 @@ private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier, onClick: ()
     ) {
         Box(
             Modifier
-                .size(width = width, height = 34.dp)
-                .clip(CircleShape)
-                .background(bg),
+                .size(width = CapsuleWidth, height = CapsuleHeight)
+                .onPlaced { onIconTop(it.positionInParent().y) },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(tab.icon, null, tint = fg, modifier = Modifier.size(24.dp))
+            Icon(
+                tab.icon, null, tint = fg,
+                modifier = Modifier
+                    .size(24.dp)
+                    .graphicsLayer {
+                        scaleX = scale.value
+                        scaleY = scale.value
+                        rotationZ = tilt.value
+                    },
+            )
         }
         Spacer(Modifier.height(4.dp))
         Text(tab.label, style = Ui.type.caption, color = label, maxLines = 1)

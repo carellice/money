@@ -1,5 +1,5 @@
-import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { animate, AnimatePresence, motion, useMotionValue, useTransform } from 'framer-motion'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
 import { parseMonthKey } from '../../shared/date.ts'
 import { api, authEvents } from './lib/api.ts'
 import { blobTime, onFrame } from './lib/blob.ts'
@@ -147,26 +147,45 @@ function Screen({ entry }: { entry: Entry }) {
 
 /** NavHost: screens stay mounted under the one on top, with the app's enter and exit transitions. */
 function Navigator() {
-  const { stack, popping } = useNav()
+  const { stack } = useNav()
   const topEntry = stack[stack.length - 1]
+  // Between tabs the page slides the way the bar's capsule goes.
+  const previous = useRef(topEntry)
+  const dir = useRef(0)
+  if (previous.current.key !== topEntry.key) {
+    dir.current = tabDirection(previous.current.route, topEntry.route)
+    previous.current = topEntry
+  }
+  const sliding = dir.current !== 0
   return (
     <>
-      <AnimatePresence initial={false} custom={popping}>
+      <AnimatePresence initial={false} custom={dir.current}>
         {stack.map((entry, i) => {
           const isTop = i === stack.length - 1
           const sheet = sheetRoutes.includes(entry.route)
+          const under = tabDirection(entry.route, topEntry.route)
           return (
             <motion.div
               key={entry.key}
               className="layer"
-              custom={popping}
-              initial={sheet ? { opacity: 0, y: '50%' } : { opacity: 0, scale: 0.97 }}
+              custom={dir.current}
+              initial={sheet ? { opacity: 0, y: '50%' } : sliding ? { opacity: 0, x: `${dir.current * 25}%` } : { opacity: 0, scale: 0.97 }}
               animate={isTop
-                ? { opacity: 1, scale: 1, y: 0, transition: sheet ? { y: spring(0.85, 320), opacity: tween(240) } : tween(240) }
-                : { opacity: 0, scale: 1.03, transition: tween(180) }}
-              exit={sheet
-                ? { opacity: 0, y: '50%', transition: { y: tween(260), opacity: tween(200) } }
-                : { opacity: 0, scale: 0.97, transition: tween(180) }}
+                ? {
+                    opacity: 1, scale: 1, y: 0, x: 0,
+                    transition: sheet ? { y: spring(0.85, 320), opacity: tween(240) } : sliding ? { x: spring(0.85, 380), opacity: tween(200) } : tween(240),
+                  }
+                : sliding && under !== 0
+                  ? { opacity: 0, scale: 1, x: `${-under * 25}%`, transition: { x: spring(0.85, 380), opacity: tween(160) } }
+                  : { opacity: 0, scale: 1.03, transition: tween(180) }}
+              variants={{
+                exit: (d: number) => sheet
+                  ? { opacity: 0, y: '50%', transition: { y: tween(260), opacity: tween(200) } }
+                  : d !== 0
+                    ? { opacity: 0, x: `${-d * 25}%`, transition: { x: spring(0.85, 380), opacity: tween(160) } }
+                    : { opacity: 0, scale: 0.97, transition: tween(180) },
+              }}
+              exit="exit"
               style={{ zIndex: i, pointerEvents: isTop ? 'auto' : 'none', visibility: undefined }}
               aria-hidden={!isTop}
             >
@@ -199,17 +218,36 @@ const tabs: { route: Route; label: string; icon: UiIcon }[] = [
   { route: 'report', label: 'Report', icon: 'donut_large' },
 ]
 
+/** +1 when moving to a tab on the right, -1 to one on the left, 0 when either side is not a tab. */
+function tabDirection(from: Route, to: Route): number {
+  const a = tabs.findIndex((t) => t.route === from)
+  const b = tabs.findIndex((t) => t.route === to)
+  return a < 0 || b < 0 ? 0 : Math.sign(b - a)
+}
+
+const CAPSULE_W = 56
+const CAPSULE_H = 34
+
 function BottomBar({ route }: { route: Route }) {
+  const rowRef = useRef<HTMLDivElement>(null)
+  const icons = useRef<(HTMLDivElement | null)[]>([])
+  // Stable refs: a new callback each render would detach the icons right when the capsule measures them.
+  const iconRefs = useMemo(() => tabs.map((_, i) => (el: HTMLDivElement | null) => { icons.current[i] = el }), [])
+  const selected = tabs.findIndex((t) => t.route === route)
   return (
     <div className="center nav-pad" style={{ position: 'relative' }}>
       <div style={{ position: 'relative', width: '100%', padding: '12px 16px' }}>
-        <div className="row" style={{
-          height: 80, borderRadius: 999, background: 'var(--surface)', padding: '0 10px',
+        <div ref={rowRef} className="row" style={{
+          position: 'relative', height: 80, borderRadius: 999, background: 'var(--surface)', padding: '0 10px',
           boxShadow: '0 12px 28px rgba(21,18,31,0.22), 0 2px 8px rgba(21,18,31,0.12)',
         }}>
-          {tabs.slice(0, 2).map((t) => <TabItem key={t.route} tab={t} selected={route === t.route} />)}
-          <div style={{ width: 80, flexShrink: 0 }} />
-          {tabs.slice(2).map((t) => <TabItem key={t.route} tab={t} selected={route === t.route} />)}
+          {tabs.map((t, i) => (
+            <TabSlot key={t.route} gap={i === 2}>
+              <TabItem tab={t} selected={route === t.route} iconRef={iconRefs[i]} />
+            </TabSlot>
+          ))}
+          {/* After the tabs, so their icons are in place when it measures them; it still sits behind. */}
+          <LiquidCapsule index={selected} rowRef={rowRef} icons={icons} />
         </div>
         <div className="center" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
           <AddButton />
@@ -219,13 +257,108 @@ function BottomBar({ route }: { route: Route }) {
   )
 }
 
-function TabItem({ tab, selected }: { tab: (typeof tabs)[number]; selected: boolean }) {
+/** Room for the add button goes before the third tab. */
+function TabSlot({ gap, children }: { gap: boolean; children: ReactNode }) {
   return (
-    <Bouncy pressedScale={0.9} onClick={() => switchTab(tab.route)} className="col flex1" style={{ height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-      <motion.div className="center" initial={false} animate={{ width: selected ? 56 : 40 }} transition={spring(0.6, 500)}
-        style={{ height: 34, borderRadius: 999, background: selected ? 'var(--accent)' : 'var(--surface)', transition: 'background-color 0.25s' }}>
-        <Icon name={tab.icon} size={24} color={selected ? Ink : 'var(--inkSoft)'} />
-      </motion.div>
+    <>
+      {gap && <div style={{ width: 80, flexShrink: 0 }} />}
+      {children}
+    </>
+  )
+}
+
+/**
+ * The capsule behind the selected icon. Its two ends move on their own springs: the one in front
+ * runs ahead and the one behind catches up later, so it stretches like a drop on the way and
+ * settles back with a small bounce.
+ */
+function LiquidCapsule({ index, rowRef, icons }: {
+  index: number
+  rowRef: RefObject<HTMLDivElement | null>
+  icons: RefObject<(HTMLDivElement | null)[]>
+}) {
+  const left = useMotionValue(0)
+  const right = useMotionValue(CAPSULE_W)
+  const top = useMotionValue(0)
+  // Hidden until it knows where the first icon is.
+  const opacity = useMotionValue(0)
+  const placed = useRef(false)
+  const width = useTransform(() => Math.max(right.get() - left.get(), 44))
+  const x = useTransform(() => (left.get() + right.get()) / 2 - width.get() / 2)
+  // Stretched it gets a little thinner, squeezed a little taller, like a drop of liquid.
+  const height = useTransform(() => Math.min(Math.max(CAPSULE_H * Math.pow(CAPSULE_W / width.get(), 0.25), CAPSULE_H * 0.78), CAPSULE_H * 1.12))
+  const y = useTransform(() => top.get() + CAPSULE_H / 2 - height.get() / 2)
+
+  useLayoutEffect(() => {
+    const row = rowRef.current
+    if (!row || index < 0) return
+    const target = () => {
+      const icon = icons.current?.[index]
+      if (!icon) return null
+      const r = row.getBoundingClientRect()
+      const b = icon.getBoundingClientRect()
+      return { center: b.left - r.left + b.width / 2, top: b.top - r.top }
+    }
+    const place = () => {
+      const t = target()
+      if (!t) return
+      top.set(t.top)
+      left.set(t.center - CAPSULE_W / 2)
+      right.set(t.center + CAPSULE_W / 2)
+      opacity.set(1)
+      placed.current = true
+    }
+    const controls: { stop: () => void }[] = []
+    const t = target()
+    if (!t) return
+    if (!placed.current) place()
+    else {
+      top.set(t.top)
+      const toLeft = t.center - CAPSULE_W / 2
+      const front = spring(0.8, 900)
+      const back = spring(0.7, 240)
+      const goingRight = toLeft > left.get()
+      controls.push(animate(left, toLeft, goingRight ? back : front))
+      controls.push(animate(right, t.center + CAPSULE_W / 2, goingRight ? front : back))
+    }
+    // A new width (rotation, resize) puts it straight in place.
+    let width = row.clientWidth
+    const observer = new ResizeObserver(() => {
+      if (row.clientWidth === width) return
+      width = row.clientWidth
+      controls.forEach((c) => c.stop())
+      place()
+    })
+    observer.observe(row)
+    return () => {
+      observer.disconnect()
+      controls.forEach((c) => c.stop())
+    }
+  }, [index, rowRef, icons, left, right, top, opacity])
+
+  return (
+    <motion.div style={{
+      position: 'absolute', left: 0, top: 0, zIndex: 0, x, y, width, height, opacity, borderRadius: 999, background: 'var(--accent)', pointerEvents: 'none',
+    }} />
+  )
+}
+
+function TabItem({ tab, selected, iconRef }: { tab: (typeof tabs)[number]; selected: boolean; iconRef: (el: HTMLDivElement | null) => void }) {
+  const icon = useRef<HTMLDivElement>(null)
+  const armed = useRef(false)
+  // Chosen: the icon shrinks at once, then springs back to size wobbling side to side.
+  useEffect(() => {
+    if (armed.current && selected && icon.current) {
+      animate(icon.current, { scale: [0.62, 1] }, spring(0.38, 420))
+      animate(icon.current, { rotate: [0, 11, -8, 5, -2.5, 1, 0] }, { duration: 0.7, ease: 'easeOut' })
+    }
+    armed.current = true
+  }, [selected])
+  return (
+    <Bouncy pressedScale={0.9} onClick={() => switchTab(tab.route)} className="col flex1" style={{ height: '100%', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
+      <div ref={iconRef} className="center" style={{ width: CAPSULE_W, height: CAPSULE_H }}>
+        <div ref={icon} className="center"><Icon name={tab.icon} size={24} color={selected ? Ink : 'var(--inkSoft)'} /></div>
+      </div>
       <span className="t-caption" style={{ marginTop: 4, color: selected ? 'var(--ink)' : 'var(--inkSoft)', transition: 'color 0.25s', whiteSpace: 'nowrap' }}>
         {tab.label}
       </span>
