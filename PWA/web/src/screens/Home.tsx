@@ -151,7 +151,7 @@ function MiniBlob({ label, cents, color, seed, onClick }: { label: string; cents
       <BlobLayer color={color} seed={seed} amplitude={0.1} />
       <div className="blob-content col" style={{ alignItems: 'center' }}>
         <span className="t-caption" style={{ color: alpha(Ink, 0.8) }}>{label}</span>
-        <span className="t-titleSmall" style={{ color: Ink, whiteSpace: 'nowrap' }}>{Money.short(cents)}</span>
+        <span className="t-titleSmall" style={{ color: Ink, whiteSpace: 'nowrap' }}>{Money.format(cents)}</span>
         <span className="t-caption" style={{ color: alpha(Ink, 0.8) }}>+ aggiungi</span>
       </div>
     </Bouncy>

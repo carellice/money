@@ -305,7 +305,7 @@ private fun MiniBlob(label: String, cents: Long, color: Color, seed: Int, modifi
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(label, style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
-            Text(Money.short(cents), style = Ui.type.titleSmall, color = Ink, maxLines = 1)
+            Text(Money.format(cents), style = Ui.type.titleSmall, color = Ink, maxLines = 1)
             Text("+ aggiungi", style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
         }
     }
