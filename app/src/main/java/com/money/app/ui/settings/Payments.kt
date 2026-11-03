@@ -1,5 +1,8 @@
 package com.money.app.ui.settings
 
+import com.money.app.ui.components.FullScreenPage
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,10 +24,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -187,27 +188,18 @@ private fun PaymentEditor(
     var confirmDelete by remember { mutableStateOf(false) }
     val preview = original.copy(name = name, icon = icon, color = color)
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = c.bg,
-    ) {
+    FullScreenPage(if (original.id == 0L) "Nuovo metodo" else "Modifica metodo", onDismiss) {
         Column(
             Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .imePadding()
+                .navigationBarsPadding()
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PaymentBadge(preview, size = 64.dp)
-                Spacer(Modifier.size(14.dp))
-                Text(
-                    if (original.id == 0L) "Nuovo metodo di pagamento" else "Modifica metodo di pagamento",
-                    style = Ui.type.title, color = c.ink,
-                )
+            Box(Modifier.fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.Center) {
+                PaymentBadge(preview, size = 96.dp)
             }
             FormLabel("Nome")
             NoteField(name, { name = it }, "Es. Carta Revolut")

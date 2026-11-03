@@ -7,7 +7,7 @@ import { Ink } from '../lib/theme.ts'
 import {
   AmountField, Bouncy, CategoryBadge, ColorSwatches, FormLabel, IconPicker, NoteField, Pill, PrimaryButton, RoundIconButton, Segmented, Staggered, TopBar,
 } from '../components/ui.tsx'
-import { Sheet, toast } from '../components/overlays.tsx'
+import { FullPage, toast } from '../components/overlays.tsx'
 
 type Editing = { category: Category; subs: Category[] }
 
@@ -110,11 +110,10 @@ function CategoryEditor({ editing, onDismiss, onSave, onDelete }: {
   }
 
   return (
-    <Sheet onDismiss={onDismiss}>
+    <FullPage title={original.id === 0 ? 'Nuova categoria' : 'Modifica categoria'} onDismiss={onDismiss}>
       <div className="col" style={{ padding: '0 20px 32px' }}>
-        <div className="row">
-          <CategoryBadge icon={icon} color={argb(color)} size={64} animated />
-          <span className="t-title" style={{ marginLeft: 14, color: 'var(--ink)' }}>{original.id === 0 ? 'Nuova categoria' : 'Modifica categoria'}</span>
+        <div className="center" style={{ paddingTop: 4 }}>
+          <CategoryBadge icon={icon} color={argb(color)} size={96} animated />
         </div>
         <FormLabel text="Nome" />
         <NoteField value={name} onChange={setName} placeholder="Es. Palestra" />
@@ -148,6 +147,6 @@ function CategoryEditor({ editing, onDismiss, onSave, onDelete }: {
           </Bouncy>
         )}
       </div>
-    </Sheet>
+    </FullPage>
   )
 }

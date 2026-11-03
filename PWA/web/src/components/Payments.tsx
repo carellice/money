@@ -3,7 +3,7 @@ import { argb, paletteAll, paymentMethods, sameChoice, type CustomPayment, type 
 import { actions, usePaymentMethods } from '../lib/store.ts'
 import { Ink } from '../lib/theme.ts'
 import { AppIcon, Bouncy, ColorSwatches, FormLabel, Icon, IconPicker, NoteField, Pill, PrimaryButton } from './ui.tsx'
-import { AlertDialog, Sheet, toast } from './overlays.tsx'
+import { AlertDialog, FullPage, toast } from './overlays.tsx'
 
 /** Rounded badge with the method's icon on its color. */
 export function PaymentBadge({ method, size = 40 }: { method: CustomPayment; size?: number }) {
@@ -91,13 +91,10 @@ function PaymentEditor({ original, onDismiss, onSave, onDelete }: {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const preview = { ...original, name, icon, color }
   return (
-    <Sheet onDismiss={onDismiss}>
+    <FullPage title={original.id === 0 ? 'Nuovo metodo' : 'Modifica metodo'} onDismiss={onDismiss}>
       <div className="col" style={{ padding: '0 20px 32px', gap: 2 }}>
-        <div className="row">
-          <PaymentBadge method={preview} size={64} />
-          <span className="t-title" style={{ marginLeft: 14, color: 'var(--ink)' }}>
-            {original.id === 0 ? 'Nuovo metodo di pagamento' : 'Modifica metodo di pagamento'}
-          </span>
+        <div className="center" style={{ paddingTop: 4 }}>
+          <PaymentBadge method={preview} size={96} />
         </div>
         <FormLabel text="Nome" />
         <NoteField value={name} onChange={setName} placeholder="Es. Carta Revolut" />
@@ -117,6 +114,6 @@ function PaymentEditor({ original, onDismiss, onSave, onDelete }: {
           confirm="Elimina" confirmColor="var(--expenseText)" onDismiss={() => setConfirmDelete(false)}
           onConfirm={() => { setConfirmDelete(false); onDelete(original) }} />
       )}
-    </Sheet>
+    </FullPage>
   )
 }

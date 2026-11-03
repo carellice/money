@@ -1,5 +1,6 @@
 package com.money.app.ui.recurring
 
+import com.money.app.ui.components.FullScreenPage
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.foundation.layout.widthIn
@@ -53,11 +54,9 @@ import androidx.compose.material.icons.rounded.Stars
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -323,7 +322,7 @@ fun RecurringEditScreen(onClose: () -> Unit) {
     }
 
     if (showBrands) {
-        BrandPickerSheet(onDismiss = { showBrands = false }) {
+        BrandPicker(onDismiss = { showBrands = false }) {
             vm.pickBrand(it)
             showBrands = false
         }
@@ -371,24 +370,18 @@ private fun Stepper(value: Int, min: Int, max: Int = 99, onChange: (Int) -> Unit
 }
 
 @Composable
-private fun BrandPickerSheet(onDismiss: () -> Unit, onPick: (Brand) -> Unit) {
+private fun BrandPicker(onDismiss: () -> Unit, onPick: (Brand) -> Unit) {
     val c = Ui.colors
     var query by remember { mutableStateOf("") }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = c.bg,
-    ) {
+    FullScreenPage("Scegli un logo", onDismiss) {
         Column(Modifier.padding(horizontal = 20.dp)) {
-            Text("Scegli un logo", style = Ui.type.title, color = c.ink)
-            Spacer(Modifier.height(12.dp))
             NoteField(query, { query = it }, "Cerca Netflix, Spotify, iCloud…")
             Spacer(Modifier.height(8.dp))
         }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(84.dp),
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 32.dp),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().weight(1f).navigationBarsPadding(),
         ) {
             if (query.isBlank()) {
                 Brands.groups.forEach { group ->

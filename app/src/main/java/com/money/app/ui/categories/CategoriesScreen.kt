@@ -1,5 +1,7 @@
 package com.money.app.ui.categories
 
+import com.money.app.ui.components.FullScreenPage
+import androidx.compose.foundation.layout.Box
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -24,9 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -196,26 +196,17 @@ private fun CategoryEditor(
     val subs = remember { mutableStateListOf<CategoryEntity>().apply { addAll(editing.subs) } }
     var newSub by remember { mutableStateOf("") }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = c.bg,
-    ) {
+    FullScreenPage(if (original.id == 0L) "Nuova categoria" else "Modifica categoria", onDismiss) {
         Column(
             Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .imePadding()
+                .navigationBarsPadding()
                 .padding(bottom = 32.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CategoryBadge(icon, Color(color), size = 64.dp, animated = true)
-                Spacer(Modifier.size(14.dp))
-                Text(
-                    if (original.id == 0L) "Nuova categoria" else "Modifica categoria",
-                    style = Ui.type.title, color = c.ink,
-                )
+            Box(Modifier.fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.Center) {
+                CategoryBadge(icon, Color(color), size = 96.dp, animated = true)
             }
             FormLabel("Nome")
             NoteField(name, { name = it }, "Es. Palestra")

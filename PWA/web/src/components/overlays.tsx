@@ -1,10 +1,10 @@
-import { AnimatePresence, motion, useAnimationControls, useDragControls } from 'framer-motion'
+import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { dayOfWeek, epochOf, monthDays, monthOf, monthStart, monthYear, today, ymd } from '../../../shared/date.ts'
 import { Dates } from '../../../shared/format.ts'
 import { useBackHandler } from '../lib/nav.ts'
-import { Icon } from './ui.tsx'
+import { Icon, TopBar } from './ui.tsx'
 import { spring, tween } from './motion.ts'
 
 function Portal({ children }: { children: ReactNode }) {
@@ -12,50 +12,34 @@ function Portal({ children }: { children: ReactNode }) {
   return target ? createPortal(children, target) : null
 }
 
-// --- bottom sheet ----------------------------------------------------------------------------
+// --- full screen page -------------------------------------------------------------------------
 
-/** ModalBottomSheet, always fully expanded; drag down, tap outside or go back to close. */
-export function Sheet({ onDismiss, children }: { onDismiss: () => void; children: ReactNode }) {
+/**
+ * A form or picker opened over the current screen at full size, with a back arrow on top:
+ * it looks like the pages of the app and keeps the state of the screen that opened it.
+ */
+export function FullPage({ title, onDismiss, actions, children }: { title: string; onDismiss: () => void; actions?: ReactNode; children: ReactNode }) {
   const controls = useAnimationControls()
-  const drag = useDragControls()
   const [closing, setClosing] = useState(false)
 
   useEffect(() => {
-    controls.start({ y: 0, transition: spring(1, 400) })
+    controls.start({ y: 0, opacity: 1, transition: { y: spring(0.85, 320), opacity: tween(240) } })
   }, [controls])
 
   const dismiss = async () => {
     if (closing) return
     setClosing(true)
-    await controls.start({ y: '100%', transition: tween(250) })
+    await controls.start({ y: '50%', opacity: 0, transition: tween(220) })
     onDismiss()
   }
   useBackHandler(true, dismiss)
 
   return (
     <Portal>
-      <motion.div className="scrim" initial={{ opacity: 0 }} animate={{ opacity: closing ? 0 : 1 }} transition={tween(250)} onClick={dismiss} />
-      <motion.div
-        initial={{ y: '100%' }}
-        animate={controls}
-        drag="y"
-        dragControls={drag}
-        dragListener={false}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0, bottom: 1 }}
-        onDragEnd={(_, info) => {
-          if (info.offset.y > 120 || info.velocity.y > 600) dismiss()
-          else controls.start({ y: 0, transition: spring(1, 400) })
-        }}
-        style={{
-          position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 51, maxHeight: 'calc(100% - var(--safe-top) - 24px)',
-          background: 'var(--bg)', borderRadius: '28px 28px 0 0', display: 'flex', flexDirection: 'column',
-        }}
-      >
-        <div onPointerDown={(e) => drag.start(e)} style={{ padding: '22px 0', touchAction: 'none', cursor: 'grab', flexShrink: 0 }}>
-          <div style={{ width: 32, height: 4, borderRadius: 2, margin: '0 auto', background: 'var(--inkSoft)', opacity: 0.4 }} />
-        </div>
-        <div className="scroll nav-pad" style={{ flex: '0 1 auto' }}>{children}</div>
+      <motion.div initial={{ y: '50%', opacity: 0 }} animate={controls} className="col"
+        style={{ position: 'absolute', inset: 0, zIndex: 45, background: 'var(--bg)' }}>
+        <TopBar title={title} onBack={dismiss} actions={actions} />
+        <div className="scroll nav-pad" style={{ flex: 1 }}>{children}</div>
       </motion.div>
     </Portal>
   )

@@ -10,7 +10,7 @@ import { actions, forgetUser, loggedUser, refresh, themeModes, updateSettings, u
 import { Ink } from '../lib/theme.ts'
 import type { UiIcon } from '../lib/icons.gen.ts'
 import { Bouncy, ColorSwatches, FormLabel, Icon, NoteField, PrimaryButton, Segmented, SwitchRow, TextField, TopBar } from '../components/ui.tsx'
-import { AlertDialog, Sheet, toast } from '../components/overlays.tsx'
+import { AlertDialog, FullPage, toast } from '../components/overlays.tsx'
 import { deviceLockAvailable, registerDeviceLock } from './Lock.tsx'
 import { PaymentsSection } from '../components/Payments.tsx'
 
@@ -22,7 +22,7 @@ export function SettingsScreen() {
   const [lockAvailable, setLockAvailable] = useState(false)
   const [pendingImport, setPendingImport] = useState<File | null>(null)
   const [version, setVersion] = useState('')
-  const [accountSheet, setAccountSheet] = useState<'password' | 'delete' | null>(null)
+  const [accountPage, setAccountPage] = useState<'password' | 'delete' | null>(null)
   const [update, setUpdate] = useState<UpdateState>('idle')
 
   useEffect(() => {
@@ -155,10 +155,10 @@ export function SettingsScreen() {
             } />
 
           <FormLabel text="Account" />
-          <NavRow icon="lock" title="Cambia password" subtitle={`Sei entrato come ${loggedUser()}`} onClick={() => setAccountSheet('password')} />
+          <NavRow icon="lock" title="Cambia password" subtitle={`Sei entrato come ${loggedUser()}`} onClick={() => setAccountPage('password')} />
           <NavRow icon="logout" title="Esci" subtitle="Su questo dispositivo servirà di nuovo la password" onClick={logout} />
           <NavRow icon="delete" title="Elimina account" subtitle="Cancella per sempre i tuoi movimenti, le spese fisse e gli scontrini"
-            onClick={() => setAccountSheet('delete')} />
+            onClick={() => setAccountPage('delete')} />
 
           <div style={{ height: 16 }} />
           <span className="t-caption" style={{ color: 'var(--inkFaint)' }}>
@@ -167,7 +167,7 @@ export function SettingsScreen() {
           <div style={{ height: 24 }} />
         </div>
       </div>
-      {accountSheet && <AccountSheet kind={accountSheet} onDismiss={() => setAccountSheet(null)} />}
+      {accountPage && <AccountPage kind={accountPage} onDismiss={() => setAccountPage(null)} />}
       {pendingImport && (
         <AlertDialog title="Importare il backup?" text="Tutti i movimenti, le categorie e le spese fisse attuali verranno sostituiti."
           confirm="Importa" confirmColor="var(--expenseText)" onDismiss={() => setPendingImport(null)}
@@ -181,7 +181,7 @@ export function SettingsScreen() {
 }
 
 /** Change password, or delete the account with all its data (asks the password again). */
-function AccountSheet({ kind, onDismiss }: { kind: 'password' | 'delete'; onDismiss: () => void }) {
+function AccountPage({ kind, onDismiss }: { kind: 'password' | 'delete'; onDismiss: () => void }) {
   const [current, setCurrent] = useState('')
   const [password, setPassword] = useState('')
   const [repeat, setRepeat] = useState('')
@@ -213,9 +213,8 @@ function AccountSheet({ kind, onDismiss }: { kind: 'password' | 'delete'; onDism
   }
 
   return (
-    <Sheet onDismiss={onDismiss}>
+    <FullPage title={remove ? 'Eliminare l’account?' : 'Cambia password'} onDismiss={onDismiss}>
       <form className="col" style={{ padding: '0 20px 32px', gap: 10 }} onSubmit={(e) => { e.preventDefault(); if (ready) submit() }}>
-        <span className="t-title" style={{ color: 'var(--ink)' }}>{remove ? 'Eliminare l’account?' : 'Cambia password'}</span>
         {remove && (
           <span className="t-body" style={{ color: 'var(--inkSoft)' }}>
             Movimenti, spese fisse, categorie e scontrini di {loggedUser()} verranno cancellati per sempre. Se vuoi tenerli, esporta prima un backup.
@@ -234,7 +233,7 @@ function AccountSheet({ kind, onDismiss }: { kind: 'password' | 'delete'; onDism
           color={remove ? 'var(--expense)' : undefined} />
         <button type="submit" style={{ display: 'none' }} />
       </form>
-    </Sheet>
+    </FullPage>
   )
 }
 
@@ -306,11 +305,10 @@ function MemberEditor({ original, onDismiss, onSave, onDelete }: {
   const [color, setColor] = useState(original.color)
   const [confirmDelete, setConfirmDelete] = useState(false)
   return (
-    <Sheet onDismiss={onDismiss}>
+    <FullPage title={original.id === 0 ? 'Nuova persona' : 'Modifica persona'} onDismiss={onDismiss}>
       <div className="col" style={{ padding: '0 20px 32px', gap: 2 }}>
-        <div className="row">
-          <MemberAvatar member={{ ...original, name: name.trim() || '?', color }} size={64} />
-          <span className="t-title" style={{ marginLeft: 14, color: 'var(--ink)' }}>{original.id === 0 ? 'Nuova persona' : 'Modifica persona'}</span>
+        <div className="center" style={{ paddingTop: 4 }}>
+          <MemberAvatar member={{ ...original, name: name.trim() || '?', color }} size={96} />
         </div>
         <FormLabel text="Nome" />
         <NoteField value={name} onChange={setName} placeholder="Es. Giulia" />
@@ -328,6 +326,6 @@ function MemberEditor({ original, onDismiss, onSave, onDelete }: {
           confirm="Elimina" confirmColor="var(--expenseText)" onDismiss={() => setConfirmDelete(false)}
           onConfirm={() => { setConfirmDelete(false); onDelete(original) }} />
       )}
-    </Sheet>
+    </FullPage>
   )
 }

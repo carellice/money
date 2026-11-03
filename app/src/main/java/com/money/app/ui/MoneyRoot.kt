@@ -95,6 +95,7 @@ import com.money.app.ui.categories.CategoriesScreen
 import com.money.app.ui.components.bouncyClick
 import com.money.app.ui.home.HomeScreen
 import com.money.app.ui.recurring.RecurringEditScreen
+import com.money.app.ui.recurring.RecurringPaymentsScreen
 import com.money.app.ui.recurring.RecurringRegisterScreen
 import com.money.app.ui.recurring.RecurringScreen
 import com.money.app.ui.report.ReportScreen
@@ -123,6 +124,7 @@ object Routes {
     private const val ADD = "add"
     private const val RECURRING_EDIT = "recurring_edit"
     private const val RECURRING_REGISTER = "recurring_register"
+    const val RECURRING_PAYMENTS = "recurring_payments"
 
     const val ADD_PATTERN = "$ADD?type={type}&id={id}"
     const val RECURRING_EDIT_PATTERN = "$RECURRING_EDIT?id={id}&kind={kind}"
@@ -212,6 +214,7 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
                     RecurringScreen(
                         onOpen = { nav.navigate(Routes.recurringEdit(it)) },
                         onRegister = { nav.navigate(Routes.recurringRegister(it)) },
+                        onOpenPayments = { nav.navigate(Routes.RECURRING_PAYMENTS) },
                         onAdd = { nav.navigate(if (it == null) Routes.recurringEdit() else Routes.recurringEdit(kind = it)) },
                     )
                 }
@@ -251,6 +254,9 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
                     popExitTransition = { slideOutVertically(tween(260)) { it / 2 } + fadeOut(tween(200)) },
                 ) {
                     RecurringRegisterScreen(onClose = { nav.closeScreen(Routes.RECURRING_REGISTER_PATTERN) })
+                }
+                composable(Routes.RECURRING_PAYMENTS) {
+                    RecurringPaymentsScreen(onBack = { nav.closeScreen(Routes.RECURRING_PAYMENTS) })
                 }
                 composable(Routes.CATEGORIES) {
                     CategoriesScreen(onBack = { nav.closeScreen(Routes.CATEGORIES) })

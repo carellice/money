@@ -14,7 +14,7 @@ import { actions, getStore, useStore } from '../lib/store.ts'
 import {
   AmountField, Bouncy, ColorSwatches, FormLabel, IconPicker, NoteField, Pill, PrimaryButton, RecurringLogo, RoundIconButton, Segmented, SwitchRow, TopBar,
 } from '../components/ui.tsx'
-import { AlertDialog, DatePickerDialog, Sheet, toast } from '../components/overlays.tsx'
+import { AlertDialog, DatePickerDialog, FullPage, toast } from '../components/overlays.tsx'
 import { spring } from '../components/motion.ts'
 import { PaymentPills } from '../components/Payments.tsx'
 
@@ -324,7 +324,7 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
         </div>
       </div>
 
-      {showBrands && <BrandPickerSheet onDismiss={() => setShowBrands(false)} onPick={(b) => { pickBrand(b); setShowBrands(false) }} />}
+      {showBrands && <BrandPicker onDismiss={() => setShowBrands(false)} onPick={(b) => { pickBrand(b); setShowBrands(false) }} />}
       {showDate && <DatePickerDialog value={date} onDismiss={() => setShowDate(false)} onPick={(d) => { setDate(d); setShowDate(false) }} />}
       {confirmDelete && (
         <AlertDialog title={`Eliminare ${name.trim() || 'questa spesa fissa'}?`} text="I movimenti già registrati restano nello storico."
@@ -347,7 +347,7 @@ function Stepper({ value, min, max = 99, onChange }: { value: number; min: numbe
   )
 }
 
-function BrandPickerSheet({ onDismiss, onPick }: { onDismiss: () => void; onPick: (b: Brand) => void }) {
+function BrandPicker({ onDismiss, onPick }: { onDismiss: () => void; onPick: (b: Brand) => void }) {
   const [query, setQuery] = useState('')
   const grid = (brands: Brand[]) => (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))' }}>
@@ -355,10 +355,8 @@ function BrandPickerSheet({ onDismiss, onPick }: { onDismiss: () => void; onPick
     </div>
   )
   return (
-    <Sheet onDismiss={onDismiss}>
+    <FullPage title="Scegli un logo" onDismiss={onDismiss}>
       <div style={{ padding: '0 20px' }}>
-        <div className="t-title" style={{ color: 'var(--ink)' }}>Scegli un logo</div>
-        <div style={{ height: 12 }} />
         <NoteField value={query} onChange={setQuery} placeholder="Cerca Netflix, Spotify, iCloud…" />
         <div style={{ height: 8 }} />
       </div>
@@ -375,7 +373,7 @@ function BrandPickerSheet({ onDismiss, onPick }: { onDismiss: () => void; onPick
           Loghi da Simple Icons (CC0). I marchi appartengono ai rispettivi proprietari.
         </div>
       </div>
-    </Sheet>
+    </FullPage>
   )
 }
 

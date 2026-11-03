@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { today as todayEpoch } from '../../../shared/date.ts'
 import { Dates, Money } from '../../../shared/format.ts'
 import {
-  argb, frequency, installmentsLeft, monthlyCents, Palette, paymentChoice, paymentLabel, recurringSorts, sameChoice, yearlyCents,
+  argb, frequency, installmentsLeft, monthlyCents, Palette, paymentChoice, paymentLabel, recurringSorts, sameChoice,
   type PaymentChoice, type Recurring, type RecurringKind,
 } from '../../../shared/model.ts'
 import { navigate } from '../lib/nav.ts'
@@ -10,15 +10,12 @@ import { updateSettings, usePaymentMethods, useStore } from '../lib/store.ts'
 import { alpha, Ink } from '../lib/theme.ts'
 import { BlobLayer } from '../components/Blob.tsx'
 import {
-  AnimatedAmount, AppIcon, Bouncy, EmptyState, Icon, Pill, RecurringLogo, RoundIconButton, SectionTitle,
-  Segmented, SoftCard, SoftProgress, Staggered,
+  AnimatedAmount, AppIcon, Bouncy, EmptyState, Icon, Pill, RecurringLogo, RoundIconButton, Staggered,
 } from '../components/ui.tsx'
-import { Sheet } from '../components/overlays.tsx'
 
 export function RecurringScreen() {
   const data = useStore((s) => s.data)
-  const [tab, setTab] = useState(0)
-  const [yearly, setYearly] = useState(false)
+  const [kind, setKind] = useState<RecurringKind | null>(null)
   const [choosingSort, setChoosingSort] = useState(false)
   const sort = useStore((s) => s.settings.recurringSort)
   const custom = usePaymentMethods()
@@ -37,7 +34,7 @@ export function RecurringScreen() {
     return [...(data?.recurring ?? [])].sort((a, b) => Number(b.active) - Number(a.active) || order(a, b))
   }, [data, sort, custom])
   if (!data) return null
-  const visible = tab === 0 ? list : list.filter((r) => r.kind === tabKinds[tab - 1])
+  const visible = kind == null ? list : list.filter((r) => r.kind === kind)
   const active = list.filter((r) => r.active)
   const monthly = active.reduce((acc, r) => acc + monthlyCents(r.frequency, r.amountCents), 0)
   const subscriptions = active.filter((r) => r.kind === 'SUBSCRIPTION').reduce((acc, r) => acc + monthlyCents(r.frequency, r.amountCents), 0)
@@ -48,7 +45,7 @@ export function RecurringScreen() {
         <div className="row status-pad">
           <div className="row" style={{ paddingTop: 12, width: '100%' }}>
             <span className="t-display flex1" style={{ color: 'var(--ink)' }}>Spese fisse</span>
-            <RoundIconButton icon="add" onClick={() => navigate('recurringEdit', tab === 0 ? {} : { kind: tabKinds[tab - 1] })} background="var(--accent)" tint={Ink} label="Aggiungi" />
+            <RoundIconButton icon="add" onClick={() => navigate('recurringEdit', kind == null ? {} : { kind })} background="var(--accent)" tint={Ink} label="Aggiungi" />
           </div>
         </div>
         <Staggered index={0} className="center blob-box" style={{ height: 190 }}>
@@ -61,53 +58,102 @@ export function RecurringScreen() {
             </span>
           </div>
         </Staggered>
+        {active.length > 0 && (
+          <Staggered index={1}>
+            <PaymentsEntry active={active} />
+          </Staggered>
+        )}
         <Staggered index={1}>
-          <Segmented options={['Tutte', 'Abbonamenti', 'Fisse', 'Rate']} selected={tab} onSelect={setTab} />
+          <KindChips items={list} selected={kind} onSelect={setKind} />
         </Staggered>
         {visible.length > 1 && (
           <Staggered index={1} className="row">
             <span className="t-caption flex1" style={{ color: 'var(--inkSoft)' }}>Ordina per</span>
-            <Pill text={recurringSorts.find((o) => o.id === sort)?.label ?? 'Prossimo addebito'} selected={false}
-              onClick={() => setChoosingSort(true)} icon="swap_vert" />
+            <div style={{ position: 'relative' }}>
+              <Pill text={recurringSorts.find((o) => o.id === sort)?.label ?? 'Prossimo addebito'} selected={false}
+                onClick={() => setChoosingSort(true)} icon="swap_vert" />
+              {choosingSort && (
+                <>
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setChoosingSort(false)} />
+                  <div className="col" style={{
+                    position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 41, minWidth: 220, padding: '6px 0',
+                    background: 'var(--surface)', borderRadius: 18, boxShadow: '0 8px 28px rgba(0, 0, 0, 0.18)',
+                  }}>
+                    {recurringSorts.map((o) => (
+                      <Bouncy key={o.id} pressedScale={0.98} className="row" style={{ padding: '12px 16px' }}
+                        onClick={() => { updateSettings({ recurringSort: o.id }); setChoosingSort(false) }}>
+                        <span className="t-label flex1" style={{ color: 'var(--ink)' }}>{o.label}</span>
+                        {o.id === sort && <Icon name="check" size={20} color="var(--accentText)" />}
+                      </Bouncy>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </Staggered>
         )}
         {visible.length === 0 && (
           <EmptyState title="Niente qui" icon="repeat"
-            text={tab === 3 ? 'Aggiungi un acquisto a rate, come Klarna: Money conta le rate pagate e quelle che mancano.' : "Aggiungi Netflix, l'affitto o la palestra: Money li registrerà da solo e ti avviserà prima del rinnovo."} />
+            text={kind === 'FINANCING' ? 'Aggiungi un acquisto a rate, come Klarna: Money conta le rate pagate e quelle che mancano.' : "Aggiungi Netflix, l'affitto o la palestra: Money li registrerà da solo e ti avviserà prima del rinnovo."} />
         )}
         {visible.map((item) => (
           <Staggered key={item.id} index={2}>
             <RecurringCard item={item} onLongClick={() => navigate('recurringRegister', { id: item.id })} />
           </Staggered>
         ))}
-        {visible.some((r) => r.active) && (
-          <PaymentTotals items={visible.filter((r) => r.active)} yearly={yearly} onYearly={setYearly} />
-        )}
         {visible.length > 0 && (
           <span className="t-caption" style={{ color: 'var(--inkFaint)', textAlign: 'center', paddingTop: 4 }}>
             Tieni premuto per aggiungere subito una spesa ai movimenti.
           </span>
         )}
       </div>
-      {choosingSort && (
-        <Sheet onDismiss={() => setChoosingSort(false)}>
-          <div className="col" style={{ padding: '0 20px 28px', gap: 4 }}>
-            <span className="t-title" style={{ color: 'var(--ink)', paddingBottom: 8 }}>Ordina per</span>
-            {recurringSorts.map((o) => (
-              <Bouncy key={o.id} pressedScale={0.98} className="row" style={{ padding: '14px 4px' }}
-                onClick={() => { updateSettings({ recurringSort: o.id }); setChoosingSort(false) }}>
-                <span className="t-bodyStrong flex1" style={{ color: 'var(--ink)' }}>{o.label}</span>
-                {o.id === sort && <Icon name="check" color="var(--accentText)" />}
-              </Bouncy>
-            ))}
-          </div>
-        </Sheet>
-      )}
     </div>
   )
 }
 
-const tabKinds: RecurringKind[] = ['SUBSCRIPTION', 'FIXED', 'FINANCING']
+const kinds: { id: RecurringKind; label: string }[] = [
+  { id: 'SUBSCRIPTION', label: 'Abbonamenti' }, { id: 'FIXED', label: 'Spese fisse' }, { id: 'FINANCING', label: 'Rate' },
+]
+
+/** Filters the list by type, with how many items each one has; long names never get cut. */
+export function KindChips({ items, selected, onSelect }: { items: Recurring[]; selected: RecurringKind | null; onSelect: (k: RecurringKind | null) => void }) {
+  return (
+    <div className="hscroll" style={{ gap: 8 }}>
+      <Pill text={`Tutte ${items.length}`} selected={selected == null} onClick={() => onSelect(null)} />
+      {kinds.map((k) => (
+        <Pill key={k.id} text={`${k.label} ${items.filter((r) => r.kind === k.id).length}`} selected={selected === k.id} onClick={() => onSelect(k.id)} />
+      ))}
+    </div>
+  )
+}
+
+/** Opens the split by payment method, with a hint of what is inside. */
+function PaymentsEntry({ active }: { active: Recurring[] }) {
+  const custom = usePaymentMethods()
+  const totals: { choice: PaymentChoice; cents: number }[] = []
+  for (const r of active) {
+    const choice = paymentChoice(r)
+    const known = totals.find((t) => sameChoice(t.choice, choice))
+    if (known) known.cents += monthlyCents(r.frequency, r.amountCents)
+    else totals.push({ choice, cents: monthlyCents(r.frequency, r.amountCents) })
+  }
+  const top = [...totals].sort((a, b) => b.cents - a.cents)[0]
+  return (
+    <Bouncy pressedScale={0.97} onClick={() => navigate('recurringPayments')} className="row"
+      style={{ borderRadius: 28, background: 'var(--surface)', padding: '14px 16px' }}>
+      <div className="center" style={{ width: 42, height: 42, borderRadius: 21, flexShrink: 0, background: 'color-mix(in srgb, var(--accent) 22%, transparent)' }}>
+        <AppIcon name="wallet" size={22} color="var(--ink)" />
+      </div>
+      <div className="col flex1" style={{ marginLeft: 14, minWidth: 0 }}>
+        <span className="t-bodyStrong" style={{ color: 'var(--ink)' }}>Per metodo di pagamento</span>
+        <span className="t-caption ellipsis" style={{ color: 'var(--inkSoft)' }}>
+          {totals.length === 1 ? '1 metodo' : `${totals.length} metodi`}{top ? ` · il più usato è ${paymentLabel(top.choice, custom).label}` : ''}
+        </span>
+      </div>
+      <Icon name="chevron_right" color="var(--inkFaint)" />
+    </Bouncy>
+  )
+}
 
 function RecurringCard({ item, onLongClick }: { item: Recurring; onLongClick: () => void }) {
   const days = item.nextDate - todayEpoch()
@@ -146,66 +192,5 @@ function RecurringCard({ item, onLongClick }: { item: Recurring; onLongClick: ()
         </div>
       </div>
     </Bouncy>
-  )
-}
-
-/** What the active fixed expenses cost on each payment method, per month or per year. */
-function PaymentTotals({ items, yearly, onYearly }: { items: Recurring[]; yearly: boolean; onYearly: (y: boolean) => void }) {
-  const custom = usePaymentMethods()
-  const groups: { choice: PaymentChoice; items: Recurring[] }[] = []
-  for (const r of items) {
-    const choice = paymentChoice(r)
-    const group = groups.find((g) => sameChoice(g.choice, choice))
-    if (group) group.items.push(r)
-    else groups.push({ choice, items: [r] })
-  }
-  const cost = (r: Recurring) => (yearly ? yearlyCents(r.frequency, r.amountCents) : monthlyCents(r.frequency, r.amountCents))
-  const totals = groups
-    .map((g) => ({ ...g, cents: g.items.reduce((acc, r) => acc + cost(r), 0) }))
-    .sort((a, b) => b.cents - a.cents)
-  const total = Math.max(1, totals.reduce((acc, t) => acc + t.cents, 0))
-  const unit = yearly ? '/anno' : '/mese'
-  return (
-    <div className="col" style={{ paddingTop: 12 }}>
-      <SectionTitle text="Per metodo di pagamento" />
-      <Segmented options={['Al mese', "All'anno"]} selected={yearly ? 1 : 0} onSelect={(i) => onYearly(i === 1)} />
-      <SoftCard padding={0} style={{ marginTop: 12, overflow: 'hidden' }}>
-        {totals.map((t, i) => {
-          const { label, icon } = paymentLabel(t.choice, custom)
-          const own = t.choice.customId != null ? custom.find((m) => m.id === t.choice.customId) : undefined
-          const color = own ? argb(own.color) : 'var(--accent)'
-          return (
-            <div key={`${t.choice.method}:${t.choice.customId}`}>
-              {i > 0 && <div style={{ height: 1, margin: '0 20px', background: 'var(--surfaceHigh)' }} />}
-              <div className="col" style={{ padding: '16px 20px', gap: 12 }}>
-                <div className="row">
-                  <div className="center" style={{ width: 42, height: 42, borderRadius: 21, flexShrink: 0, background: `color-mix(in srgb, ${color} 22%, transparent)` }}>
-                    <AppIcon name={icon} size={22} color="var(--ink)" />
-                  </div>
-                  <div className="col flex1" style={{ marginLeft: 14, minWidth: 0 }}>
-                    <span className="t-bodyStrong ellipsis" style={{ color: 'var(--ink)' }}>{label}</span>
-                    <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>
-                      {t.items.length === 1 ? '1 voce' : `${t.items.length} voci`} · {Math.trunc((t.cents * 100) / total)}%
-                    </span>
-                  </div>
-                  <div className="col" style={{ alignItems: 'flex-end', marginLeft: 12 }}>
-                    <span className="t-bodyStrong" style={{ color: 'var(--ink)', whiteSpace: 'nowrap' }}>{Money.format(t.cents)}</span>
-                    <span className="t-caption" style={{ color: 'var(--inkFaint)' }}>{unit}</span>
-                  </div>
-                </div>
-                <SoftProgress progress={t.cents / total} color={color} />
-              </div>
-            </div>
-          )
-        })}
-        {totals.length > 1 && (
-          <div className="row" style={{ padding: '14px 20px', background: 'color-mix(in srgb, var(--surfaceHigh) 50%, transparent)' }}>
-            <span className="t-bodyStrong flex1" style={{ color: 'var(--ink)' }}>Totale</span>
-            <span className="t-bodyStrong" style={{ color: 'var(--ink)' }}>{Money.format(totals.reduce((acc, t) => acc + t.cents, 0))}</span>
-            <span className="t-caption" style={{ color: 'var(--inkFaint)', marginLeft: 4 }}>{unit}</span>
-          </div>
-        )}
-      </SoftCard>
-    </div>
   )
 }
