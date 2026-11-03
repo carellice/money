@@ -1,7 +1,7 @@
 // Data model, same tables and fields as the Android app (Room entities), so backups move freely between them.
 
 export type TxType = 'EXPENSE' | 'INCOME'
-export type RecurringKind = 'SUBSCRIPTION' | 'FIXED'
+export type RecurringKind = 'SUBSCRIPTION' | 'FIXED' | 'FINANCING'
 
 export type PaymentMethod = 'CARD' | 'DEBIT' | 'CASH' | 'TRANSFER' | 'PAYPAL' | 'APP' | 'OTHER'
 
@@ -46,10 +46,11 @@ export function paymentLabel(choice: PaymentChoice, custom: CustomPayment[]): { 
   return own ? { label: own.name, icon: own.icon } : payment(choice.method)
 }
 
-export type Frequency = 'WEEKLY' | 'MONTHLY' | 'BIMONTHLY' | 'QUARTERLY' | 'SEMIANNUAL' | 'YEARLY' | 'BIENNIAL'
+export type Frequency = 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'BIMONTHLY' | 'QUARTERLY' | 'SEMIANNUAL' | 'YEARLY' | 'BIENNIAL'
 
 export const frequencies: { id: Frequency; label: string; short: string; months: number; weeks: number }[] = [
   { id: 'WEEKLY', label: 'Ogni settimana', short: '/sett', months: 0, weeks: 1 },
+  { id: 'BIWEEKLY', label: 'Ogni 2 settimane', short: '/2 sett', months: 0, weeks: 2 },
   { id: 'MONTHLY', label: 'Ogni mese', short: '/mese', months: 1, weeks: 0 },
   { id: 'BIMONTHLY', label: 'Ogni 2 mesi', short: '/2 mesi', months: 2, weeks: 0 },
   { id: 'QUARTERLY', label: 'Ogni 3 mesi', short: '/3 mesi', months: 3, weeks: 0 },
@@ -59,19 +60,19 @@ export const frequencies: { id: Frequency; label: string; short: string; months:
 ]
 
 export function frequency(id: Frequency) {
-  return frequencies.find((f) => f.id === id) ?? frequencies[1]
+  return frequencies.find((f) => f.id === id) ?? frequencies[2]
 }
 
 /** Average cost per month of something billed [cents] at this frequency (Long arithmetic, like Kotlin). */
 export function monthlyCents(id: Frequency, cents: number): number {
   const f = frequency(id)
-  return f.weeks > 0 ? Math.trunc((cents * 52) / 12) : Math.trunc(cents / f.months)
+  return f.weeks > 0 ? Math.trunc((cents * 52) / (12 * f.weeks)) : Math.trunc(cents / f.months)
 }
 
 /** Cost over a year of something billed [cents] at this frequency. */
 export function yearlyCents(id: Frequency, cents: number): number {
   const f = frequency(id)
-  return f.weeks > 0 ? cents * 52 : Math.trunc((cents * 12) / f.months)
+  return f.weeks > 0 ? Math.trunc((cents * 52) / f.weeks) : Math.trunc((cents * 12) / f.months)
 }
 
 /** Order of the fixed expenses list; paused ones always go last. */
@@ -156,6 +157,22 @@ export type Recurring = {
   note: string
   /** Custom payment method; when set, payment is OTHER. */
   paymentId: number | null
+  /** How many installments a financing has; null for subscriptions and fixed expenses. */
+  installments: number | null
+  /** Installments already paid: on the last one the financing closes itself. */
+  installmentsPaid: number
+}
+
+/** Installments still to pay, or null when it is not a financing. */
+export function installmentsLeft(r: Recurring): number | null {
+  return r.installments == null ? null : Math.max(0, r.installments - r.installmentsPaid)
+}
+
+/** The item after one more payment: a financing counts it and stops after the last installment. */
+export function afterPayment(r: Recurring): Recurring {
+  if (r.installments == null) return r
+  const paid = r.installmentsPaid + 1
+  return { ...r, installmentsPaid: paid, active: r.active && paid < r.installments }
 }
 
 export type Member = {

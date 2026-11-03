@@ -269,26 +269,27 @@ class MoneyRepository(
         val reminders = mutableListOf<RecurringEntity>()
         for (original in recurringDao.active()) {
             var next = original.nextDate
+            var paid = original
             var guard = 0
-            while (next <= todayEpoch && guard++ < 400) {
-                if (original.autoRegister) {
-                    txDao.upsert(
-                        TransactionEntity(
-                            type = TxType.EXPENSE,
-                            amountCents = original.amountCents,
-                            date = next,
-                            categoryId = original.categoryId,
-                            subcategoryId = original.subcategoryId,
-                            payment = original.payment,
-                            paymentId = original.paymentId,
-                            note = original.name,
-                            recurringId = original.id,
-                        )
+            // Manual ones stay on their date until the payment is added by hand.
+            while (original.autoRegister && paid.active && next <= todayEpoch && guard++ < 400) {
+                txDao.upsert(
+                    TransactionEntity(
+                        type = TxType.EXPENSE,
+                        amountCents = original.amountCents,
+                        date = next,
+                        categoryId = original.categoryId,
+                        subcategoryId = original.subcategoryId,
+                        payment = original.payment,
+                        paymentId = original.paymentId,
+                        note = original.name,
+                        recurringId = original.id,
                     )
-                }
+                )
+                paid = paid.afterPayment()
                 next = Recurrence.nextAfter(original.startDate, original.frequency, next)
             }
-            var item = original.copy(nextDate = next)
+            var item = paid.copy(nextDate = next)
             if (item.remindDaysBefore >= 0 && next - todayEpoch <= item.remindDaysBefore && item.notifiedFor != next) {
                 reminders += item
                 item = item.copy(notifiedFor = next)

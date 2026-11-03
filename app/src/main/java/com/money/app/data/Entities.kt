@@ -19,6 +19,7 @@ enum class PaymentMethod(val label: String, val icon: String) {
 
 enum class Frequency(val label: String, val short: String, val months: Int, val weeks: Int = 0) {
     WEEKLY("Ogni settimana", "/sett", 0, 1),
+    BIWEEKLY("Ogni 2 settimane", "/2 sett", 0, 2),
     MONTHLY("Ogni mese", "/mese", 1),
     BIMONTHLY("Ogni 2 mesi", "/2 mesi", 2),
     QUARTERLY("Ogni 3 mesi", "/3 mesi", 3),
@@ -28,11 +29,11 @@ enum class Frequency(val label: String, val short: String, val months: Int, val 
 
     /** Average cost per month of something billed [cents] at this frequency. */
     fun monthlyCents(cents: Long): Long =
-        if (weeks > 0) cents * 52 / 12 else cents / months
+        if (weeks > 0) cents * 52 / (12 * weeks) else cents / months
 
     /** Cost over a year of something billed [cents] at this frequency. */
     fun yearlyCents(cents: Long): Long =
-        if (weeks > 0) cents * 52 else cents * 12 / months
+        if (weeks > 0) cents * 52 / weeks else cents * 12 / months
 }
 
 /** Order of the fixed expenses list; paused ones always go last. */
@@ -44,7 +45,7 @@ enum class RecurringSort(val label: String) {
     PAYMENT("Metodo di pagamento"),
 }
 
-enum class RecurringKind { SUBSCRIPTION, FIXED }
+enum class RecurringKind { SUBSCRIPTION, FIXED, FINANCING }
 
 @Entity(tableName = "categories", indices = [Index("parentId")])
 data class CategoryEntity(
@@ -137,7 +138,21 @@ data class RecurringEntity(
     val note: String = "",
     /** Custom payment method; when set, [payment] is [PaymentMethod.OTHER]. */
     val paymentId: Long? = null,
+    /** How many installments a financing has; null for subscriptions and fixed expenses. */
+    val installments: Int? = null,
+    /** Installments already paid: on the last one the financing closes itself. */
+    @ColumnInfo(defaultValue = "0") val installmentsPaid: Int = 0,
 )
+
+/** Installments still to pay, or null when it is not a financing. */
+val RecurringEntity.installmentsLeft: Int? get() = installments?.let { (it - installmentsPaid).coerceAtLeast(0) }
+
+/** The item after one more payment: a financing counts it and stops after the last installment. */
+fun RecurringEntity.afterPayment(): RecurringEntity {
+    val total = installments ?: return this
+    val paid = installmentsPaid + 1
+    return copy(installmentsPaid = paid, active = active && paid < total)
+}
 
 /** Payment method added by the user (a specific card, a voucher...), next to the built-in ones. */
 @Entity(tableName = "payment_methods")

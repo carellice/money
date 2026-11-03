@@ -1,5 +1,5 @@
 import { monthsBetween, plusMonths, weeksBetween } from './date.ts'
-import { frequency, type Frequency, type Recurring } from './model.ts'
+import { frequency, installmentsLeft, type Frequency, type Recurring } from './model.ts'
 
 export function occurrence(start: number, freq: Frequency, n: number): number {
   const f = frequency(freq)
@@ -21,8 +21,10 @@ export function nextAfter(start: number, freq: Frequency, after: number): number
 export function occurrencesBetween(item: Recurring, from: number, to: number): number[] {
   const result: number[] = []
   let current = item.nextDate
+  // A financing ends after its last installment.
+  let left = installmentsLeft(item) ?? Infinity
   let guard = 0
-  while (current <= to && guard++ < 500) {
+  while (current <= to && left-- > 0 && guard++ < 500) {
     if (current >= from) result.push(current)
     current = nextAfter(item.startDate, item.frequency, current)
   }

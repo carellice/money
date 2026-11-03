@@ -321,7 +321,9 @@ function line(t: Transaction, cats: Map<number, Category>, custom: CustomPayment
 }
 
 function recurringLine(r: Recurring, cats: Map<number, Category>, custom: CustomPayment[]): string {
-  let text = `- ${r.name} (${r.kind === 'SUBSCRIPTION' ? 'abbonamento' : 'spesa fissa'}${r.active ? '' : ', in pausa'}): `
+  const kind = r.kind === 'SUBSCRIPTION' ? 'abbonamento' : r.kind === 'FINANCING' ? 'finanziamento' : 'spesa fissa'
+  const installments = r.installments != null ? `, rate pagate ${r.installmentsPaid} su ${r.installments}` : ''
+  let text = `- ${r.name} (${kind}${installments}${r.active ? '' : ', in pausa'}): `
   text += `${Money.format(r.amountCents)} ${frequency(r.frequency).label.toLowerCase()}, categoria ${cats.get(r.categoryId)?.name}, `
   text += `pagato con ${paymentLabel(paymentChoice(r), custom).label}, ${r.autoRegister ? 'registrato in automatico' : 'da registrare a mano'}`
   if (r.active) text += `, prossimo addebito ${isoDate(r.nextDate)}`

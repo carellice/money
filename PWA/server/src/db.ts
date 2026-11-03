@@ -4,6 +4,7 @@ import { mkdirSync, unlinkSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { today as todayEpoch } from '../../shared/date.ts'
 import {
+  afterPayment,
   defaultExpenseCategories,
   defaultIncomeCategories,
   type AppState,
@@ -38,7 +39,8 @@ CREATE TABLE IF NOT EXISTS recurring (
   categoryId INTEGER NOT NULL, subcategoryId INTEGER, payment TEXT NOT NULL, frequency TEXT NOT NULL,
   startDate INTEGER NOT NULL, nextDate INTEGER NOT NULL, brandKey TEXT, imagePath TEXT, icon TEXT NOT NULL,
   color INTEGER NOT NULL, autoRegister INTEGER NOT NULL, remindDaysBefore INTEGER NOT NULL, notifiedFor INTEGER,
-  active INTEGER NOT NULL, note TEXT NOT NULL, paymentId INTEGER);
+  active INTEGER NOT NULL, note TEXT NOT NULL, paymentId INTEGER, installments INTEGER,
+  installmentsPaid INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS members (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, color INTEGER NOT NULL, sortOrder INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS payment_methods (
@@ -80,6 +82,10 @@ function migrate(db: DatabaseSync) {
     const columns = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name)
     if (!columns.includes('paymentId')) db.exec(`ALTER TABLE ${table} ADD COLUMN paymentId INTEGER`)
     if (table === 'transactions' && !columns.includes('settle')) db.exec('ALTER TABLE transactions ADD COLUMN settle INTEGER NOT NULL DEFAULT 0')
+    if (table === 'recurring' && !columns.includes('installments')) {
+      db.exec('ALTER TABLE recurring ADD COLUMN installments INTEGER')
+      db.exec('ALTER TABLE recurring ADD COLUMN installmentsPaid INTEGER NOT NULL DEFAULT 0')
+    }
   }
 }
 
@@ -166,6 +172,7 @@ const toRecurring = (r: Row): Recurring => ({
   brandKey: (r.brandKey as string | null) ?? null, imagePath: (r.imagePath as string | null) ?? null, icon: String(r.icon),
   color: num(r.color), autoRegister: num(r.autoRegister) !== 0, remindDaysBefore: num(r.remindDaysBefore),
   notifiedFor: optNum(r.notifiedFor), active: num(r.active) !== 0, note: String(r.note), paymentId: optNum(r.paymentId),
+  installments: optNum(r.installments), installmentsPaid: num(r.installmentsPaid),
 })
 
 const toMember = (r: Row): Member => ({ id: num(r.id), name: String(r.name), color: num(r.color), sortOrder: num(r.sortOrder) })
@@ -218,7 +225,7 @@ export function state(): AppState {
 // --- writes ----------------------------------------------------------------------------------
 
 const txColumns = ['type', 'amountCents', 'date', 'categoryId', 'subcategoryId', 'payment', 'note', 'receiptPath', 'recurringId', 'createdAt', 'memberId', 'paymentId', 'settle'] as const
-const recurringColumns = ['kind', 'name', 'amountCents', 'categoryId', 'subcategoryId', 'payment', 'frequency', 'startDate', 'nextDate', 'brandKey', 'imagePath', 'icon', 'color', 'autoRegister', 'remindDaysBefore', 'notifiedFor', 'active', 'note', 'paymentId'] as const
+const recurringColumns = ['kind', 'name', 'amountCents', 'categoryId', 'subcategoryId', 'payment', 'frequency', 'startDate', 'nextDate', 'brandKey', 'imagePath', 'icon', 'color', 'autoRegister', 'remindDaysBefore', 'notifiedFor', 'active', 'note', 'paymentId', 'installments', 'installmentsPaid'] as const
 const categoryColumns = ['name', 'icon', 'color', 'type', 'parentId', 'budgetCents', 'sortOrder'] as const
 const memberColumns = ['name', 'color', 'sortOrder'] as const
 const paymentColumns = ['name', 'icon', 'color', 'sortOrder'] as const
@@ -262,7 +269,11 @@ export function deleteTransaction(id: number) {
 }
 
 export function saveRecurring(item: Recurring): Recurring {
-  return transaction(() => recurringById(upsert('recurring', recurringColumns, item))!)
+  // Apps from before financings don't send them: the item keeps what it had.
+  const known = item.id ? recurringById(item.id) : null
+  const installments = item.installments === undefined ? known?.installments ?? null : item.installments
+  const installmentsPaid = item.installmentsPaid ?? known?.installmentsPaid ?? 0
+  return transaction(() => recurringById(upsert('recurring', recurringColumns, { ...item, installments, installmentsPaid }))!)
 }
 
 export function deleteRecurring(id: number) {
@@ -364,23 +375,24 @@ export function processRecurring(today = todayEpoch()): Recurring[] {
   try {
     for (const original of recurring().filter((r) => r.active)) {
       let next = original.nextDate
+      let paid = original
       let guard = 0
-      while (next <= today && guard++ < 400) {
-        if (original.autoRegister) {
-          upsert('transactions', txColumns, {
-            id: 0, type: 'EXPENSE', amountCents: original.amountCents, date: next, categoryId: original.categoryId,
-            subcategoryId: original.subcategoryId, payment: original.payment, note: original.name, receiptPath: null,
-            recurringId: original.id, createdAt: Date.now(), memberId: null, paymentId: original.paymentId, settle: 0,
-          })
-        }
+      // Manual ones stay on their date until the payment is added by hand.
+      while (original.autoRegister && paid.active && next <= today && guard++ < 400) {
+        upsert('transactions', txColumns, {
+          id: 0, type: 'EXPENSE', amountCents: original.amountCents, date: next, categoryId: original.categoryId,
+          subcategoryId: original.subcategoryId, payment: original.payment, note: original.name, receiptPath: null,
+          recurringId: original.id, createdAt: Date.now(), memberId: null, paymentId: original.paymentId, settle: 0,
+        })
+        paid = afterPayment(paid)
         next = nextAfter(original.startDate, original.frequency, next)
       }
-      let item = { ...original, nextDate: next }
+      let item = { ...paid, nextDate: next }
       if (item.remindDaysBefore >= 0 && next - today <= item.remindDaysBefore && item.notifiedFor !== next) {
         reminders.push(item)
         item = { ...item, notifiedFor: next }
       }
-      if (item.nextDate !== original.nextDate || item.notifiedFor !== original.notifiedFor) {
+      if (item.nextDate !== original.nextDate || item.notifiedFor !== original.notifiedFor || item.active !== original.active) {
         upsert('recurring', recurringColumns, item)
         changed = true
       }

@@ -229,7 +229,8 @@ class AiAssistant(
     }
 
     private fun recurringLine(item: RecurringEntity, cats: Map<Long, CategoryEntity>, payments: Payments) = buildString {
-        append("- ${item.name} (${if (item.kind == RecurringKind.SUBSCRIPTION) "abbonamento" else "spesa fissa"}")
+        append("- ${item.name} (${when (item.kind) { RecurringKind.SUBSCRIPTION -> "abbonamento"; RecurringKind.FIXED -> "spesa fissa"; RecurringKind.FINANCING -> "finanziamento" }}")
+        item.installments?.let { append(", rate pagate ${item.installmentsPaid} su $it") }
         if (!item.active) append(", in pausa")
         append("): ${Money.format(item.amountCents)} ${item.frequency.label.lowercase()}, categoria ${cats[item.categoryId]?.name}, ")
         append("pagato con ${payments.label(PaymentChoice(item.payment, item.paymentId))}, ")

@@ -2,6 +2,7 @@ package com.money.app.domain
 
 import com.money.app.data.Frequency
 import com.money.app.data.RecurringEntity
+import com.money.app.data.installmentsLeft
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -28,8 +29,10 @@ object Recurrence {
     fun occurrencesBetween(item: RecurringEntity, from: LocalDate, to: LocalDate): List<LocalDate> {
         val result = mutableListOf<LocalDate>()
         var current = item.nextDate
+        // A financing ends after its last installment.
+        var left = item.installmentsLeft ?: Int.MAX_VALUE
         var guard = 0
-        while (current <= to.toEpochDay() && guard++ < 500) {
+        while (current <= to.toEpochDay() && left-- > 0 && guard++ < 500) {
             if (current >= from.toEpochDay()) result += LocalDate.ofEpochDay(current)
             current = nextAfter(item.startDate, item.frequency, current)
         }

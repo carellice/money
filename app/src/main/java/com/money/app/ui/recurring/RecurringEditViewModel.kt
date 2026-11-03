@@ -57,6 +57,8 @@ class RecurringEditViewModel(private val container: AppContainer, handle: SavedS
     var autoRegister by mutableStateOf(true)
     var remindDays by mutableIntStateOf(2)
     var active by mutableStateOf(true)
+    var installments by mutableIntStateOf(3)
+    var installmentsPaid by mutableIntStateOf(0)
     var loaded by mutableStateOf(false)
         private set
 
@@ -89,6 +91,8 @@ class RecurringEditViewModel(private val container: AppContainer, handle: SavedS
                 autoRegister = item.autoRegister
                 remindDays = item.remindDaysBefore
                 active = item.active
+                installments = item.installments ?: 3
+                installmentsPaid = item.installmentsPaid
             } else {
                 applyKindDefaults(repo.allCategories())
             }
@@ -97,13 +101,25 @@ class RecurringEditViewModel(private val container: AppContainer, handle: SavedS
     }
 
     private fun applyKindDefaults(all: List<CategoryEntity>) {
-        val (catName, subName) = if (kind == RecurringKind.SUBSCRIPTION) "Abbonamenti" to "Streaming" else "Casa" to "Affitto"
+        val (catName, subName) = when (kind) {
+            RecurringKind.SUBSCRIPTION -> "Abbonamenti" to "Streaming"
+            RecurringKind.FINANCING -> "Shopping" to ""
+            RecurringKind.FIXED -> "Casa" to "Affitto"
+        }
         val top = all.firstOrNull { it.parentId == null && it.type == TxType.EXPENSE && it.name == catName }
             ?: all.firstOrNull { it.parentId == null && it.type == TxType.EXPENSE }
         categoryId = top?.id
         subcategoryId = all.firstOrNull { it.parentId == top?.id && it.name == subName }?.id
-        icon = if (kind == RecurringKind.SUBSCRIPTION) "repeat" else "home"
-        color = if (kind == RecurringKind.SUBSCRIPTION) Palette.LILAC else Palette.PEACH
+        icon = when (kind) {
+            RecurringKind.SUBSCRIPTION -> "repeat"
+            RecurringKind.FINANCING -> "card"
+            RecurringKind.FIXED -> "home"
+        }
+        color = when (kind) {
+            RecurringKind.SUBSCRIPTION -> Palette.LILAC
+            RecurringKind.FINANCING -> Palette.SKY
+            RecurringKind.FIXED -> Palette.PEACH
+        }
     }
 
     fun changeKind(newKind: RecurringKind) {
@@ -171,11 +187,21 @@ class RecurringEditViewModel(private val container: AppContainer, handle: SavedS
         val epoch = date.toEpochDay()
         val o = original
         val reschedule = o == null || o.nextDate != epoch || o.frequency != frequency
+        val financing = kind == RecurringKind.FINANCING
+        val paid = if (financing) installmentsPaid.coerceAtMost(installments) else 0
+        // A settled financing starts again when more installments are left to pay.
+        val wasSettled = o?.installments != null && o.installmentsPaid >= o.installments
         val savedId = repo.saveRecurring(
             RecurringEntity(
                 id = editId,
                 kind = kind,
-                name = name.trim().ifBlank { if (kind == RecurringKind.SUBSCRIPTION) "Abbonamento" else "Spesa fissa" },
+                name = name.trim().ifBlank {
+                    when (kind) {
+                        RecurringKind.SUBSCRIPTION -> "Abbonamento"
+                        RecurringKind.FINANCING -> "Finanziamento"
+                        RecurringKind.FIXED -> "Spesa fissa"
+                    }
+                },
                 amountCents = cents,
                 categoryId = category,
                 subcategoryId = subcategoryId,
@@ -191,8 +217,10 @@ class RecurringEditViewModel(private val container: AppContainer, handle: SavedS
                 autoRegister = autoRegister,
                 remindDaysBefore = remindDays,
                 notifiedFor = if (reschedule) null else o?.notifiedFor,
-                active = active,
+                active = if (financing) (active || wasSettled) && paid < installments else active,
                 note = o?.note.orEmpty(),
+                installments = if (financing) installments else null,
+                installmentsPaid = paid,
             )
         )
         // Not saved (server unreachable): the form stays open with everything filled in.

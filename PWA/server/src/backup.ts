@@ -31,6 +31,7 @@ export function exportBackup(): string {
       subcategoryId: r.subcategoryId, payment: r.payment, frequency: r.frequency, startDate: r.startDate,
       nextDate: r.nextDate, brandKey: r.brandKey, icon: r.icon, color: r.color, autoRegister: r.autoRegister,
       remindDaysBefore: r.remindDaysBefore, active: r.active, note: r.note, paymentId: r.paymentId,
+      installments: r.installments, installmentsPaid: r.installmentsPaid,
     })),
     members: members.map((m) => ({ id: m.id, name: m.name, color: m.color, sortOrder: m.sortOrder })),
     paymentMethods: paymentMethods.map((p) => ({ id: p.id, name: p.name, icon: p.icon, color: p.color, sortOrder: p.sortOrder })),
@@ -81,6 +82,7 @@ export function importBackup(text: string): number {
     brandKey: o.brandKey == null ? null : String(o.brandKey), imagePath: null, icon: str(o, 'icon', 'repeat'),
     color: Number(o.color), autoRegister: o.autoRegister !== false, remindDaysBefore: Number(o.remindDaysBefore ?? 2),
     notifiedFor: null, active: o.active !== false, note: str(o, 'note'), paymentId: paymentId(o),
+    installments: optNum(o, 'installments'), installmentsPaid: Number(o.installmentsPaid ?? 0),
   }))
   if (!root.categories || !root.transactions || !root.recurring) throw new Error('Backup incompleto')
   const snapshot: AppState = { categories, transactions, recurring, members, paymentMethods }

@@ -1,25 +1,14 @@
 package com.money.app.ui.recurring
 
+import com.money.app.data.installmentsLeft
 import androidx.compose.foundation.background
-import android.widget.Toast
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import com.money.app.data.PaymentChoice
 import com.money.app.data.Payments
 import com.money.app.data.RecurringSort
 import com.money.app.data.paymentChoice
@@ -29,19 +18,8 @@ import com.money.app.ui.components.SectionTitle
 import com.money.app.ui.components.SoftCard
 import com.money.app.ui.components.SoftProgress
 import androidx.compose.foundation.layout.width
-import com.money.app.ui.settings.PaymentPills
-import com.money.app.data.TransactionEntity
-import com.money.app.data.TxType
-import com.money.app.ui.components.AmountField
-import com.money.app.ui.components.OperationKeys
-import com.money.app.domain.AmountMath
-import androidx.compose.animation.AnimatedVisibility
-import com.money.app.ui.components.FormLabel
 import com.money.app.ui.components.Pill
-import com.money.app.ui.components.PrimaryButton
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.ZoneOffset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -125,42 +103,19 @@ class RecurringViewModel(private val container: AppContainer) : ViewModel() {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun setSort(sort: RecurringSort) = viewModelScope.launch { container.settings.setRecurringSort(sort) }
-
-    /** Records one payment of [item] now, without touching its schedule. */
-    fun registerNow(item: RecurringEntity, cents: Long, date: LocalDate, payment: PaymentChoice, onDone: () -> Unit) = viewModelScope.launch {
-        val savedId = repo.saveTransaction(
-            TransactionEntity(
-                type = TxType.EXPENSE,
-                amountCents = cents,
-                date = date.toEpochDay(),
-                categoryId = item.categoryId,
-                subcategoryId = item.subcategoryId,
-                payment = payment.method,
-                paymentId = payment.customId,
-                note = item.name,
-                recurringId = item.id,
-            )
-        )
-        if (savedId >= 0) onDone()
-    }
 }
 
 @Composable
-fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
+fun RecurringScreen(onOpen: (Long) -> Unit, onRegister: (Long) -> Unit, onAdd: (RecurringKind?) -> Unit) {
     val vm = appViewModel { c, _ -> RecurringViewModel(c) }
     val all by vm.items.collectAsStateWithLifecycle()
     val sort by vm.sort.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var yearly by rememberSaveable { mutableStateOf(false) }
-    var registering by remember { mutableStateOf<RecurringEntity?>(null) }
-    val context = LocalContext.current
     val c = Ui.colors
     val list = all ?: return
-    val visible = when (tab) {
-        1 -> list.filter { it.kind == RecurringKind.SUBSCRIPTION }
-        2 -> list.filter { it.kind == RecurringKind.FIXED }
-        else -> list
-    }
+    val tabKind = if (tab == 0) null else RecurringKind.entries[tab - 1]
+    val visible = if (tabKind == null) list else list.filter { it.kind == tabKind }
     val active = list.filter { it.active }
     val monthly = active.sumOf { it.frequency.monthlyCents(it.amountCents) }
     val subscriptions = active.filter { it.kind == RecurringKind.SUBSCRIPTION }.sumOf { it.frequency.monthlyCents(it.amountCents) }
@@ -173,7 +128,7 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
         item {
             Row(Modifier.statusBarsPadding().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Spese fisse", style = Ui.type.display, color = c.ink, modifier = Modifier.weight(1f))
-                RoundIconButton(Icons.Rounded.Add, onAdd, background = c.accent, tint = Ink, contentDescription = "Aggiungi")
+                RoundIconButton(Icons.Rounded.Add, { onAdd(tabKind) }, background = c.accent, tint = Ink, contentDescription = "Aggiungi")
             }
         }
         item {
@@ -198,7 +153,7 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
         }
         item {
             Segmented(
-                listOf("Tutte", "Abbonamenti", "Fisse"), tab, { tab = it },
+                listOf("Tutte", "Abbonamenti", "Fisse", "Rate"), tab, { tab = it },
                 modifier = Modifier.staggered(1),
             )
         }
@@ -209,13 +164,14 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
             item {
                 EmptyState(
                     "Niente qui",
-                    "Aggiungi Netflix, l'affitto o la palestra: Money li registrerà da solo e ti avviserà prima del rinnovo.",
+                    if (tabKind == RecurringKind.FINANCING) "Aggiungi un acquisto a rate, come Klarna: Money conta le rate pagate e quelle che mancano."
+                    else "Aggiungi Netflix, l'affitto o la palestra: Money li registrerà da solo e ti avviserà prima del rinnovo.",
                     icon = "repeat",
                 )
             }
         }
         items(visible, key = { it.id }) { item ->
-            RecurringCard(item, Modifier.animateItem().staggered(2), onLongClick = { registering = item }) { onOpen(item.id) }
+            RecurringCard(item, Modifier.animateItem().staggered(2), onLongClick = { onRegister(item.id) }) { onOpen(item.id) }
         }
         if (visible.any { it.active }) {
             item(key = "payments") {
@@ -235,86 +191,6 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onAdd: () -> Unit) {
         }
     }
 
-    registering?.let { item ->
-        RegisterNowSheet(item, onDismiss = { registering = null }) { cents, date, payment ->
-            vm.registerNow(item, cents, date, payment) {
-                registering = null
-                Toast.makeText(context, "${item.name} aggiunto ai movimenti del ${Dates.long(date)}", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-}
-
-@Composable
-private fun RegisterNowSheet(item: RecurringEntity, onDismiss: () -> Unit, onConfirm: (Long, LocalDate, PaymentChoice) -> Unit) {
-    val c = Ui.colors
-    val today = LocalDate.now()
-    var amount by remember { mutableStateOf(Money.toInput(item.amountCents)) }
-    var date by remember { mutableStateOf(today) }
-    // Defaults to the usual method; this one payment may have gone another way.
-    var payment by remember { mutableStateOf(item.paymentChoice) }
-    var showPicker by remember { mutableStateOf(false) }
-    // The amount can be worked out on the spot, such as "11,00×2".
-    val cents = AmountMath.evaluate(amount) ?: 0L
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = c.bg,
-    ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).imePadding().padding(bottom = 28.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RecurringLogo(item.brandKey, item.imagePath, item.icon, Color(item.color), size = 56.dp, animated = true)
-                Spacer(Modifier.size(14.dp))
-                Column {
-                    Text("Aggiungi alle spese", style = Ui.type.caption, color = c.inkSoft)
-                    Text(item.name, style = Ui.type.title, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-            FormLabel("Importo")
-            AmountField(amount, { amount = it }, operations = true)
-            OperationKeys(amount, { amount = it })
-            AnimatedVisibility(AmountMath.hasOperation(amount)) {
-                Text(
-                    "= ${Money.format(cents)}",
-                    style = Ui.type.titleSmall,
-                    color = c.ink,
-                    modifier = Modifier.padding(top = 10.dp, start = 4.dp),
-                )
-            }
-            FormLabel("Data")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill("Oggi", date == today, { date = today })
-                Pill("Ieri", date == today.minusDays(1), { date = today.minusDays(1) })
-                val other = date != today && date != today.minusDays(1)
-                Pill(if (other) Dates.long(date) else "Altra data", other, { showPicker = true }, icon = Icons.Rounded.CalendarMonth)
-            }
-            FormLabel("Metodo di pagamento")
-            PaymentPills(payment, { payment = it })
-            Text(
-                "Il prossimo addebito programmato (${Dates.long(LocalDate.ofEpochDay(item.nextDate))}) resta invariato.",
-                style = Ui.type.caption,
-                color = c.inkFaint,
-                modifier = Modifier.padding(top = 12.dp),
-            )
-            Spacer(Modifier.height(20.dp))
-            PrimaryButton("Aggiungi ${Money.format(cents)}", { onConfirm(cents, date, payment) }, enabled = cents > 0, icon = Icons.Rounded.Check)
-        }
-    }
-
-    if (showPicker) {
-        val state = rememberDatePickerState(date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())
-        DatePickerDialog(
-            onDismissRequest = { showPicker = false },
-            confirmButton = {
-                TextButton({
-                    state.selectedDateMillis?.let { date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
-                    showPicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = { TextButton({ showPicker = false }) { Text("Annulla") } },
-        ) { DatePicker(state) }
-    }
 }
 
 @Composable
@@ -322,6 +198,7 @@ private fun RecurringCard(item: RecurringEntity, modifier: Modifier, onLongClick
     val c = Ui.colors
     val date = LocalDate.ofEpochDay(item.nextDate)
     val days = item.nextDate - LocalDate.now().toEpochDay()
+    val left = item.installmentsLeft
     Row(
         modifier
             .fillMaxWidth()
@@ -351,20 +228,31 @@ private fun RecurringCard(item: RecurringEntity, modifier: Modifier, onLongClick
                 if (item.autoRegister) Icon(Icons.Rounded.Autorenew, null, tint = c.inkFaint, modifier = Modifier.size(13.dp))
                 if (item.remindDaysBefore >= 0) Icon(Icons.Rounded.NotificationsActive, null, tint = c.inkFaint, modifier = Modifier.size(13.dp))
                 Text(
-                    if (item.active) " ${Dates.long(date)} · ${Dates.relative(date)}" else " In pausa",
+                    when {
+                        item.active -> " ${Dates.long(date)} · ${Dates.relative(date)}"
+                        left == 0 -> " Saldato"
+                        else -> " In pausa"
+                    },
                     style = Ui.type.caption,
                     color = c.inkSoft,
                     maxLines = 1,
+                )
+            }
+            if (item.installments != null && left != 0) {
+                Text(
+                    (if (left == 1) "Rimane 1 rata" else "Rimangono $left rate") + " su ${item.installments}",
+                    style = Ui.type.caption,
+                    color = c.inkSoft,
                 )
             }
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(Money.format(item.amountCents), style = Ui.type.amount, color = c.ink)
             Text(item.frequency.short, style = Ui.type.caption, color = c.inkFaint)
-            if (item.active && days in 0..3) {
+            if (item.active && days <= 3) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "presto",
+                    if (days < 0) "da pagare" else "presto",
                     style = Ui.type.caption,
                     color = Ink,
                     modifier = Modifier.clip(CircleShape).background(c.expense).padding(horizontal = 8.dp, vertical = 2.dp),

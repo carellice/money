@@ -5,6 +5,7 @@ import { Dates, Money } from '../../../shared/format.ts'
 import {
   argb, frequencies, paletteAll, Palette, type Category, type Frequency, type PaymentChoice, type Recurring, type RecurringKind,
 } from '../../../shared/model.ts'
+import { occurrence } from '../../../shared/recurrence.ts'
 import { brandGroups, findBrand, groupOf, searchBrands, type Brand } from '../lib/brands.ts'
 import { pickImage, shrinkToJpeg } from '../lib/images.ts'
 import { close } from '../lib/nav.ts'
@@ -53,6 +54,8 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
   const [autoRegister, setAutoRegister] = useState(original?.autoRegister ?? true)
   const [remindDays, setRemindDays] = useState(original?.remindDaysBefore ?? 2)
   const [active, setActive] = useState(original?.active ?? true)
+  const [installments, setInstallments] = useState(original?.installments ?? 3)
+  const [installmentsPaid, setInstallmentsPaid] = useState(original?.installmentsPaid ?? 0)
   const [showBrands, setShowBrands] = useState(false)
   const [showDate, setShowDate] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -62,13 +65,13 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
   const amountCents = Money.parse(amountText) ?? 0
 
   const applyKindDefaults = (k: RecurringKind, all: Category[]) => {
-    const [catName, subName] = k === 'SUBSCRIPTION' ? ['Abbonamenti', 'Streaming'] : ['Casa', 'Affitto']
+    const [catName, subName] = k === 'SUBSCRIPTION' ? ['Abbonamenti', 'Streaming'] : k === 'FINANCING' ? ['Shopping', ''] : ['Casa', 'Affitto']
     const top = all.find((c) => c.parentId == null && c.type === 'EXPENSE' && c.name === catName) ??
       all.find((c) => c.parentId == null && c.type === 'EXPENSE')
     setCategoryId(top?.id ?? null)
     setSubcategoryId(all.find((c) => c.parentId === top?.id && c.name === subName)?.id ?? null)
-    setIcon(k === 'SUBSCRIPTION' ? 'repeat' : 'home')
-    setColor(k === 'SUBSCRIPTION' ? Palette.LILAC : Palette.PEACH)
+    setIcon(k === 'SUBSCRIPTION' ? 'repeat' : k === 'FINANCING' ? 'card' : 'home')
+    setColor(k === 'SUBSCRIPTION' ? Palette.LILAC : k === 'FINANCING' ? Palette.SKY : Palette.PEACH)
   }
 
   useEffect(() => {
@@ -140,10 +143,14 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
     if (remindDays >= 0 && pushSupported() && Notification.permission === 'default') await enablePush()
     const o = original
     const reschedule = !o || o.nextDate !== date || o.frequency !== freq
+    const financing = kind === 'FINANCING'
+    const paid = financing ? Math.min(installmentsPaid, installments) : 0
+    // A settled financing starts again when more installments are left to pay.
+    const wasSettled = o?.installments != null && o.installmentsPaid >= o.installments
     const item: Recurring = {
       id,
       kind,
-      name: name.trim() || (kind === 'SUBSCRIPTION' ? 'Abbonamento' : 'Spesa fissa'),
+      name: name.trim() || (kind === 'SUBSCRIPTION' ? 'Abbonamento' : financing ? 'Finanziamento' : 'Spesa fissa'),
       amountCents,
       categoryId,
       subcategoryId,
@@ -159,8 +166,10 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
       autoRegister,
       remindDaysBefore: remindDays,
       notifiedFor: reschedule ? null : o?.notifiedFor ?? null,
-      active,
+      active: financing ? (active || wasSettled) && paid < installments : active,
       note: o?.note ?? '',
+      installments: financing ? installments : null,
+      installmentsPaid: paid,
     }
     try {
       await actions.saveRecurring(item)
@@ -195,14 +204,14 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
   return (
     <div className="col" style={{ height: '100%' }}>
       <TopBar
-        title={isEdit ? 'Modifica' : kind === 'SUBSCRIPTION' ? 'Nuovo abbonamento' : 'Nuova spesa fissa'}
+        title={isEdit ? 'Modifica' : kind === 'SUBSCRIPTION' ? 'Nuovo abbonamento' : kind === 'FINANCING' ? 'Nuovo finanziamento' : 'Nuova spesa fissa'}
         onBack={() => close('recurringEdit')}
         actions={isEdit ? <RoundIconButton icon="delete" onClick={() => setConfirmDelete(true)} label="Elimina" /> : undefined}
       />
       <div className="scroll">
         <div className="col nav-pad" style={{ padding: '0 20px' }}>
-          <Segmented options={['Abbonamento', 'Spesa fissa']} selected={kind === 'SUBSCRIPTION' ? 0 : 1}
-            onSelect={(i) => changeKind(i === 0 ? 'SUBSCRIPTION' : 'FIXED')} />
+          <Segmented options={['Abbonamento', 'Spesa fissa', 'Rate']} selected={kinds.indexOf(kind)}
+            onSelect={(i) => changeKind(kinds[i])} />
 
           <div className="col" style={{ alignItems: 'center', paddingTop: 20 }}>
             <div style={{ position: 'relative', width: 112, height: 112 }}>
@@ -230,9 +239,9 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
           </Expand>
 
           <FormLabel text="Nome" />
-          <NoteField value={name} onChange={setName} placeholder={kind === 'SUBSCRIPTION' ? 'Es. Netflix' : 'Es. Affitto'}
+          <NoteField value={name} onChange={setName} placeholder={kind === 'SUBSCRIPTION' ? 'Es. Netflix' : kind === 'FINANCING' ? 'Es. Klarna, telefono' : 'Es. Affitto'}
             onFocus={() => setNameFocused(true)} onBlur={() => setTimeout(() => setNameFocused(false), 150)} />
-          <Expand visible={nameFocused && kind === 'SUBSCRIPTION' && suggestions.length > 0}>
+          <Expand visible={nameFocused && kind !== 'FIXED' && suggestions.length > 0}>
             <div className="hscroll" style={{ gap: 8, paddingTop: 10 }}>
               {suggestions.map((brand) => (
                 <Pill key={brand.key} text={brand.name} selected={false}
@@ -245,18 +254,36 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
             </div>
           </Expand>
 
-          <FormLabel text="Importo" />
+          <FormLabel text={kind === 'FINANCING' ? 'Importo della rata' : 'Importo'} />
           <AmountField value={amountText} onChange={setAmountText} />
+          {kind === 'FINANCING' && (
+            <>
+              <FormLabel text="Numero di rate" />
+              <Stepper value={installments} min={1} onChange={(n) => { setInstallments(n); setInstallmentsPaid(Math.min(installmentsPaid, n)) }} />
+              {isEdit && (
+                <>
+                  <FormLabel text="Rate già pagate" />
+                  <Stepper value={installmentsPaid} min={0} max={installments} onChange={setInstallmentsPaid} />
+                </>
+              )}
+            </>
+          )}
 
           <FormLabel text="Frequenza" />
           <div className="flow">
             {frequencies.map((f) => <Pill key={f.id} text={f.label} selected={freq === f.id} onClick={() => setFreq(f.id)} />)}
           </div>
 
-          <FormLabel text="Prossimo addebito" />
+          <FormLabel text={kind !== 'FINANCING' ? 'Prossimo addebito' : isEdit ? 'Prossima rata' : 'Prima rata'} />
           <div className="row">
             <Pill text={Dates.long(date).replace(/^./, (c) => c.toUpperCase())} selected onClick={() => setShowDate(true)} icon="calendar_month" />
           </div>
+          {kind === 'FINANCING' && amountCents > 0 && installmentsPaid < installments && (
+            <span className="t-caption" style={{ color: 'var(--inkSoft)', paddingTop: 6 }}>
+              {installments - installmentsPaid === 1 ? 'Manca 1 rata' : `Mancano ${installments - installmentsPaid} rate`} da {Money.format(amountCents)}:{' '}
+              {Money.format(amountCents * (installments - installmentsPaid))} in tutto, l'ultima il {Dates.long(occurrence(date, freq, installments - installmentsPaid - 1))}.
+            </span>
+          )}
           {date < today() && autoRegister && (
             <span className="t-caption" style={{ color: 'var(--inkSoft)', paddingTop: 6 }}>
               Data passata: gli addebiti già trascorsi verranno registrati nei movimenti.
@@ -287,7 +314,7 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
             {reminderOptions.map(([days, label]) => <Pill key={days} text={label} selected={remindDays === days} onClick={() => setRemindDays(days)} />)}
           </div>
 
-          <SwitchRow title="Registra in automatico" subtitle="Il giorno dell'addebito la spesa finisce da sola nei movimenti."
+          <SwitchRow title="Registra in automatico" subtitle="Il giorno dell'addebito la spesa finisce da sola nei movimenti. Se è spento, resta in attesa finché non la aggiungi tu tenendola premuta."
             checked={autoRegister} onChange={setAutoRegister} style={{ marginTop: 18 }} />
           {isEdit && <SwitchRow title="Attiva" subtitle="Metti in pausa senza perdere i dati." checked={active} onChange={setActive} style={{ marginTop: 10 }} />}
 
@@ -303,6 +330,19 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
         <AlertDialog title={`Eliminare ${name.trim() || 'questa spesa fissa'}?`} text="I movimenti già registrati restano nello storico."
           confirm="Elimina" confirmColor="var(--expenseText)" onConfirm={remove} onDismiss={() => setConfirmDelete(false)} />
       )}
+    </div>
+  )
+}
+
+const kinds: RecurringKind[] = ['SUBSCRIPTION', 'FIXED', 'FINANCING']
+
+/** A number picked with − and + buttons, such as the installments of a financing. */
+function Stepper({ value, min, max = 99, onChange }: { value: number; min: number; max?: number; onChange: (n: number) => void }) {
+  return (
+    <div className="row" style={{ gap: 12 }}>
+      <RoundIconButton icon="remove" onClick={() => onChange(Math.max(min, value - 1))} label="Meno" />
+      <span className="t-title" style={{ color: 'var(--ink)', minWidth: 40, textAlign: 'center' }}>{value}</span>
+      <RoundIconButton icon="add" onClick={() => onChange(Math.min(max, value + 1))} label="Più" />
     </div>
   )
 }

@@ -5,15 +5,15 @@ import { useEffect, useSyncExternalStore } from 'react'
 
 export type Route =
   | 'home' | 'transactions' | 'recurring' | 'report'
-  | 'add' | 'recurringEdit' | 'categories' | 'settings' | 'chat' | 'aiSettings'
+  | 'add' | 'recurringEdit' | 'recurringRegister' | 'categories' | 'settings' | 'chat' | 'aiSettings'
 
-export type Params = { type?: 'EXPENSE' | 'INCOME'; id?: number; kind?: 'SUBSCRIPTION' | 'FIXED' }
+export type Params = { type?: 'EXPENSE' | 'INCOME'; id?: number; kind?: 'SUBSCRIPTION' | 'FIXED' | 'FINANCING' }
 
 export type Entry = { key: number; route: Route; params: Params }
 
 export const topLevel: Route[] = ['home', 'transactions', 'recurring', 'report']
 /** Screens that slide up from the bottom, like the add and edit forms on Android. */
-export const sheetRoutes: Route[] = ['add', 'recurringEdit']
+export const sheetRoutes: Route[] = ['add', 'recurringEdit', 'recurringRegister']
 
 let nextKey = 1
 let stack: Entry[] = [{ key: nextKey++, route: 'home', params: {} }]

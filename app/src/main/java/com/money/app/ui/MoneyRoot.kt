@@ -95,6 +95,7 @@ import com.money.app.ui.categories.CategoriesScreen
 import com.money.app.ui.components.bouncyClick
 import com.money.app.ui.home.HomeScreen
 import com.money.app.ui.recurring.RecurringEditScreen
+import com.money.app.ui.recurring.RecurringRegisterScreen
 import com.money.app.ui.recurring.RecurringScreen
 import com.money.app.ui.report.ReportScreen
 import com.money.app.ui.settings.ServerSettingsScreen
@@ -121,12 +122,15 @@ object Routes {
     const val SERVER_SETTINGS = "server_settings"
     private const val ADD = "add"
     private const val RECURRING_EDIT = "recurring_edit"
+    private const val RECURRING_REGISTER = "recurring_register"
 
     const val ADD_PATTERN = "$ADD?type={type}&id={id}"
     const val RECURRING_EDIT_PATTERN = "$RECURRING_EDIT?id={id}&kind={kind}"
+    const val RECURRING_REGISTER_PATTERN = "$RECURRING_REGISTER?id={id}"
 
     fun add(type: TxType = TxType.EXPENSE, id: Long = 0) = "$ADD?type=${type.name}&id=$id"
     fun recurringEdit(id: Long = 0, kind: RecurringKind = RecurringKind.SUBSCRIPTION) = "$RECURRING_EDIT?id=$id&kind=${kind.name}"
+    fun recurringRegister(id: Long) = "$RECURRING_REGISTER?id=$id"
 
     val topLevel = setOf(HOME, TRANSACTIONS, RECURRING, REPORT)
 }
@@ -207,7 +211,8 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
                 composable(Routes.RECURRING) {
                     RecurringScreen(
                         onOpen = { nav.navigate(Routes.recurringEdit(it)) },
-                        onAdd = { nav.navigate(Routes.recurringEdit()) },
+                        onRegister = { nav.navigate(Routes.recurringRegister(it)) },
+                        onAdd = { nav.navigate(if (it == null) Routes.recurringEdit() else Routes.recurringEdit(kind = it)) },
                     )
                 }
                 composable(Routes.REPORT) {
@@ -238,6 +243,14 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
                     popExitTransition = { slideOutVertically(tween(260)) { it / 2 } + fadeOut(tween(200)) },
                 ) {
                     RecurringEditScreen(onClose = { nav.closeScreen(Routes.RECURRING_EDIT_PATTERN) })
+                }
+                composable(
+                    Routes.RECURRING_REGISTER_PATTERN,
+                    arguments = listOf(navArgument("id") { type = NavType.LongType; defaultValue = 0L }),
+                    enterTransition = { slideInVertically(spring(dampingRatio = 0.85f, stiffness = 320f)) { it / 2 } + fadeIn() },
+                    popExitTransition = { slideOutVertically(tween(260)) { it / 2 } + fadeOut(tween(200)) },
+                ) {
+                    RecurringRegisterScreen(onClose = { nav.closeScreen(Routes.RECURRING_REGISTER_PATTERN) })
                 }
                 composable(Routes.CATEGORIES) {
                     CategoriesScreen(onBack = { nav.closeScreen(Routes.CATEGORIES) })

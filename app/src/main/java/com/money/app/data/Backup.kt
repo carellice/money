@@ -106,6 +106,7 @@ object Backup {
         .put("nextDate", nextDate).put("brandKey", brandKey ?: JSONObject.NULL).put("icon", icon)
         .put("color", color).put("autoRegister", autoRegister).put("remindDaysBefore", remindDaysBefore)
         .put("active", active).put("note", note).put("paymentId", paymentId ?: JSONObject.NULL)
+        .put("installments", installments ?: JSONObject.NULL).put("installmentsPaid", installmentsPaid)
 
     private fun JSONObject.toRecurring() = RecurringEntity(
         id = getLong("id"), kind = RecurringKind.valueOf(getString("kind")), name = getString("name"),
@@ -116,5 +117,6 @@ object Backup {
         color = getLong("color"), autoRegister = optBoolean("autoRegister", true),
         remindDaysBefore = optInt("remindDaysBefore", 2), active = optBoolean("active", true), note = optString("note"),
         paymentId = optLongOrNull("paymentId"),
+        installments = optLongOrNull("installments")?.toInt(), installmentsPaid = optInt("installmentsPaid"),
     )
 }

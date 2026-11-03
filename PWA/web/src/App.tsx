@@ -15,6 +15,7 @@ import { HomeScreen } from './screens/Home.tsx'
 import { TransactionsScreen } from './screens/Transactions.tsx'
 import { RecurringScreen } from './screens/Recurring.tsx'
 import { RecurringEditScreen } from './screens/RecurringEdit.tsx'
+import { RecurringRegisterScreen } from './screens/RecurringRegister.tsx'
 import { ReportScreen } from './screens/Report.tsx'
 import { AddTransactionScreen } from './screens/AddTransaction.tsx'
 import { CategoriesScreen } from './screens/Categories.tsx'
@@ -138,6 +139,7 @@ function Screen({ entry }: { entry: Entry }) {
     case 'report': return <ReportScreen />
     case 'add': return <AddTransactionScreen type={p.type ?? 'EXPENSE'} id={p.id ?? 0} />
     case 'recurringEdit': return <RecurringEditScreen id={p.id ?? 0} kind={p.kind ?? 'SUBSCRIPTION'} />
+    case 'recurringRegister': return <RecurringRegisterScreen id={p.id ?? 0} />
     case 'categories': return <CategoriesScreen />
     case 'settings': return <SettingsScreen />
     case 'chat': return <ChatScreen />

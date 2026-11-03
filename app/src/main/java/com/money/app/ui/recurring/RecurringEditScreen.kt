@@ -1,5 +1,10 @@
 package com.money.app.ui.recurring
 
+import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.foundation.layout.widthIn
+import com.money.app.domain.Money
+import com.money.app.domain.Recurrence
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -131,6 +136,7 @@ fun RecurringEditScreen(onClose: () -> Unit) {
             title = when {
                 vm.isEdit -> "Modifica"
                 vm.kind == RecurringKind.SUBSCRIPTION -> "Nuovo abbonamento"
+                vm.kind == RecurringKind.FINANCING -> "Nuovo finanziamento"
                 else -> "Nuova spesa fissa"
             },
             onBack = onClose,
@@ -147,9 +153,9 @@ fun RecurringEditScreen(onClose: () -> Unit) {
                 .navigationBarsPadding(),
         ) {
             Segmented(
-                listOf("Abbonamento", "Spesa fissa"),
-                if (vm.kind == RecurringKind.SUBSCRIPTION) 0 else 1,
-                { vm.changeKind(if (it == 0) RecurringKind.SUBSCRIPTION else RecurringKind.FIXED) },
+                listOf("Abbonamento", "Spesa fissa", "Rate"),
+                RecurringKind.entries.indexOf(vm.kind),
+                { vm.changeKind(RecurringKind.entries[it]) },
             )
 
             // Logo
@@ -187,7 +193,11 @@ fun RecurringEditScreen(onClose: () -> Unit) {
             NoteField(
                 vm.name,
                 { vm.name = it },
-                if (vm.kind == RecurringKind.SUBSCRIPTION) "Es. Netflix" else "Es. Affitto",
+                when (vm.kind) {
+                    RecurringKind.SUBSCRIPTION -> "Es. Netflix"
+                    RecurringKind.FINANCING -> "Es. Klarna, telefono"
+                    RecurringKind.FIXED -> "Es. Affitto"
+                },
                 Modifier.onFocusChanged { nameFocused = it.isFocused },
             )
             val suggestions = remember(vm.name) {
@@ -195,7 +205,7 @@ fun RecurringEditScreen(onClose: () -> Unit) {
                 else Brands.search(vm.name).filterNot { it.name.equals(vm.name.trim(), ignoreCase = true) }.take(8)
             }
             AnimatedVisibility(
-                visible = nameFocused && vm.kind == RecurringKind.SUBSCRIPTION && suggestions.isNotEmpty(),
+                visible = nameFocused && vm.kind != RecurringKind.FIXED && suggestions.isNotEmpty(),
                 enter = expandVertically(spring(dampingRatio = 0.8f, stiffness = 400f)) + fadeIn(),
                 exit = shrinkVertically() + fadeOut(),
             ) {
@@ -218,16 +228,45 @@ fun RecurringEditScreen(onClose: () -> Unit) {
                 }
             }
 
-            FormLabel("Importo")
+            val financing = vm.kind == RecurringKind.FINANCING
+            FormLabel(if (financing) "Importo della rata" else "Importo")
             AmountField(vm.amountText, { vm.amountText = it })
+            if (financing) {
+                FormLabel("Numero di rate")
+                Stepper(vm.installments, min = 1) {
+                    vm.installments = it
+                    vm.installmentsPaid = vm.installmentsPaid.coerceAtMost(it)
+                }
+                if (vm.isEdit) {
+                    FormLabel("Rate già pagate")
+                    Stepper(vm.installmentsPaid, min = 0, max = vm.installments) { vm.installmentsPaid = it }
+                }
+            }
 
             FormLabel("Frequenza")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Frequency.entries.forEach { f -> Pill(f.label, vm.frequency == f, { vm.frequency = f }) }
             }
 
-            FormLabel("Prossimo addebito")
+            FormLabel(
+                when {
+                    !financing -> "Prossimo addebito"
+                    vm.isEdit -> "Prossima rata"
+                    else -> "Prima rata"
+                }
+            )
             Pill(Dates.long(vm.date).replaceFirstChar { it.uppercase() }, true, { showDate = true }, icon = Icons.Rounded.CalendarMonth)
+            val left = vm.installments - vm.installmentsPaid
+            if (financing && vm.amountCents > 0 && left > 0) {
+                Text(
+                    (if (left == 1) "Manca 1 rata" else "Mancano $left rate") + " da ${Money.format(vm.amountCents)}: " +
+                        "${Money.format(vm.amountCents * left)} in tutto, l'ultima il " +
+                        "${Dates.long(Recurrence.occurrence(vm.date, vm.frequency, (left - 1).toLong()))}.",
+                    style = Ui.type.caption,
+                    color = c.inkSoft,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
             if (vm.date.isBefore(LocalDate.now()) && vm.autoRegister) {
                 Text(
                     "Data passata: gli addebiti già trascorsi verranno registrati nei movimenti.",
@@ -268,7 +307,7 @@ fun RecurringEditScreen(onClose: () -> Unit) {
             Spacer(Modifier.height(18.dp))
             SwitchRow(
                 "Registra in automatico",
-                "Il giorno dell'addebito la spesa finisce da sola nei movimenti.",
+                "Il giorno dell'addebito la spesa finisce da sola nei movimenti. Se è spento, resta in attesa finché non la aggiungi tu tenendola premuta.",
                 vm.autoRegister,
                 { vm.autoRegister = it },
             )
@@ -312,6 +351,22 @@ fun RecurringEditScreen(onClose: () -> Unit) {
             confirmButton = { TextButton({ confirmDelete = false; vm.delete(onClose) }) { Text("Elimina", color = c.expenseText) } },
             dismissButton = { TextButton({ confirmDelete = false }) { Text("Annulla") } },
         )
+    }
+}
+
+/** A number picked with - and + buttons, such as the installments of a financing. */
+@Composable
+private fun Stepper(value: Int, min: Int, max: Int = 99, onChange: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        RoundIconButton(Icons.Rounded.Remove, { onChange((value - 1).coerceAtLeast(min)) }, contentDescription = "Meno")
+        Text(
+            value.toString(),
+            style = Ui.type.title,
+            color = Ui.colors.ink,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(min = 40.dp),
+        )
+        RoundIconButton(Icons.Rounded.Add, { onChange((value + 1).coerceAtMost(max)) }, contentDescription = "Più")
     }
 }
 

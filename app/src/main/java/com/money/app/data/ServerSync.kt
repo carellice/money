@@ -418,6 +418,7 @@ class ServerSync(
         .put("icon", icon).put("color", color).put("autoRegister", autoRegister)
         .put("remindDaysBefore", remindDaysBefore).put("notifiedFor", notifiedFor ?: JSONObject.NULL)
         .put("active", active).put("note", note).put("paymentId", paymentId ?: JSONObject.NULL)
+        .put("installments", installments ?: JSONObject.NULL).put("installmentsPaid", installmentsPaid)
 
     private fun JSONObject.toRecurring() = RecurringEntity(
         id = getLong("id"), kind = RecurringKind.valueOf(getString("kind")), name = getString("name"),
@@ -429,6 +430,7 @@ class ServerSync(
         autoRegister = optBoolean("autoRegister", true), remindDaysBefore = optInt("remindDaysBefore", 2),
         notifiedFor = optLongOrNull("notifiedFor"), active = optBoolean("active", true), note = optString("note"),
         paymentId = optLongOrNull("paymentId"),
+        installments = optLongOrNull("installments")?.toInt(), installmentsPaid = optInt("installmentsPaid"),
     )
 
     companion object {

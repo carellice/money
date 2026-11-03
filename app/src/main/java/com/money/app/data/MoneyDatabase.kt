@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [CategoryEntity::class, TransactionEntity::class, RecurringEntity::class, MemberEntity::class, CustomPaymentEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class MoneyDatabase : RoomDatabase() {
@@ -51,9 +51,17 @@ abstract class MoneyDatabase : RoomDatabase() {
             }
         }
 
+        /** Financings: how many installments and how many are paid. */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `recurring` ADD COLUMN `installments` INTEGER")
+                db.execSQL("ALTER TABLE `recurring` ADD COLUMN `installmentsPaid` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun build(context: Context): MoneyDatabase =
             Room.databaseBuilder(context, MoneyDatabase::class.java, "money.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
     }
 }
