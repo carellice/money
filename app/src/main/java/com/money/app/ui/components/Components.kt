@@ -10,6 +10,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -40,12 +42,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,10 +75,12 @@ import coil.compose.AsyncImage
 import com.money.app.brand.Brands
 import com.money.app.domain.Dates
 import com.money.app.domain.Money
+import com.money.app.ui.appContainer
 import com.money.app.ui.theme.BlobShape
 import com.money.app.ui.theme.Ink
 import com.money.app.ui.theme.Ui
 import com.money.app.ui.theme.blob
+import kotlinx.coroutines.launch
 import java.io.File
 import java.time.YearMonth
 
@@ -200,6 +208,53 @@ fun AmountText(
         color = color,
         modifier = modifier,
         maxLines = 1,
+    )
+}
+
+/** True when the user chose to hide amounts on Home and Movimenti. */
+val LocalHideAmounts = compositionLocalOf { false }
+
+/** Shows [content], or soft dots in its place when amounts are hidden; the swap pops with a little scale. */
+@Composable
+fun Masked(
+    style: TextStyle,
+    color: Color,
+    modifier: Modifier = Modifier,
+    hidden: Boolean = LocalHideAmounts.current,
+    content: @Composable () -> Unit,
+) {
+    AnimatedContent(
+        targetState = hidden,
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+        transitionSpec = {
+            (fadeIn(tween(220)) + scaleIn(spring(dampingRatio = 0.55f, stiffness = 500f), initialScale = 0.6f)) togetherWith
+                (fadeOut(tween(120)) + scaleOut(tween(120), targetScale = 0.6f))
+        },
+        label = "masked",
+    ) { isHidden ->
+        if (isHidden) Text("••••", style = style, color = color.copy(alpha = 0.75f), maxLines = 1) else content()
+    }
+}
+
+/** Flips the saved hide-amounts choice. */
+@Composable
+fun rememberHideAmountsToggle(): () -> Unit {
+    val hidden = LocalHideAmounts.current
+    val settings = appContainer().settings
+    val scope = rememberCoroutineScope()
+    return { scope.launch { settings.setHideAmounts(!hidden) } }
+}
+
+/** Eye that hides or reveals amounts everywhere they are maskable. */
+@Composable
+fun HideAmountsButton(modifier: Modifier = Modifier) {
+    val hidden = LocalHideAmounts.current
+    RoundIconButton(
+        if (hidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+        rememberHideAmountsToggle(),
+        modifier,
+        contentDescription = if (hidden) "Mostra importi" else "Nascondi importi",
     )
 }
 

@@ -14,6 +14,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,6 +27,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.money.app.data.Settings
 import com.money.app.ui.MoneyRoot
+import com.money.app.ui.components.LocalHideAmounts
 import com.money.app.ui.lock.Biometric
 import com.money.app.ui.lock.LockScreen
 import com.money.app.ui.onboarding.OnboardingScreen
@@ -83,7 +85,9 @@ class MainActivity : FragmentActivity() {
             }
             MoneyTheme(dark, settings.accent) {
                 Box(Modifier.fillMaxSize()) {
-                    MoneyRoot(deepLink, onDeepLinkHandled = { deepLink = null })
+                    CompositionLocalProvider(LocalHideAmounts provides settings.hideAmounts) {
+                        MoneyRoot(deepLink, onDeepLinkHandled = { deepLink = null })
+                    }
                     AnimatedVisibility(
                         visible = locked && settings.lockEnabled,
                         enter = fadeIn(),

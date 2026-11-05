@@ -21,6 +21,8 @@ export type Settings = {
   accent: number
   onboarded: boolean
   recurringSort: RecurringSort
+  /** Amounts on Home and Movimenti shown as dots, for prying eyes. */
+  hideAmounts: boolean
 }
 
 // Every account keeps its own settings and data cache, so a shared tablet can switch between them.
@@ -43,7 +45,7 @@ let currentUser = read(LAST_USER_KEY) ?? ''
 
 function loadSettings(user: string): Settings {
   const defaults: Settings = {
-    theme: 'SYSTEM', lockCredential: null, remindersEnabled: false, accent: Palette.LILAC, onboarded: false, recurringSort: 'NEXT',
+    theme: 'SYSTEM', lockCredential: null, remindersEnabled: false, accent: Palette.LILAC, onboarded: false, recurringSort: 'NEXT', hideAmounts: false,
   }
   try {
     return { ...defaults, ...JSON.parse(read(settingsKey(user)) ?? '{}') }

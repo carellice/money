@@ -4,7 +4,7 @@ import { Dates, Money } from '../../../shared/format.ts'
 import { paymentChoice, paymentLabel, type Transaction } from '../../../shared/model.ts'
 import { navigate } from '../lib/nav.ts'
 import { actions, setMonth, useStore } from '../lib/store.ts'
-import { EmptyState, Icon, MonthSwitcher, Segmented, Staggered } from '../components/ui.tsx'
+import { EmptyState, HideAmountsButton, Icon, Masked, MonthSwitcher, Segmented, Staggered } from '../components/ui.tsx'
 import { SwipeRow, TransactionRow } from '../components/TransactionRow.tsx'
 import { showSnackbar } from '../components/overlays.tsx'
 
@@ -53,7 +53,10 @@ export function TransactionsScreen() {
       <div style={{ padding: '0 20px 156px' }}>
         <div className="col status-pad">
           <div style={{ paddingTop: 12 }}>
-            <div className="t-display" style={{ color: 'var(--ink)' }}>Movimenti</div>
+            <div className="row">
+              <div className="t-display flex1" style={{ color: 'var(--ink)' }}>Movimenti</div>
+              <HideAmountsButton />
+            </div>
             <MonthSwitcher month={month} onChange={setMonth} style={{ marginTop: 8 }} />
             <label className="row" style={{ marginTop: 14, borderRadius: 999, background: 'var(--surface)', padding: '14px 18px', cursor: 'text' }}>
               <Icon name="search" size={20} color="var(--inkFaint)" />
@@ -65,10 +68,14 @@ export function TransactionsScreen() {
             {state && (
               <div className="row" style={{ marginTop: 14 }}>
                 <span className="t-label" style={{ color: 'var(--inkSoft)' }}>Entrate&nbsp;</span>
-                <span className="t-label" style={{ color: 'var(--incomeText)' }}>{Money.format(state.income)}</span>
+                <Masked className="t-label" color="var(--incomeText)">
+                  <span className="t-label" style={{ color: 'var(--incomeText)' }}>{Money.format(state.income)}</span>
+                </Masked>
                 <span className="flex1" />
                 <span className="t-label" style={{ color: 'var(--inkSoft)' }}>Uscite&nbsp;</span>
-                <span className="t-label" style={{ color: 'var(--ink)' }}>{Money.format(state.expense)}</span>
+                <Masked className="t-label" color="var(--ink)">
+                  <span className="t-label" style={{ color: 'var(--ink)' }}>{Money.format(state.expense)}</span>
+                </Masked>
               </div>
             )}
             <div style={{ height: 8 }} />
@@ -85,12 +92,14 @@ export function TransactionsScreen() {
           <div key={`${month}-${group.date}`}>
             <Staggered index={gi} className="row" style={{ padding: '18px 0 4px' }}>
               <span className="t-label flex1" style={{ color: 'var(--inkSoft)' }}>{Dates.dayHeader(group.date)}</span>
-              <span className="t-caption" style={{ color: 'var(--inkFaint)' }}>{Money.format(group.net, true)}</span>
+              <Masked className="t-caption" color="var(--inkFaint)">
+                <span className="t-caption" style={{ color: 'var(--inkFaint)' }}>{Money.format(group.net, true)}</span>
+              </Masked>
             </Staggered>
             {group.items.map((tx) => (
               <Staggered key={tx.id} index={gi}>
                 <SwipeRow onDelete={() => remove(tx)}>
-                  <TransactionRow tx={tx} categories={state.categories} onClick={() => navigate('add', { id: tx.id })} />
+                  <TransactionRow tx={tx} categories={state.categories} onClick={() => navigate('add', { id: tx.id })} maskable />
                 </SwipeRow>
               </Staggered>
             ))}

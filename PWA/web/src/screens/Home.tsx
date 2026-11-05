@@ -9,7 +9,8 @@ import { setMonth, useStore } from '../lib/store.ts'
 import { alpha, Ink } from '../lib/theme.ts'
 import { BackdropBlobs, BlobBox, BlobLayer } from '../components/Blob.tsx'
 import {
-  AnimatedAmount, Bouncy, CategoryBadge, MonthSwitcher, RecurringLogo, RoundIconButton, SectionTitle, SoftCard, SoftProgress, Staggered,
+  AnimatedAmount, Bouncy, CategoryBadge, HideAmountsButton, Masked, MonthSwitcher, RecurringLogo, RoundIconButton, SectionTitle, SoftCard,
+  SoftProgress, Staggered, toggleHideAmounts,
 } from '../components/ui.tsx'
 import { fastOutSlowIn } from '../components/motion.ts'
 
@@ -41,6 +42,8 @@ export function HomeScreen() {
         <div className="row status-pad" style={{ flexShrink: 0 }}>
           <div className="row" style={{ width: '100%', padding: '12px 20px 8px' }}>
             <MonthSwitcher month={month} onChange={setMonth} style={{ flex: 1 }} />
+            <HideAmountsButton />
+            <div style={{ width: 8 }} />
             <RoundIconButton icon="auto_awesome" onClick={() => navigate('chat')} label="Chiedi a Money" />
             <div style={{ width: 8 }} />
             <RoundIconButton icon="settings" onClick={() => navigate('settings')} label="Impostazioni" />
@@ -124,15 +127,19 @@ function Hero({ r, onAdd }: { r: MonthReport; onAdd: (type: TxType) => void }) {
   return (
     <div style={{ position: 'relative', height: 310 }}>
       <div className="center" style={{ position: 'absolute', inset: 0 }}>
-        <BlobBox size={250} gradient={['var(--accent)', argb(Palette.ROSE), argb(Palette.PEACH)]} seed={11} amplitude={0.08} speed={0.8}>
-          <div className="col" style={{ alignItems: 'center' }}>
-            <span className="t-caption" style={{ color: alpha(Ink, 0.8) }}>saldo del mese</span>
-            <AnimatedAmount cents={r.balance} className="t-display" color={Ink} decimalsScale={0.45} />
-            {r.savingsRate != null && (
-              <span className="t-label" style={{ color: alpha(Ink, 0.8) }}>{r.balance >= 0 ? `risparmi ${percent(r.savingsRate)}` : 'in rosso'}</span>
-            )}
-          </div>
-        </BlobBox>
+        <Bouncy onClick={toggleHideAmounts} pressedScale={0.96}>
+          <BlobBox size={250} gradient={['var(--accent)', argb(Palette.ROSE), argb(Palette.PEACH)]} seed={11} amplitude={0.08} speed={0.8}>
+            <div className="col" style={{ alignItems: 'center' }}>
+              <span className="t-caption" style={{ color: alpha(Ink, 0.8) }}>saldo del mese</span>
+              <Masked className="t-display" color={Ink}>
+                <AnimatedAmount cents={r.balance} className="t-display" color={Ink} decimalsScale={0.45} />
+              </Masked>
+              {r.savingsRate != null && (
+                <span className="t-label" style={{ color: alpha(Ink, 0.8) }}>{r.balance >= 0 ? `risparmi ${percent(r.savingsRate)}` : 'in rosso'}</span>
+              )}
+            </div>
+          </BlobBox>
+        </Bouncy>
       </div>
       <motion.div style={{ position: 'absolute', top: 0, right: 0 }} initial={{ y: -6, rotate: -2.4 }}
         animate={{ y: [-6, 6], rotate: [-2.4, 2.4] }} transition={bob.transition}>
@@ -151,7 +158,9 @@ function MiniBlob({ label, cents, color, seed, onClick }: { label: string; cents
       <BlobLayer color={color} seed={seed} amplitude={0.1} />
       <div className="blob-content col" style={{ alignItems: 'center' }}>
         <span className="t-caption" style={{ color: alpha(Ink, 0.8) }}>{label}</span>
-        <span className="t-titleSmall" style={{ color: Ink, whiteSpace: 'nowrap' }}>{Money.format(cents)}</span>
+        <Masked className="t-titleSmall" color={Ink}>
+          <span className="t-titleSmall" style={{ color: Ink, whiteSpace: 'nowrap' }}>{Money.format(cents)}</span>
+        </Masked>
         <span className="t-caption" style={{ color: alpha(Ink, 0.8) }}>+ aggiungi</span>
       </div>
     </Bouncy>

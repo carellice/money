@@ -67,6 +67,8 @@ fun TransactionRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     showDate: String? = null,
+    /** Follows the hide-amounts choice (only Movimenti opts in). */
+    maskable: Boolean = false,
 ) {
     val c = Ui.colors
     val category = categories[tx.categoryId]
@@ -108,10 +110,13 @@ fun TransactionRow(
             }
         }
         val income = tx.type == TxType.INCOME
-        Text(
-            Money.format(if (income) tx.amountCents else -tx.amountCents, signed = true),
-            style = Ui.type.amount,
-            color = if (income) c.incomeText else c.ink,
-        )
+        val amountColor = if (income) c.incomeText else c.ink
+        Masked(Ui.type.amount, amountColor, hidden = maskable && LocalHideAmounts.current) {
+            Text(
+                Money.format(if (income) tx.amountCents else -tx.amountCents, signed = true),
+                style = Ui.type.amount,
+                color = amountColor,
+            )
+        }
     }
 }

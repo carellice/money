@@ -60,6 +60,8 @@ import com.money.app.ui.update.UpdateBanner
 import com.money.app.ui.components.AnimatedAmount
 import com.money.app.ui.components.CategoryBadge
 import com.money.app.ui.components.EmptyState
+import com.money.app.ui.components.HideAmountsButton
+import com.money.app.ui.components.Masked
 import com.money.app.ui.components.MonthSwitcher
 import com.money.app.ui.components.RecurringLogo
 import com.money.app.ui.components.RoundIconButton
@@ -68,6 +70,7 @@ import com.money.app.ui.components.SoftCard
 import com.money.app.ui.components.SoftProgress
 import com.money.app.ui.components.TransactionRow
 import com.money.app.ui.components.bouncyClick
+import com.money.app.ui.components.rememberHideAmountsToggle
 import com.money.app.ui.components.staggered
 import com.money.app.ui.theme.Ink
 import com.money.app.ui.theme.Ui
@@ -144,6 +147,8 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 MonthSwitcher(month, vm::setMonth, Modifier.weight(1f))
+                HideAmountsButton()
+                Spacer(Modifier.width(8.dp))
                 RoundIconButton(Icons.Rounded.AutoAwesome, onOpenChat, contentDescription = "Chiedi a Money")
                 Spacer(Modifier.width(8.dp))
                 RoundIconButton(Icons.Rounded.Settings, onOpenSettings, contentDescription = "Impostazioni")
@@ -256,11 +261,13 @@ private fun Hero(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifier = M
         infiniteRepeatable(tween(2600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "bob",
     )
+    val toggleHidden = rememberHideAmountsToggle()
     Box(modifier.fillMaxWidth().height(310.dp)) {
         Box(
             Modifier
                 .align(Alignment.Center)
                 .size(250.dp)
+                .bouncyClick(pressedScale = 0.96f, onClick = toggleHidden)
                 .blob(
                     Brush.linearGradient(listOf(c.accent, Color(Palette.ROSE), Color(Palette.PEACH))),
                     seed = 11,
@@ -271,7 +278,9 @@ private fun Hero(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifier = M
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("saldo del mese", style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
-                AnimatedAmount(r.balance, Ui.type.display, color = Ink, decimalsScale = 0.45f)
+                Masked(Ui.type.display, Ink) {
+                    AnimatedAmount(r.balance, Ui.type.display, color = Ink, decimalsScale = 0.45f)
+                }
                 if (r.savingsRate != null) {
                     Text(
                         if (r.balance >= 0) "risparmi ${percent(r.savingsRate)}" else "in rosso",
@@ -305,7 +314,9 @@ private fun MiniBlob(label: String, cents: Long, color: Color, seed: Int, modifi
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(label, style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
-            Text(Money.format(cents), style = Ui.type.titleSmall, color = Ink, maxLines = 1)
+            Masked(Ui.type.titleSmall, Ink) {
+                Text(Money.format(cents), style = Ui.type.titleSmall, color = Ink, maxLines = 1)
+            }
             Text("+ aggiungi", style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
         }
     }

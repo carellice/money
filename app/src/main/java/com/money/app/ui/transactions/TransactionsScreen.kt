@@ -51,6 +51,8 @@ import com.money.app.domain.Dates
 import com.money.app.domain.Money
 import com.money.app.ui.appViewModel
 import com.money.app.ui.components.EmptyState
+import com.money.app.ui.components.HideAmountsButton
+import com.money.app.ui.components.Masked
 import com.money.app.ui.components.MonthSwitcher
 import com.money.app.ui.components.Segmented
 import com.money.app.ui.components.TransactionRow
@@ -136,7 +138,10 @@ fun TransactionsScreen(onOpen: (Long) -> Unit) {
         ) {
             item {
                 Column(Modifier.statusBarsPadding().padding(top = 12.dp)) {
-                    Text("Movimenti", style = Ui.type.display, color = c.ink)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Movimenti", style = Ui.type.display, color = c.ink, modifier = Modifier.weight(1f))
+                        HideAmountsButton()
+                    }
                     Spacer(Modifier.height(8.dp))
                     MonthSwitcher(month, vm::setMonth)
                     Spacer(Modifier.height(14.dp))
@@ -150,10 +155,14 @@ fun TransactionsScreen(onOpen: (Long) -> Unit) {
                         Spacer(Modifier.height(14.dp))
                         Row {
                             Text("Entrate ", style = Ui.type.label, color = c.inkSoft)
-                            Text(Money.format(s.income), style = Ui.type.label, color = c.incomeText)
+                            Masked(Ui.type.label, c.incomeText) {
+                                Text(Money.format(s.income), style = Ui.type.label, color = c.incomeText)
+                            }
                             Spacer(Modifier.weight(1f))
                             Text("Uscite ", style = Ui.type.label, color = c.inkSoft)
-                            Text(Money.format(s.expense), style = Ui.type.label, color = c.ink)
+                            Masked(Ui.type.label, c.ink) {
+                                Text(Money.format(s.expense), style = Ui.type.label, color = c.ink)
+                            }
                         }
                     }
                     Spacer(Modifier.height(8.dp))
@@ -176,7 +185,9 @@ fun TransactionsScreen(onOpen: (Long) -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(Dates.dayHeader(group.date), style = Ui.type.label, color = c.inkSoft, modifier = Modifier.weight(1f))
-                        Text(Money.format(group.net, signed = true), style = Ui.type.caption, color = c.inkFaint)
+                        Masked(Ui.type.caption, c.inkFaint) {
+                            Text(Money.format(group.net, signed = true), style = Ui.type.caption, color = c.inkFaint)
+                        }
                     }
                 }
                 items(group.items, key = { it.id }) { tx ->
@@ -192,7 +203,7 @@ fun TransactionsScreen(onOpen: (Long) -> Unit) {
                         },
                         modifier = Modifier.animateItem().staggered(gi),
                     ) {
-                        TransactionRow(tx, s.categories, { onOpen(tx.id) }, Modifier.background(c.bg))
+                        TransactionRow(tx, s.categories, { onOpen(tx.id) }, Modifier.background(c.bg), maskable = true)
                     }
                 }
             }

@@ -6,6 +6,7 @@ import type { Month } from '../../../shared/date.ts'
 import { appIcons, uiIcons, type UiIcon } from '../lib/icons.gen.ts'
 import { findBrand, isLightBrand } from '../lib/brands.ts'
 import { hashCode } from '../lib/blob.ts'
+import { getStore, updateSettings, useStore } from '../lib/store.ts'
 import { Ink } from '../lib/theme.ts'
 import { BlobBox, useBlobClip } from './Blob.tsx'
 import { fastOutSlowIn, haptic, spring, tween } from './motion.ts'
@@ -179,6 +180,29 @@ export function AnimatedAmount(props: Parameters<typeof AmountText>[0]) {
     return () => controls.stop()
   }, [props.cents])
   return <AmountText {...props} cents={shown} />
+}
+
+/** Shows [children], or soft dots in their place when amounts are hidden; the swap pops with a little scale. */
+export function Masked({ className, color, hidden, children }: { className: string; color: string; hidden?: boolean; children: ReactNode }) {
+  const hideAmounts = useStore((s) => s.settings.hideAmounts)
+  const masked = hidden ?? hideAmounts
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.span key={masked ? 'dots' : 'amount'} style={{ display: 'inline-block' }}
+        initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1, transition: spring(0.55, 500) }}
+        exit={{ opacity: 0, scale: 0.6, transition: tween(120) }}>
+        {masked ? <span className={className} style={{ color, opacity: 0.75, whiteSpace: 'nowrap' }}>••••</span> : children}
+      </motion.span>
+    </AnimatePresence>
+  )
+}
+
+export const toggleHideAmounts = () => updateSettings({ hideAmounts: !getStore().settings.hideAmounts })
+
+/** Eye that hides or reveals amounts everywhere they are maskable. */
+export function HideAmountsButton() {
+  const hidden = useStore((s) => s.settings.hideAmounts)
+  return <RoundIconButton icon={hidden ? 'visibility_off' : 'visibility'} onClick={toggleHideAmounts} label={hidden ? 'Mostra importi' : 'Nascondi importi'} />
 }
 
 // --- controls --------------------------------------------------------------------------------
