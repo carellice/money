@@ -31,9 +31,12 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,9 +67,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -115,8 +121,10 @@ class TransactionsViewModel(private val container: AppContainer) : ViewModel() {
         container.month.value = m
     }
 
-    fun delete(tx: TransactionEntity) = viewModelScope.launch { repo.deleteTransaction(tx) }
-    fun restore(tx: TransactionEntity) = viewModelScope.launch { repo.saveTransaction(tx) }
+    // "Annulla" can come before the server has finished deleting: in order, the restore always wins.
+    private val lock = Mutex()
+    fun delete(tx: TransactionEntity) = viewModelScope.launch { lock.withLock { repo.deleteTransaction(tx) } }
+    fun restore(tx: TransactionEntity) = viewModelScope.launch { lock.withLock { repo.saveTransaction(tx) } }
     fun forget(tx: TransactionEntity) = repo.discardReceipt(tx)
 }
 
@@ -215,14 +223,15 @@ fun TransactionsScreen(onOpen: (Long) -> Unit) {
 @Composable
 private fun SwipeRow(onDelete: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val c = Ui.colors
-    val state = rememberSwipeToDismissBoxState(
-        confirmValueChange = {
-            if (it == SwipeToDismissBoxValue.EndToStart) {
-                onDelete()
-                true
-            } else false
-        },
-    )
+    val state = rememberSwipeToDismissBoxState()
+    val delete by rememberUpdatedState(onDelete)
+    LaunchedEffect(state) {
+        // A movement brought back by "Annulla" keeps its key, so its saved state is still swiped away.
+        if (state.currentValue != SwipeToDismissBoxValue.Settled) state.snapTo(SwipeToDismissBoxValue.Settled)
+        // Deleting here, not in confirmValueChange: that one can fire more than once for one swipe.
+        snapshotFlow { state.currentValue }.first { it == SwipeToDismissBoxValue.EndToStart }
+        delete()
+    }
     SwipeToDismissBox(
         state = state,
         enableDismissFromStartToEnd = false,

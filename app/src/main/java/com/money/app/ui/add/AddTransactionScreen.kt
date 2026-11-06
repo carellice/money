@@ -207,10 +207,7 @@ private fun Summary(vm: AddViewModel, categories: List<CategoryEntity>, accent: 
 @Composable
 private fun AmountStep(vm: AddViewModel, accent: Color) {
     val c = Ui.colors
-    Column(
-        Modifier.fillMaxSize().padding(horizontal = 20.dp).navigationBarsPadding(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    AmountPad(vm.calc, if (vm.type == TxType.EXPENSE) "Quanto hai speso?" else "Quanto hai ricevuto?", accent, vm::confirmAmount) {
         if (!vm.isEdit) {
             Segmented(
                 listOf("Spesa", "Entrata"),
@@ -220,12 +217,20 @@ private fun AmountStep(vm: AddViewModel, accent: Color) {
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
         }
+    }
+}
+
+/** The big amount with the calculator keypad, as when adding a movement from "+". [top] sits above it. */
+@Composable
+fun AmountPad(calc: AmountCalc, prompt: String, accent: Color, onNext: () -> Unit, top: @Composable () -> Unit = {}) {
+    val c = Ui.colors
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 20.dp).navigationBarsPadding(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        top()
         Spacer(Modifier.weight(1f))
-        Text(
-            if (vm.type == TxType.EXPENSE) "Quanto hai speso?" else "Quanto hai ricevuto?",
-            style = Ui.type.bodyStrong,
-            color = c.inkSoft,
-        )
+        Text(prompt, style = Ui.type.bodyStrong, color = c.inkSoft)
         Box(
             Modifier
                 .fillMaxWidth()
@@ -234,17 +239,17 @@ private fun AmountStep(vm: AddViewModel, accent: Color) {
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                AmountDisplay(vm.amountText)
+                AmountDisplay(calc.text)
                 // The operation being typed, under the result that already follows it.
-                AnimatedVisibility(vm.calc.expression != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                    Text(vm.calc.expression.orEmpty(), style = Ui.type.bodyStrong, color = c.inkSoft, maxLines = 1)
+                AnimatedVisibility(calc.expression != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    Text(calc.expression.orEmpty(), style = Ui.type.bodyStrong, color = c.inkSoft, maxLines = 1)
                 }
             }
         }
         Spacer(Modifier.weight(1f))
-        Keypad(onKey = vm::press, onOperation = vm::operation, pending = vm.calc.pending, onBackspace = vm::backspace, onClear = vm::clearAmount)
+        Keypad(onKey = calc::press, onOperation = calc::operation, pending = calc.pending, onBackspace = calc::backspace, onClear = calc::clear)
         Spacer(Modifier.height(16.dp))
-        PrimaryButton("Avanti", vm::confirmAmount, enabled = vm.amountCents > 0, color = accent)
+        PrimaryButton("Avanti", onNext, enabled = calc.cents > 0, color = accent)
         Spacer(Modifier.height(12.dp))
     }
 }

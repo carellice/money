@@ -1,5 +1,5 @@
 import { animate, AnimatePresence, motion } from 'framer-motion'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { today as todayEpoch } from '../../../shared/date.ts'
 import { Dates, Money } from '../../../shared/format.ts'
@@ -200,9 +200,9 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
               style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}
             >
               {step === 0 && (
-                <AmountStep type={type} isEdit={isEdit} accent={accent} amountText={amountText} amountCents={amountCents}
+                <AmountStep type={type} accent={accent} amountText={amountText} amountCents={amountCents}
                   expression={calcExpression(calc)} pending={calcPending(calc)}
-                  onType={switchType} onKey={(k) => setCalc(calcPress(calc, k))} onOperation={(op) => setCalc(calcOperation(calc, op))}
+                  onType={isEdit ? undefined : switchType} onKey={(k) => setCalc(calcPress(calc, k))} onOperation={(op) => setCalc(calcOperation(calc, op))}
                   onBackspace={() => setCalc(calcBackspace(calc))} onClear={() => setCalc(emptyCalc)}
                   onNext={() => {
                     // Moving on keeps only the result of the operations.
@@ -253,15 +253,16 @@ function StepDots({ step, accent }: { step: number; accent: string }) {
 
 // --- Step 1: amount ----------------------------------------------------------------------------
 
-function AmountStep(p: {
+/** The big amount with the calculator keypad. Without [onType] there is no Spesa/Entrata switch; [top] goes above it. */
+export function AmountStep(p: {
   type: TxType
-  isEdit: boolean
   accent: string
   amountText: string
   amountCents: number
   expression: string | null
   pending: AmountOp | null
-  onType: (t: TxType) => void
+  onType?: (t: TxType) => void
+  top?: ReactNode
   onKey: (k: string) => void
   onOperation: (op: AmountOp) => void
   onBackspace: () => void
@@ -270,10 +271,11 @@ function AmountStep(p: {
 }) {
   return (
     <div className="col nav-pad" style={{ height: '100%', padding: '0 20px', alignItems: 'center' }}>
-      {!p.isEdit && (
-        <Segmented options={['Spesa', 'Entrata']} selected={p.type === 'EXPENSE' ? 0 : 1} onSelect={(i) => p.onType(i === 0 ? 'EXPENSE' : 'INCOME')}
+      {p.onType && (
+        <Segmented options={['Spesa', 'Entrata']} selected={p.type === 'EXPENSE' ? 0 : 1} onSelect={(i) => p.onType!(i === 0 ? 'EXPENSE' : 'INCOME')}
           colors={['var(--expense)', 'var(--income)']} style={{ width: '100%', marginTop: 8 }} />
       )}
+      {p.top}
       <div style={{ flex: 1 }} />
       <span className="t-bodyStrong" style={{ color: 'var(--inkSoft)' }}>{p.type === 'EXPENSE' ? 'Quanto hai speso?' : 'Quanto hai ricevuto?'}</span>
       <BlobBox width="100%" height={170} color={alpha(p.type === 'EXPENSE' ? '#FF8A7A' : '#8FE3C0', 0.22)} seed={5} amplitude={0.1}>

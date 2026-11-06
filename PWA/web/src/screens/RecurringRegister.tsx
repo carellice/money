@@ -1,15 +1,18 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { today as todayEpoch } from '../../../shared/date.ts'
 import { Dates, Money } from '../../../shared/format.ts'
 import { afterPayment, argb, frequencies, paymentChoice, type Frequency, type Recurring } from '../../../shared/model.ts'
 import { occurrence } from '../../../shared/recurrence.ts'
-import { amountOps, evaluateAmount, hasOperation } from '../lib/amountMath.ts'
-import { close } from '../lib/nav.ts'
+import {
+  calcBackspace, calcCents, calcExpression, calcOf, calcOperation, calcPending, calcPress, calcText, emptyCalc,
+} from '../lib/amountMath.ts'
+import { close, useBackHandler } from '../lib/nav.ts'
 import { actions, getStore, useStore } from '../lib/store.ts'
-import { AmountField, Bouncy, FormLabel, Pill, PrimaryButton, RecurringLogo, TopBar } from '../components/ui.tsx'
+import { FormLabel, Pill, PrimaryButton, RecurringLogo, TopBar } from '../components/ui.tsx'
 import { DatePickerDialog, toast } from '../components/overlays.tsx'
 import { PaymentPills } from '../components/Payments.tsx'
 import { MemberAvatar } from './Settings.tsx'
+import { AmountStep } from './AddTransaction.tsx'
 
 /** "+1 mese", "+3 mesi", "+1 anno": how far the next renewal moves. */
 function step(id: Frequency): string {
@@ -35,7 +38,10 @@ function RegisterForm({ item }: { item: Recurring }) {
   const today = todayEpoch()
   /** The current billing date moved forward by [period]. */
   const renewal = (period: Frequency) => occurrence(item.nextDate, period, 1)
-  const [amount, setAmount] = useState(Money.toInput(item.amountCents))
+  // First the amount on the keypad, as when adding a movement from "+", then the rest of the form.
+  const [calc, setCalc] = useState(() => calcOf(item.amountCents))
+  const [amountStep, setAmountStep] = useState(true)
+  useBackHandler(!amountStep, useCallback(() => setAmountStep(true), []))
   const [date, setDate] = useState(today)
   // Defaults to the usual method; this one payment may have gone another way.
   const [method, setMethod] = useState(paymentChoice(item))
@@ -43,8 +49,7 @@ function RegisterForm({ item }: { item: Recurring }) {
   // Manual ones wait for the payment to move on; automatic ones already move by themselves.
   const [next, setNext] = useState<number | null>(item.autoRegister ? null : renewal(item.frequency))
   const [picking, setPicking] = useState<'date' | 'next' | null>(null)
-  // The amount can be worked out on the spot, such as "11,00×2".
-  const cents = evaluateAmount(amount) ?? 0
+  const cents = calcCents(calc)
   const otherDate = date !== today && date !== today - 1
   const presets = frequencies.map((f) => ({ date: renewal(f.id), label: step(f.id) }))
   const otherNext = next != null && !presets.some((p) => p.date === next)
@@ -69,34 +74,44 @@ function RegisterForm({ item }: { item: Recurring }) {
     close('recurringRegister')
   }
 
+  const header = (
+    <div className="row">
+      <RecurringLogo brandKey={item.brandKey} imagePath={item.imagePath} icon={item.icon} color={argb(item.color)} size={56} animated />
+      <div className="col flex1" style={{ marginLeft: 14, minWidth: 0 }}>
+        <span className="t-title ellipsis" style={{ color: 'var(--ink)' }}>{item.name}</span>
+        <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>
+          {item.installments != null
+            ? `Rata ${Math.min(item.installmentsPaid + 1, item.installments)} di ${item.installments} · prevista ${Dates.long(item.nextDate)}`
+            : `Rinnovo previsto ${Dates.long(item.nextDate)}`}
+        </span>
+      </div>
+    </div>
+  )
+
+  if (amountStep) {
+    return (
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <AmountStep type="EXPENSE" accent="var(--expense)" amountText={calcText(calc)} amountCents={cents}
+          expression={calcExpression(calc)} pending={calcPending(calc)} top={<div className="row" style={{ width: '100%', marginTop: 8 }}>{header}</div>}
+          onKey={(k) => setCalc(calcPress(calc, k))} onOperation={(op) => setCalc(calcOperation(calc, op))}
+          onBackspace={() => setCalc(calcBackspace(calc))} onClear={() => setCalc(emptyCalc)}
+          onNext={() => {
+            // Moving on keeps only the result of the operations.
+            setCalc(calcOf(cents))
+            setAmountStep(false)
+          }} />
+      </div>
+    )
+  }
+
   return (
     <div className="scroll">
       <div className="col nav-pad" style={{ padding: '0 20px' }}>
-        <div className="row">
-          <RecurringLogo brandKey={item.brandKey} imagePath={item.imagePath} icon={item.icon} color={argb(item.color)} size={56} animated />
-          <div className="col flex1" style={{ marginLeft: 14, minWidth: 0 }}>
-            <span className="t-title ellipsis" style={{ color: 'var(--ink)' }}>{item.name}</span>
-            <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>
-              {item.installments != null
-                ? `Rata ${Math.min(item.installmentsPaid + 1, item.installments)} di ${item.installments} · prevista ${Dates.long(item.nextDate)}`
-                : `Rinnovo previsto ${Dates.long(item.nextDate)}`}
-            </span>
-          </div>
-        </div>
+        {header}
         <FormLabel text="Importo" />
-        <AmountField value={amount} onChange={setAmount} operations />
-        <div className="row" style={{ gap: 8, paddingTop: 10 }}>
-          {amountOps.map((op) => (
-            <Bouncy key={op} pressedScale={0.9} className="center flex1" aria-label={op}
-              onClick={() => { if (amount) setAmount(amount.replace(/[+\-−*×x/÷:]+$/, '') + op) }}
-              style={{ height: 46, borderRadius: 18, background: 'var(--surfaceHigh)' }}>
-              <span className="t-title" style={{ color: amount ? 'var(--ink)' : 'var(--inkFaint)' }}>{op}</span>
-            </Bouncy>
-          ))}
+        <div className="flow">
+          <Pill text={Money.format(cents)} selected onClick={() => setAmountStep(true)} color="var(--expense)" />
         </div>
-        {hasOperation(amount) && (
-          <span className="t-titleSmall" style={{ color: 'var(--ink)', padding: '10px 4px 0' }}>= {Money.format(cents)}</span>
-        )}
         {members.length > 0 && (
           <>
             <FormLabel text="Chi ha pagato?" />

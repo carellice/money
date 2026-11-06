@@ -2,7 +2,7 @@ package com.money.app.ui.recurring
 
 import com.money.app.data.afterPayment
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -48,14 +49,13 @@ import com.money.app.data.RecurringEntity
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
 import com.money.app.data.paymentChoice
-import com.money.app.domain.AmountMath
 import com.money.app.domain.Dates
 import com.money.app.domain.Money
 import com.money.app.domain.Recurrence
+import com.money.app.ui.add.AmountCalc
+import com.money.app.ui.add.AmountPad
 import com.money.app.ui.appViewModel
-import com.money.app.ui.components.AmountField
 import com.money.app.ui.components.FormLabel
-import com.money.app.ui.components.OperationKeys
 import com.money.app.ui.components.Pill
 import com.money.app.ui.components.PrimaryButton
 import com.money.app.ui.components.RecurringLogo
@@ -78,7 +78,10 @@ class RecurringRegisterViewModel(private val container: AppContainer, handle: Sa
 
     var item by mutableStateOf<RecurringEntity?>(null)
         private set
-    var amount by mutableStateOf("")
+    /** The keypad's amount, as when adding a movement from "+". */
+    val calc = AmountCalc()
+    /** First the amount on the keypad, then the rest of the form. */
+    var amountStep by mutableStateOf(true)
     var date by mutableStateOf(LocalDate.now())
     // Defaults to the usual method; this one payment may have gone another way.
     var payment by mutableStateOf<PaymentChoice?>(null)
@@ -89,13 +92,12 @@ class RecurringRegisterViewModel(private val container: AppContainer, handle: Sa
     val members: StateFlow<List<MemberEntity>> =
         repo.members.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    // The amount can be worked out on the spot, such as "11,00×2".
-    val cents: Long get() = AmountMath.evaluate(amount) ?: 0L
+    val cents: Long get() = calc.cents
 
     init {
         viewModelScope.launch {
             val found = repo.recurringItem(id) ?: return@launch
-            amount = Money.toInput(found.amountCents)
+            calc.set(found.amountCents)
             payment = found.paymentChoice
             memberId = repo.members.first().firstOrNull()?.id
             // Manual ones wait for the payment to move on; automatic ones already move by themselves.
@@ -157,16 +159,12 @@ fun RecurringRegisterScreen(onClose: () -> Unit) {
     var pickingDate by remember { mutableStateOf(false) }
     var pickingNext by remember { mutableStateOf(false) }
 
+    BackHandler(enabled = !vm.amountStep) { vm.amountStep = true }
+
     Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
         TopBar("Aggiungi alle spese", onBack = onClose)
         val item = vm.item ?: return@Column
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .navigationBarsPadding(),
-        ) {
+        val header = @Composable {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RecurringLogo(item.brandKey, item.imagePath, item.icon, Color(item.color), size = 56.dp, animated = true)
                 Spacer(Modifier.size(14.dp))
@@ -181,17 +179,25 @@ fun RecurringRegisterScreen(onClose: () -> Unit) {
                     )
                 }
             }
+        }
+        if (vm.amountStep) {
+            AmountPad(vm.calc, "Quanto hai speso?", c.expense, {
+                // Moving on keeps only the result of the operations.
+                vm.calc.set(vm.cents)
+                vm.amountStep = false
+            }) { Row(Modifier.fillMaxWidth().padding(top = 8.dp)) { header() } }
+            return@Column
+        }
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .navigationBarsPadding(),
+        ) {
+            header()
             FormLabel("Importo")
-            AmountField(vm.amount, { vm.amount = it }, operations = true)
-            OperationKeys(vm.amount, { vm.amount = it })
-            AnimatedVisibility(AmountMath.hasOperation(vm.amount)) {
-                Text(
-                    "= ${Money.format(vm.cents)}",
-                    style = Ui.type.titleSmall,
-                    color = c.ink,
-                    modifier = Modifier.padding(top = 10.dp, start = 4.dp),
-                )
-            }
+            Pill(Money.format(vm.cents), true, { vm.amountStep = true }, color = c.expense)
             if (members.isNotEmpty()) {
                 FormLabel("Chi ha pagato?")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

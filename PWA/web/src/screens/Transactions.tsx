@@ -6,7 +6,7 @@ import { navigate } from '../lib/nav.ts'
 import { actions, setMonth, useStore } from '../lib/store.ts'
 import { EmptyState, HideAmountsButton, Icon, Masked, MonthSwitcher, Segmented, Staggered } from '../components/ui.tsx'
 import { SwipeRow, TransactionRow } from '../components/TransactionRow.tsx'
-import { showSnackbar } from '../components/overlays.tsx'
+import { showSnackbar, toast } from '../components/overlays.tsx'
 
 export function TransactionsScreen() {
   const month = useStore((s) => s.month)
@@ -42,9 +42,9 @@ export function TransactionsScreen() {
   }, [data, month, query, filter])
 
   const remove = async (tx: Transaction) => {
-    actions.deleteTransaction(tx)
+    const deleting = actions.deleteTransaction(tx)
     const undo = await showSnackbar('Movimento eliminato', 'Annulla')
-    if (undo) actions.saveTransaction(tx)
+    if (undo) actions.restoreTransaction(tx, deleting).catch((e: Error) => toast(e.message, true))
     else actions.discardReceipt(tx)
   }
 

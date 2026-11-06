@@ -143,7 +143,8 @@ let loading: Promise<void> | null = null
 
 /** Reloads the data when it changed on the server (another phone, a fixed expense registered...). */
 export function refresh(force = false): Promise<void> {
-  if (loading) return loading
+  // A forced refresh after a change must not settle for a load that started before it.
+  if (loading) return force ? loading.then(() => refresh(true)) : loading
   loading = (async () => {
     try {
       const since = force || !store.data ? '' : `?since=${store.revision}`
@@ -175,6 +176,16 @@ export const actions = {
     // Optimistic: the row leaves the list at once, like on the phone.
     if (store.data) set({ data: { ...store.data, transactions: store.data.transactions.filter((t) => t.id !== tx.id) } })
     return mutate(() => api('/api/transactions/' + tx.id, { method: 'DELETE' }))
+  },
+  /** "Annulla" after a delete: the row is back at once, saved again once the delete is done. */
+  restoreTransaction: async (tx: Transaction, deleting: Promise<unknown>) => {
+    if (store.data) {
+      const transactions = [...store.data.transactions.filter((t) => t.id !== tx.id), tx]
+        .sort((a, b) => b.date - a.date || b.createdAt - a.createdAt)
+      set({ data: { ...store.data, transactions } })
+    }
+    await deleting.catch(() => {})
+    return mutate(() => api<Transaction>('/api/transactions', { method: 'POST', json: tx }))
   },
   saveRecurring: (item: Recurring) => mutate(() => api<Recurring>('/api/recurring', { method: 'POST', json: item })),
   deleteRecurring: (item: Recurring) => mutate(() => api('/api/recurring/' + item.id, { method: 'DELETE' })),

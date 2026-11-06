@@ -15,7 +15,6 @@ import com.money.app.data.MemberEntity
 import com.money.app.data.PaymentChoice
 import com.money.app.data.PaymentMethod
 import com.money.app.data.Settle
-import com.money.app.domain.AmountOp
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
 import com.money.app.domain.Money
@@ -41,9 +40,6 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
         private set
     /** The keypad's amount, POS style (the last two digits are the cents), with operations. */
     val calc = AmountCalc()
-
-    /** The amount as shown above the keypad ("12,50"), empty before the first digit. */
-    val amountText: String get() = calc.text
     var categoryId by mutableStateOf<Long?>(null)
         private set
     var subcategoryId by mutableStateOf<Long?>(null)
@@ -95,14 +91,6 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
             loaded = true
         }
     }
-
-    fun press(key: String) = calc.press(key)
-
-    fun operation(op: AmountOp) = calc.operation(op)
-
-    fun backspace() = calc.backspace()
-
-    fun clearAmount() = calc.clear()
 
     /** Moving on keeps only the result of the operations. */
     fun confirmAmount() {
