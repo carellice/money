@@ -11,7 +11,11 @@ import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import com.money.app.ai.AiAssistant
+import com.money.app.ai.Draft
 import com.money.app.ai.VoiceRecorder
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.runtime.mutableStateMapOf
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
@@ -83,6 +87,7 @@ private val starters = listOf(
     "Quanto ho speso in cibo negli ultimi 3 mesi?",
     "Quanto mi costano gli abbonamenti in un anno?",
     "In quale mese ho speso di più?",
+    "Aggiungi una spesa di 15 € per il pranzo",
 )
 
 class ChatViewModel(container: AppContainer) : ViewModel() {
@@ -101,6 +106,8 @@ class ChatViewModel(container: AppContainer) : ViewModel() {
     var transcribing by mutableStateOf(false)
         private set
     private var discardRecording = false
+    /** Message index of a proposed movement to its outcome: true added, false discarded. */
+    val drafts = mutableStateMapOf<Int, Boolean>()
 
     /** Records until [stopRecording]; the transcript is then sent like a typed question. */
     fun startRecording() {
@@ -148,14 +155,39 @@ class ChatViewModel(container: AppContainer) : ViewModel() {
         busy = true
         viewModelScope.launch {
             runCatching { ai.ask(history, question) }
-                .onSuccess { messages += ChatMessage("assistant", it) }
+                .onSuccess {
+                    messages += it
+                    if (it.draft == null && AiAssistant.hasDraft(it.content)) {
+                        error = "Non sono riuscito a preparare il movimento: riprova dicendo importo e categoria"
+                    }
+                }
                 .onFailure { error = it.message }
             busy = false
         }
     }
 
+    fun confirmDraft(index: Int) {
+        val draft = messages.getOrNull(index)?.draft ?: return
+        if (busy || index in drafts) return
+        busy = true
+        viewModelScope.launch {
+            if (ai.save(draft)) {
+                drafts[index] = true
+                messages += ChatMessage("assistant", "Fatto, l'ho aggiunto ai movimenti.")
+            } else {
+                error = "Server non raggiungibile: movimento non salvato, riprova"
+            }
+            busy = false
+        }
+    }
+
+    fun discardDraft(index: Int) {
+        if (index !in drafts) drafts[index] = false
+    }
+
     fun reset() {
         messages.clear()
+        drafts.clear()
         error = null
     }
 }
@@ -222,7 +254,12 @@ fun ChatScreen(onBack: () -> Unit, onOpenAiSettings: () -> Unit) {
                     }
                 }
             }
-            itemsIndexed(vm.messages) { _, message -> Bubble(message) }
+            itemsIndexed(vm.messages) { i, message ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Bubble(message)
+                    message.draft?.let { DraftCard(it, vm.drafts[i], { vm.confirmDraft(i) }, { vm.discardDraft(i) }) }
+                }
+            }
             if (vm.busy) {
                 item {
                     Box(
@@ -379,7 +416,7 @@ private fun Bubble(message: ChatMessage) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
         Text(
             if (mine) androidx.compose.ui.text.AnnotatedString(if (message.voice) "🎙️ ${message.content}" else message.content)
-            else aiText(message.content),
+            else aiText(AiAssistant.visible(message.content)),
             style = Ui.type.body,
             color = if (mine) Ink else c.ink,
             modifier = Modifier
@@ -396,5 +433,32 @@ private fun Bubble(message: ChatMessage) {
                 .background(if (mine) c.accent else c.surface)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         )
+    }
+}
+
+/** Movement proposed by the assistant: added only when the user taps Aggiungi. [outcome]: null pending, true added, false discarded. */
+@Composable
+private fun DraftCard(draft: Draft, outcome: Boolean?, onConfirm: () -> Unit, onDiscard: () -> Unit) {
+    val c = Ui.colors
+    Column(
+        Modifier
+            .widthIn(max = 320.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(c.surface)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Nuovo movimento", style = Ui.type.label, color = c.inkSoft)
+        Text(draft.summary, style = Ui.type.bodyStrong, color = c.ink)
+        AnimatedContent(outcome, label = "draftOutcome") { state ->
+            when (state) {
+                null -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    PrimaryButton("Aggiungi", onConfirm, Modifier.weight(1f), icon = Icons.Rounded.Check)
+                    Pill("Annulla", false, onDiscard)
+                }
+                true -> Text("Aggiunto ✓", style = Ui.type.label, color = c.incomeText)
+                false -> Text("Annullato", style = Ui.type.label, color = c.inkFaint)
+            }
+        }
     }
 }

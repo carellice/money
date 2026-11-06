@@ -1,6 +1,7 @@
 package com.money.app.ai
 
 import com.money.app.data.CategoryEntity
+import com.money.app.data.MemberEntity
 import com.money.app.data.MoneyRepository
 import com.money.app.data.PaymentChoice
 import com.money.app.data.PaymentMethod
@@ -23,6 +24,9 @@ import java.time.LocalDate
 import java.time.YearMonth
 
 data class Commentary(val text: String, val upToDate: Boolean)
+
+/** A movement the chat prepared from what the user said, with a one line [summary] for the confirm card. */
+data class Draft(val tx: TransactionEntity, val summary: String)
 
 /** Everything the app asks the model: month commentary, chat answers, category guesses. */
 class AiAssistant(
@@ -84,14 +88,78 @@ class AiAssistant(
 
     // --- chat ---------------------------------------------------------------------------------
 
-    suspend fun ask(history: List<ChatMessage>, question: String): String {
+    /** Answer to [question]; carries a [Draft] when the user asked to add a movement and nothing is missing. */
+    suspend fun ask(history: List<ChatMessage>, question: String): ChatMessage {
         val data = chatContext()
+        val cats = repo.allCategories()
+        val payments = repo.payments()
+        val members = repo.members.first()
         val messages = buildList {
-            add(ChatMessage("system", "$system\n\nDATI DELL'UTENTE (oggi è ${Dates.numeric(LocalDate.now())}):\n$data"))
+            add(ChatMessage("system", "$system\n\n${addRules(cats, payments, members)}\n\nDATI DELL'UTENTE (oggi è ${Dates.numeric(LocalDate.now())}):\n$data"))
             addAll(history.takeLast(10))
             add(ChatMessage("user", question))
         }
-        return client.complete(config(), messages, maxTokens = 900)
+        val answer = client.complete(config(), messages, maxTokens = 900)
+        return ChatMessage("assistant", answer, draft = parseDraft(answer, cats, payments, members))
+    }
+
+    /** @return false when the server didn't save it. */
+    suspend fun save(draft: Draft): Boolean = repo.saveTransaction(draft.tx) >= 0
+
+    private fun addRules(cats: List<CategoryEntity>, payments: Payments, members: List<MemberEntity>): String {
+        val methods = PaymentMethod.entries.joinToString(", ") { "${it.name}: ${it.label}" } +
+            payments.custom.values.joinToString("") { ", custom:${it.id}: ${it.name}" }
+        return buildString {
+            appendLine("## Aggiungere movimenti")
+            appendLine("Se l'utente ti chiede di aggiungere o registrare una spesa o un'entrata (spesso a voce, es. \"aggiungi una spesa di 15 euro che ho comprato da mangiare\"):")
+            appendLine("- capisci tipo, importo, categoria (e sottocategoria se adatta), data (oggi se non la dice), metodo di pagamento (se non lo dice: CARD per le spese, TRANSFER per le entrate) e una nota breve;")
+            if (members.isNotEmpty()) appendLine("- la persona è obbligatoria: se non dice chi ha pagato la spesa o di chi è l'entrata, chiediglielo e non preparare ancora il movimento;")
+            appendLine("- se manca l'importo o hai dubbi veri sulla categoria, chiedi prima di preparare il movimento;")
+            appendLine("- quando hai tutto, scrivi una frase breve di riepilogo e in fondo, su una riga sola, il movimento in questo formato esatto:")
+            appendLine("<movimento>{\"tipo\":\"spesa\",\"importo\":15.00,\"categoryId\":1,\"subcategoryId\":null,\"data\":\"${LocalDate.now()}\",\"metodo\":\"CARD\",\"memberId\":null,\"nota\":\"pranzo\"}</movimento>")
+            appendLine("- \"tipo\" è \"spesa\" o \"entrata\"; usa solo gli id elencati qui sotto;")
+            appendLine("- non dire mai che l'hai già salvato: l'utente lo conferma con un pulsante sotto il tuo messaggio.")
+            appendLine("Categorie di spesa (id: nome):")
+            appendLine(categoryList(cats, TxType.EXPENSE))
+            appendLine("Categorie di entrata (id: nome):")
+            appendLine(categoryList(cats, TxType.INCOME))
+            appendLine("Metodi di pagamento (codice: nome): $methods")
+            if (members.isNotEmpty()) appendLine("Persone (id: nome): " + members.joinToString(", ") { "${it.id}: ${it.name}" })
+        }
+    }
+
+    private fun parseDraft(answer: String, cats: List<CategoryEntity>, payments: Payments, members: List<MemberEntity>): Draft? {
+        val o = DRAFT.find(answer)?.groupValues?.get(1)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return null
+        val type = when (o.optString("tipo").lowercase()) {
+            "spesa" -> TxType.EXPENSE
+            "entrata" -> TxType.INCOME
+            else -> return null
+        }
+        val cents = Math.round(o.optDouble("importo", 0.0) * 100)
+        if (cents <= 0) return null
+        val category = cats.firstOrNull { it.id == o.optLong("categoryId", -1) && it.type == type && it.parentId == null } ?: return null
+        val sub = if (o.isNull("subcategoryId")) null else cats.firstOrNull { it.id == o.optLong("subcategoryId", -1) && it.parentId == category.id }
+        val member = if (o.isNull("memberId")) null else members.firstOrNull { it.id == o.optLong("memberId", -1) }
+        if (members.isNotEmpty() && member == null) return null
+        val date = runCatching { LocalDate.parse(o.optString("data")) }.getOrDefault(LocalDate.now())
+        val code = if (o.isNull("metodo")) "" else o.optString("metodo")
+        val choice = code.removePrefix("custom:").toLongOrNull()?.takeIf { code.startsWith("custom:") && it in payments.custom }?.let { PaymentChoice.custom(it) }
+            ?: PaymentMethod.entries.firstOrNull { it.name == code }?.let { PaymentChoice(it) }
+            ?: PaymentChoice(if (type == TxType.INCOME) PaymentMethod.TRANSFER else PaymentMethod.CARD)
+        val note = if (o.isNull("nota")) "" else o.optString("nota").trim()
+        val tx = TransactionEntity(
+            type = type, amountCents = cents, date = date.toEpochDay(), categoryId = category.id, subcategoryId = sub?.id,
+            payment = choice.method, paymentId = choice.customId, note = note, memberId = member?.id,
+        )
+        val summary = listOfNotNull(
+            "${if (type == TxType.INCOME) "Entrata" else "Spesa"} di ${Money.format(cents)}",
+            listOfNotNull(category.name, sub?.name).joinToString(" > "),
+            payments.label(choice),
+            member?.name,
+            if (kotlin.math.abs(date.toEpochDay() - LocalDate.now().toEpochDay()) <= 1) Dates.relative(date) else Dates.short(date),
+            note.takeIf { it.isNotEmpty() }?.let { "\"$it\"" },
+        ).joinToString(" · ")
+        return Draft(tx, summary)
     }
 
     private suspend fun chatContext(): String {
@@ -170,14 +238,10 @@ class AiAssistant(
 
         val config = store.config.value ?: return null
         val tops = cats.filter { it.type == type && it.parentId == null }
-        val list = tops.joinToString("\n") { top ->
-            val subs = cats.filter { it.parentId == top.id }
-            "${top.id}: ${top.name}" + if (subs.isEmpty()) "" else subs.joinToString("") { "\n   ${it.id}: ${top.name} > ${it.name}" }
-        }
         val prompt = """
             Classifica questa ${if (type == TxType.EXPENSE) "spesa" else "entrata"}: "$note".
             Categorie disponibili (id: nome):
-            $list
+            ${categoryList(cats, type)}
             Rispondi SOLO con JSON: {"categoryId": <id categoria principale>, "subcategoryId": <id sottocategoria o null>}
         """.trimIndent()
         val answer = client.complete(config, listOf(ChatMessage("user", prompt)), maxTokens = 60, temperature = 0.0)
@@ -190,6 +254,12 @@ class AiAssistant(
     }
 
     // --- helpers ------------------------------------------------------------------------------
+
+    private fun categoryList(cats: List<CategoryEntity>, type: TxType) =
+        cats.filter { it.type == type && it.parentId == null }.joinToString("\n") { top ->
+            val subs = cats.filter { it.parentId == top.id }
+            "${top.id}: ${top.name}" + if (subs.isEmpty()) "" else subs.joinToString("") { "\n   ${it.id}: ${top.name} > ${it.name}" }
+        }
 
     suspend fun report(month: YearMonth): MonthReport {
         val txs = repo.transactionsBetweenOnce(month.minusMonths(5).atDay(1), month.atEndOfMonth())
@@ -237,5 +307,15 @@ class AiAssistant(
         append(if (item.autoRegister) "registrato in automatico" else "da registrare a mano")
         if (item.active) append(", prossimo addebito ${LocalDate.ofEpochDay(item.nextDate)}")
         if (item.note.isNotBlank()) append(", nota \"${item.note}\"")
+    }
+
+    companion object {
+        private val DRAFT = Regex("(?s)<movimento>\\s*(\\{.*?\\})\\s*</movimento>")
+        private val TAG = Regex("(?s)<movimento>.*?(</movimento>|$)")
+
+        /** Chat text without the machine readable movement. */
+        fun visible(text: String) = TAG.replace(text, "").trim()
+
+        fun hasDraft(text: String) = "<movimento>" in text
     }
 }

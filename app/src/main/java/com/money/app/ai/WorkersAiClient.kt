@@ -11,8 +11,11 @@ import java.net.URL
 
 class AiException(message: String) : Exception(message)
 
-/** [voice]: the user dictated it; only changes how the bubble looks, never what is sent. */
-data class ChatMessage(val role: String, val content: String, val voice: Boolean = false)
+/**
+ * [voice]: the user dictated it; only changes how the bubble looks, never what is sent.
+ * [draft]: movement the assistant proposes to add, saved only when the user confirms.
+ */
+data class ChatMessage(val role: String, val content: String, val voice: Boolean = false, val draft: Draft? = null)
 
 /** Cloudflare Workers AI: chat through the OpenAI compatible endpoint, speech through Whisper. */
 class WorkersAiClient {
