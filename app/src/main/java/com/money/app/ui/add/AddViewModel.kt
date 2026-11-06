@@ -107,7 +107,8 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
     /** Moving on keeps only the result of the operations. */
     fun confirmAmount() {
         calc.set(calc.cents)
-        step = 1
+        // Editing keeps the category: back to the details, the pill reopens it on demand.
+        step = if (isEdit && categoryId != null) 2 else 1
     }
 
     fun switchType(newType: TxType) {

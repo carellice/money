@@ -207,7 +207,8 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
                   onNext={() => {
                     // Moving on keeps only the result of the operations.
                     setCalc(calcOf(amountCents))
-                    setStep(1)
+                    // Editing keeps the category: back to the details, the pill reopens it on demand.
+                    setStep(isEdit && categoryId != null ? 2 : 1)
                   }} />
               )}
               {step === 1 && (
