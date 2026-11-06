@@ -164,7 +164,7 @@ export function AmountText({ cents, className, color = 'var(--ink)', signed = fa
 }
 
 /** Counts up/down to [cents] whenever it changes. */
-export function AnimatedAmount(props: Parameters<typeof AmountText>[0]) {
+export function AnimatedAmount({ masked, ...props }: Parameters<typeof AmountText>[0] & { masked?: boolean }) {
   const [shown, setShown] = useState(0)
   const from = useRef(0)
   useEffect(() => {
@@ -179,7 +179,11 @@ export function AnimatedAmount(props: Parameters<typeof AmountText>[0]) {
     })
     return () => controls.stop()
   }, [props.cents])
-  return <AmountText {...props} cents={shown} />
+  return (
+    <Masked className={props.className ?? ''} color={props.color ?? 'var(--ink)'} hidden={masked}>
+      <AmountText {...props} cents={shown} />
+    </Masked>
+  )
 }
 
 /** Shows [children], or soft dots in their place when amounts are hidden; the swap pops with a little scale. */
@@ -195,6 +199,12 @@ export function Masked({ className, color, hidden, children }: { className: stri
       </motion.span>
     </AnimatePresence>
   )
+}
+
+/** Text or dots when amounts are hidden, for amounts inside longer strings. */
+export function useHideable() {
+  const hidden = useStore((s) => s.settings.hideAmounts)
+  return (text: string) => hidden ? '••••' : text
 }
 
 export const toggleHideAmounts = () => updateSettings({ hideAmounts: !getStore().settings.hideAmounts })

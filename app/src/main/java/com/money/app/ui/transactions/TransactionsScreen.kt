@@ -203,7 +203,7 @@ fun TransactionsScreen(onOpen: (Long) -> Unit) {
                         },
                         modifier = Modifier.animateItem().staggered(gi),
                     ) {
-                        TransactionRow(tx, s.categories, { onOpen(tx.id) }, Modifier.background(c.bg), maskable = true)
+                        TransactionRow(tx, s.categories, { onOpen(tx.id) }, Modifier.background(c.bg))
                     }
                 }
             }

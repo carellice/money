@@ -29,6 +29,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,7 +63,7 @@ import com.money.app.ui.update.UpdateBanner
 import com.money.app.ui.components.AnimatedAmount
 import com.money.app.ui.components.CategoryBadge
 import com.money.app.ui.components.EmptyState
-import com.money.app.ui.components.HideAmountsButton
+import com.money.app.ui.components.LocalHideAmounts
 import com.money.app.ui.components.Masked
 import com.money.app.ui.components.MonthSwitcher
 import com.money.app.ui.components.RecurringLogo
@@ -70,6 +73,7 @@ import com.money.app.ui.components.SoftCard
 import com.money.app.ui.components.SoftProgress
 import com.money.app.ui.components.TransactionRow
 import com.money.app.ui.components.bouncyClick
+import com.money.app.ui.components.hideable
 import com.money.app.ui.components.rememberHideAmountsToggle
 import com.money.app.ui.components.staggered
 import com.money.app.ui.theme.Ink
@@ -147,8 +151,6 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 MonthSwitcher(month, vm::setMonth, Modifier.weight(1f))
-                HideAmountsButton()
-                Spacer(Modifier.width(8.dp))
                 RoundIconButton(Icons.Rounded.AutoAwesome, onOpenChat, contentDescription = "Chiedi a Money")
                 Spacer(Modifier.width(8.dp))
                 RoundIconButton(Icons.Rounded.Settings, onOpenSettings, contentDescription = "Impostazioni")
@@ -179,7 +181,7 @@ fun HomeScreen(
                                         Spacer(Modifier.height(10.dp))
                                         Text(line.category.name, style = Ui.type.label, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         Text(
-                                            "${Money.short(line.spent)} di ${Money.short(line.budget)}",
+                                            "${hideable(Money.short(line.spent))} di ${hideable(Money.short(line.budget))}",
                                             style = Ui.type.caption, color = c.inkSoft,
                                         )
                                         Spacer(Modifier.height(10.dp))
@@ -216,7 +218,7 @@ fun HomeScreen(
                                         Column(Modifier.weight(1f)) {
                                             Row {
                                                 Text(slice.category.name, style = Ui.type.label, color = c.ink, modifier = Modifier.weight(1f))
-                                                Text(Money.format(slice.cents), style = Ui.type.label, color = c.ink)
+                                                Text(hideable(Money.format(slice.cents)), style = Ui.type.label, color = c.ink)
                                             }
                                             Spacer(Modifier.height(6.dp))
                                             SoftProgress(slice.share, Color(slice.category.color), height = 8.dp)
@@ -278,9 +280,7 @@ private fun Hero(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifier = M
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("saldo del mese", style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
-                Masked(Ui.type.display, Ink) {
-                    AnimatedAmount(r.balance, Ui.type.display, color = Ink, decimalsScale = 0.45f)
-                }
+                AnimatedAmount(r.balance, Ui.type.display, color = Ink, decimalsScale = 0.45f)
                 if (r.savingsRate != null) {
                     Text(
                         if (r.balance >= 0) "risparmi ${percent(r.savingsRate)}" else "in rosso",
@@ -288,6 +288,15 @@ private fun Hero(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifier = M
                         color = Ink.copy(alpha = 0.8f),
                     )
                 }
+                // The whole bubble toggles; the eye only says so.
+                val hidden = LocalHideAmounts.current
+                Spacer(Modifier.height(6.dp))
+                Icon(
+                    if (hidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                    contentDescription = if (hidden) "Mostra importi" else "Nascondi importi",
+                    tint = Ink.copy(alpha = 0.7f),
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
         MiniBlob(
@@ -345,8 +354,8 @@ private fun SpendGauge(r: MonthReport, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(10.dp))
         Row {
-            Text("media ${Money.short(r.avgDailyExpense)} al giorno", style = Ui.type.caption, color = c.inkSoft, modifier = Modifier.weight(1f))
-            if (r.fixedExpense > 0) Text("fisse ${Money.short(r.fixedExpense)}", style = Ui.type.caption, color = c.inkSoft)
+            Text("media ${hideable(Money.short(r.avgDailyExpense))} al giorno", style = Ui.type.caption, color = c.inkSoft, modifier = Modifier.weight(1f))
+            if (r.fixedExpense > 0) Text("fisse ${hideable(Money.short(r.fixedExpense))}", style = Ui.type.caption, color = c.inkSoft)
         }
     }
 }

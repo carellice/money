@@ -52,7 +52,7 @@ export function RecurringScreen() {
           <BlobLayer gradient={['var(--accent)', argb(Palette.SKY)]} seed={404} amplitude={0.05} speed={0.6} />
           <div className="blob-content col" style={{ alignItems: 'center' }}>
             <span className="t-caption" style={{ color: alpha(Ink, 0.8) }}>ogni mese, in media</span>
-            <AnimatedAmount cents={monthly} className="t-display" color={Ink} decimalsScale={0.45} />
+            <AnimatedAmount cents={monthly} className="t-display" color={Ink} decimalsScale={0.45} masked={false} />
             <span className="t-caption" style={{ color: alpha(Ink, 0.8) }}>
               {Money.short(monthly * 12)} l'anno · abbonamenti {Money.short(subscriptions)}/mese
             </span>

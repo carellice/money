@@ -246,6 +246,10 @@ fun rememberHideAmountsToggle(): () -> Unit {
     return { scope.launch { settings.setHideAmounts(!hidden) } }
 }
 
+/** [text] or dots when amounts are hidden, for amounts inside longer strings. */
+@Composable
+fun hideable(text: String): String = if (LocalHideAmounts.current) "••••" else text
+
 /** Eye that hides or reveals amounts everywhere they are maskable. */
 @Composable
 fun HideAmountsButton(modifier: Modifier = Modifier) {
@@ -267,13 +271,14 @@ fun AnimatedAmount(
     color: Color = Ui.colors.ink,
     signed: Boolean = false,
     decimalsScale: Float = 0.5f,
+    masked: Boolean = LocalHideAmounts.current,
 ) {
     val anim = remember { Animatable(0f) }
     LaunchedEffect(cents) {
         anim.animateTo(cents.toFloat(), tween(900, easing = FastOutSlowInEasing))
     }
     val shown = if (anim.isRunning) anim.value.toLong() else cents
-    AmountText(shown, style, modifier, color, signed, decimalsScale)
+    Masked(style, color, modifier, hidden = masked) { AmountText(shown, style, Modifier, color, signed, decimalsScale) }
 }
 
 @Composable

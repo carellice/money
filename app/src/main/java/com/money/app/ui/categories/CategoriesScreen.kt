@@ -65,6 +65,7 @@ import com.money.app.ui.components.RoundIconButton
 import com.money.app.ui.components.Segmented
 import com.money.app.ui.components.TopBar
 import com.money.app.ui.components.bouncyClick
+import com.money.app.ui.components.hideable
 import com.money.app.ui.components.staggered
 import com.money.app.ui.theme.Ink
 import com.money.app.ui.theme.Ui
@@ -151,7 +152,7 @@ fun CategoriesScreen(onBack: () -> Unit) {
                     }
                     cat.budgetCents?.let {
                         Text(
-                            "${Money.short(it)}/mese",
+                            "${hideable(Money.short(it))}/mese",
                             style = Ui.type.caption,
                             color = Ink,
                             modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(cat.color)).padding(horizontal = 10.dp, vertical = 4.dp),

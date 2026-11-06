@@ -7,14 +7,12 @@ import { Ink } from '../lib/theme.ts'
 import { Bouncy, CategoryBadge, Icon, Masked } from './ui.tsx'
 import { spring } from './motion.ts'
 
-export function TransactionRow({ tx, categories, onClick, showDate, style, maskable = false }: {
+export function TransactionRow({ tx, categories, onClick, showDate, style }: {
   tx: Transaction
   categories: Map<number, Category>
   onClick: () => void
   showDate?: string
   style?: CSSProperties
-  /** Follows the hide-amounts choice (only Movimenti opts in). */
-  maskable?: boolean
 }) {
   const members = useStore((s) => s.data?.members)
   const custom = usePaymentMethods()
@@ -40,7 +38,7 @@ export function TransactionRow({ tx, categories, onClick, showDate, style, maska
           <span className="t-caption ellipsis" style={{ color: 'var(--inkSoft)' }}>{subtitle}</span>
         </div>
       </div>
-      <Masked className="t-amount" color={income ? 'var(--incomeText)' : 'var(--ink)'} hidden={maskable ? undefined : false}>
+      <Masked className="t-amount" color={income ? 'var(--incomeText)' : 'var(--ink)'}>
         <span className="t-amount" style={{ color: income ? 'var(--incomeText)' : 'var(--ink)', whiteSpace: 'nowrap' }}>
           {Money.format(income ? tx.amountCents : -tx.amountCents, true)}
         </span>

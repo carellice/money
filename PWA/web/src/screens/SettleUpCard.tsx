@@ -4,7 +4,7 @@ import type { Month } from '../../../shared/date.ts'
 import type { SettleUp } from '../../../shared/settle.ts'
 import { actions } from '../lib/store.ts'
 import { AlertDialog, toast } from '../components/overlays.tsx'
-import { Icon, PrimaryButton, SectionTitle, SoftCard } from '../components/ui.tsx'
+import { Icon, PrimaryButton, SectionTitle, SoftCard, useHideable } from '../components/ui.tsx'
 import { MemberAvatar } from './Settings.tsx'
 
 /**
@@ -12,6 +12,7 @@ import { MemberAvatar } from './Settings.tsx'
  * equally, and once the money has been given the expenses counted so far are marked as settled.
  */
 export function SettleUpCard({ settle, month }: { settle: SettleUp; month: Month }) {
+  const hide = useHideable()
   const [confirm, setConfirm] = useState(false)
   const name = Dates.monthName(month).toLowerCase()
 
@@ -46,7 +47,7 @@ export function SettleUpCard({ settle, month }: { settle: SettleUp; month: Month
                   <MemberAvatar member={member} size={32} />
                   <span className="t-bodyStrong flex1" style={{ color: 'var(--ink)', marginLeft: 12 }}>{member.name}</span>
                   <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>ha pagato&nbsp;</span>
-                  <span className="t-bodyStrong" style={{ color: 'var(--ink)' }}>{Money.format(cents)}</span>
+                  <span className="t-bodyStrong" style={{ color: 'var(--ink)' }}>{hide(Money.format(cents))}</span>
                 </div>
               ))}
             </div>
@@ -59,13 +60,13 @@ export function SettleUpCard({ settle, month }: { settle: SettleUp; month: Month
                     <Icon name="arrow_forward" size={16} color="var(--inkFaint)" style={{ margin: '0 4px' }} />
                     <MemberAvatar member={t.to} size={28} />
                     <span className="t-body flex1" style={{ color: 'var(--ink)', marginLeft: 12 }}>
-                      <b>{t.from.name}</b> deve dare <b>{Money.format(t.cents)}</b> a <b>{t.to.name}</b>
+                      <b>{t.from.name}</b> deve dare <b>{hide(Money.format(t.cents))}</b> a <b>{t.to.name}</b>
                     </span>
                   </div>
                 ))}
             </div>
             <span className="t-caption" style={{ color: 'var(--inkFaint)', paddingTop: 10 }}>
-              {Money.format(settle.total)} divisi in parti uguali tra {settle.paid.length} persone. Le spese escluse dal pagante non contano.
+              {hide(Money.format(settle.total))} divisi in parti uguali tra {settle.paid.length} persone. Le spese escluse dal pagante non contano.
             </span>
             <div style={{ height: 16 }} />
             <PrimaryButton text="Conti parati" onClick={() => setConfirm(true)} icon="check" />

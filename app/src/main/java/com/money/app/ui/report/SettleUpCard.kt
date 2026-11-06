@@ -32,6 +32,7 @@ import com.money.app.domain.SettleUp
 import com.money.app.ui.components.PrimaryButton
 import com.money.app.ui.components.SectionTitle
 import com.money.app.ui.components.SoftCard
+import com.money.app.ui.components.hideable
 import com.money.app.ui.settings.MemberAvatar
 import com.money.app.ui.theme.Ui
 import java.time.YearMonth
@@ -70,7 +71,7 @@ fun SettleUpCard(settle: SettleUp, month: YearMonth, onSettled: (List<Long>) -> 
                     Spacer(Modifier.width(12.dp))
                     Text(member.name, style = Ui.type.bodyStrong, color = c.ink, modifier = Modifier.weight(1f))
                     Text("ha pagato ", style = Ui.type.caption, color = c.inkSoft)
-                    Text(Money.format(cents), style = Ui.type.bodyStrong, color = c.ink)
+                    Text(hideable(Money.format(cents)), style = Ui.type.bodyStrong, color = c.ink)
                 }
             }
             Spacer(Modifier.height(18.dp))
@@ -91,7 +92,7 @@ fun SettleUpCard(settle: SettleUp, month: YearMonth, onSettled: (List<Long>) -> 
                             buildAnnotatedString {
                                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(t.from.name) }
                                 append(" deve dare ")
-                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(Money.format(t.cents)) }
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(hideable(Money.format(t.cents))) }
                                 append(" a ")
                                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(t.to.name) }
                             },
@@ -103,7 +104,7 @@ fun SettleUpCard(settle: SettleUp, month: YearMonth, onSettled: (List<Long>) -> 
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                "${Money.format(settle.total)} divisi in parti uguali tra ${settle.paid.size} persone. " +
+                "${hideable(Money.format(settle.total))} divisi in parti uguali tra ${settle.paid.size} persone. " +
                     "Le spese escluse dal pagante non contano.",
                 style = Ui.type.caption,
                 color = c.inkFaint,

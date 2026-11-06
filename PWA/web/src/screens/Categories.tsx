@@ -6,12 +6,14 @@ import { actions, useStore } from '../lib/store.ts'
 import { Ink } from '../lib/theme.ts'
 import {
   AmountField, Bouncy, CategoryBadge, ColorSwatches, FormLabel, IconPicker, NoteField, Pill, PrimaryButton, RoundIconButton, Segmented, Staggered, TopBar,
+  useHideable,
 } from '../components/ui.tsx'
 import { FullPage, toast } from '../components/overlays.tsx'
 
 type Editing = { category: Category; subs: Category[] }
 
 export function CategoriesScreen() {
+  const hide = useHideable()
   const all = useStore((s) => s.data?.categories ?? [])
   const [tab, setTab] = useState(0)
   const [editing, setEditing] = useState<Editing | null>(null)
@@ -54,7 +56,7 @@ export function CategoriesScreen() {
                   </div>
                   {cat.budgetCents != null && (
                     <span className="t-caption" style={{ color: Ink, borderRadius: 999, background: argb(cat.color), padding: '4px 10px', whiteSpace: 'nowrap' }}>
-                      {Money.short(cat.budgetCents)}/mese
+                      {hide(Money.short(cat.budgetCents))}/mese
                     </span>
                   )}
                 </Bouncy>

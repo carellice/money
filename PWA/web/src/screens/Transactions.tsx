@@ -99,7 +99,7 @@ export function TransactionsScreen() {
             {group.items.map((tx) => (
               <Staggered key={tx.id} index={gi}>
                 <SwipeRow onDelete={() => remove(tx)}>
-                  <TransactionRow tx={tx} categories={state.categories} onClick={() => navigate('add', { id: tx.id })} maskable />
+                  <TransactionRow tx={tx} categories={state.categories} onClick={() => navigate('add', { id: tx.id })} />
                 </SwipeRow>
               </Staggered>
             ))}

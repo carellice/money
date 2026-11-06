@@ -9,8 +9,8 @@ import { setMonth, useStore } from '../lib/store.ts'
 import { alpha, Ink } from '../lib/theme.ts'
 import { BackdropBlobs, BlobBox, BlobLayer } from '../components/Blob.tsx'
 import {
-  AnimatedAmount, Bouncy, CategoryBadge, HideAmountsButton, Masked, MonthSwitcher, RecurringLogo, RoundIconButton, SectionTitle, SoftCard,
-  SoftProgress, Staggered, toggleHideAmounts,
+  AnimatedAmount, Bouncy, CategoryBadge, Icon, Masked, MonthSwitcher, RecurringLogo, RoundIconButton, SectionTitle, SoftCard,
+  SoftProgress, Staggered, toggleHideAmounts, useHideable,
 } from '../components/ui.tsx'
 import { fastOutSlowIn } from '../components/motion.ts'
 
@@ -42,8 +42,6 @@ export function HomeScreen() {
         <div className="row status-pad" style={{ flexShrink: 0 }}>
           <div className="row" style={{ width: '100%', padding: '12px 20px 8px' }}>
             <MonthSwitcher month={month} onChange={setMonth} style={{ flex: 1 }} />
-            <HideAmountsButton />
-            <div style={{ width: 8 }} />
             <RoundIconButton icon="auto_awesome" onClick={() => navigate('chat')} label="Chiedi a Money" />
             <div style={{ width: 8 }} />
             <RoundIconButton icon="settings" onClick={() => navigate('settings')} label="Impostazioni" />
@@ -62,6 +60,7 @@ export function HomeScreen() {
 }
 
 function HomeContent({ report: r, upcoming }: { report: MonthReport; upcoming: Recurring[] }) {
+  const hide = useHideable()
   return (
     <>
       <Staggered index={0}><Hero r={r} onAdd={(type) => navigate('add', { type })} /></Staggered>
@@ -75,7 +74,7 @@ function HomeContent({ report: r, upcoming }: { report: MonthReport; upcoming: R
               <SoftCard key={line.category.id} padding={16} style={{ width: 150, flexShrink: 0 }}>
                 <CategoryBadge icon={line.category.icon} color={argb(line.category.color)} size={36} />
                 <span className="t-label ellipsis" style={{ marginTop: 10, color: 'var(--ink)' }}>{line.category.name}</span>
-                <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>{Money.short(line.spent)} di {Money.short(line.budget)}</span>
+                <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>{hide(Money.short(line.spent))} di {hide(Money.short(line.budget))}</span>
                 <SoftProgress progress={line.ratio} height={8} style={{ marginTop: 10 }}
                   color={line.ratio > 1 ? 'var(--expense)' : line.ratio > 0.8 ? argb(Palette.BUTTER) : 'var(--income)'} />
               </SoftCard>
@@ -96,7 +95,7 @@ function HomeContent({ report: r, upcoming }: { report: MonthReport; upcoming: R
                 <div className="col flex1" style={{ marginLeft: 12 }}>
                   <div className="row">
                     <span className="t-label flex1" style={{ color: 'var(--ink)' }}>{slice.category.name}</span>
-                    <span className="t-label" style={{ color: 'var(--ink)' }}>{Money.format(slice.cents)}</span>
+                    <span className="t-label" style={{ color: 'var(--ink)' }}>{hide(Money.format(slice.cents))}</span>
                   </div>
                   <SoftProgress progress={slice.share} color={argb(slice.category.color)} height={8} style={{ marginTop: 6 }} />
                 </div>
@@ -120,6 +119,7 @@ function HomeContent({ report: r, upcoming }: { report: MonthReport; upcoming: R
 }
 
 function Hero({ r, onAdd }: { r: MonthReport; onAdd: (type: TxType) => void }) {
+  const hidden = useStore((s) => s.settings.hideAmounts)
   const bob = {
     animate: { y: [-6, 6] },
     transition: { duration: 2.6, ease: fastOutSlowIn, repeat: Infinity, repeatType: 'reverse' as const },
@@ -131,12 +131,13 @@ function Hero({ r, onAdd }: { r: MonthReport; onAdd: (type: TxType) => void }) {
           <BlobBox size={250} gradient={['var(--accent)', argb(Palette.ROSE), argb(Palette.PEACH)]} seed={11} amplitude={0.08} speed={0.8}>
             <div className="col" style={{ alignItems: 'center' }}>
               <span className="t-caption" style={{ color: alpha(Ink, 0.8) }}>saldo del mese</span>
-              <Masked className="t-display" color={Ink}>
-                <AnimatedAmount cents={r.balance} className="t-display" color={Ink} decimalsScale={0.45} />
-              </Masked>
+              <AnimatedAmount cents={r.balance} className="t-display" color={Ink} decimalsScale={0.45} />
               {r.savingsRate != null && (
                 <span className="t-label" style={{ color: alpha(Ink, 0.8) }}>{r.balance >= 0 ? `risparmi ${percent(r.savingsRate)}` : 'in rosso'}</span>
               )}
+              {/* The whole bubble toggles; the eye only says so. */}
+              <Icon name={hidden ? 'visibility_off' : 'visibility'} size={20} color={alpha(Ink, 0.7)} style={{ marginTop: 6 }}
+                label={hidden ? 'Mostra importi' : 'Nascondi importi'} />
             </div>
           </BlobBox>
         </Bouncy>
@@ -168,6 +169,7 @@ function MiniBlob({ label, cents, color, seed, onClick }: { label: string; cents
 }
 
 function SpendGauge({ r }: { r: MonthReport }) {
+  const hide = useHideable()
   const ratio = r.income > 0 ? r.expense / r.income : r.expense > 0 ? 1 : 0
   const text = r.income === 0 && r.expense === 0
     ? 'Il mese è appena iniziato: nessun movimento.'
@@ -178,8 +180,8 @@ function SpendGauge({ r }: { r: MonthReport }) {
       <SoftProgress progress={ratio} height={14} style={{ marginTop: 12 }}
         color={ratio > 1 ? 'var(--expense)' : ratio > 0.8 ? argb(Palette.BUTTER) : 'var(--income)'} />
       <div className="row" style={{ marginTop: 10 }}>
-        <span className="t-caption flex1" style={{ color: 'var(--inkSoft)' }}>media {Money.short(r.avgDailyExpense)} al giorno</span>
-        {r.fixedExpense > 0 && <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>fisse {Money.short(r.fixedExpense)}</span>}
+        <span className="t-caption flex1" style={{ color: 'var(--inkSoft)' }}>media {hide(Money.short(r.avgDailyExpense))} al giorno</span>
+        {r.fixedExpense > 0 && <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>fisse {hide(Money.short(r.fixedExpense))}</span>}
       </div>
     </SoftCard>
   )

@@ -15,6 +15,7 @@ import { BlobBox } from '../components/Blob.tsx'
 import { DonutChart, SpendingCalendar, TrendBars } from '../components/Charts.tsx'
 import {
   AnimatedAmount, AppIcon, Bouncy, CategoryBadge, EmptyState, Icon, Legend, MonthSwitcher, Pill, SectionTitle, SoftCard, SoftProgress, Staggered,
+  useHideable,
 } from '../components/ui.tsx'
 import { TransactionRow } from '../components/TransactionRow.tsx'
 import { toast } from '../components/overlays.tsx'
@@ -25,6 +26,7 @@ import { spring } from '../components/motion.ts'
 type Commentary = { text: string; upToDate: boolean }
 
 export function ReportScreen() {
+  const hide = useHideable()
   const month = useStore((s) => s.month)
   const data = useStore((s) => s.data)
   const custom = usePaymentMethods()
@@ -137,7 +139,7 @@ export function ReportScreen() {
                     <div key={b.category.id}>
                       <div className="row">
                         <span className="t-label flex1" style={{ color: 'var(--ink)' }}>{b.category.name}</span>
-                        <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>{Money.short(b.spent)} / {Money.short(b.budget)}</span>
+                        <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>{hide(Money.short(b.spent))} / {hide(Money.short(b.budget))}</span>
                       </div>
                       <SoftProgress progress={b.ratio} style={{ marginTop: 6 }}
                         color={b.ratio > 1 ? 'var(--expense)' : b.ratio > 0.8 ? argb(Palette.BUTTER) : 'var(--income)'} />
@@ -151,9 +153,9 @@ export function ReportScreen() {
               <SoftCard>
                 <SplitBar share={r.expense > 0 ? r.fixedExpense / r.expense : 0} left="var(--accent)" right={argb(Palette.PEACH)} />
                 <div className="row" style={{ marginTop: 10 }}>
-                  <Legend text={`Fisse ${Money.short(r.fixedExpense)}`} color="var(--accent)" />
+                  <Legend text={`Fisse ${hide(Money.short(r.fixedExpense))}`} color="var(--accent)" />
                   <span className="flex1" />
-                  <Legend text={`Variabili ${Money.short(r.variableExpense)}`} color={argb(Palette.PEACH)} />
+                  <Legend text={`Variabili ${hide(Money.short(r.variableExpense))}`} color={argb(Palette.PEACH)} />
                 </div>
               </SoftCard>
             </Staggered>
@@ -169,7 +171,7 @@ export function ReportScreen() {
                         <AppIcon name={icon} size={18} color="var(--inkSoft)" />
                         <span className="t-label ellipsis" style={{ width: 110, marginLeft: 10, color: 'var(--ink)' }}>{label}</span>
                         <SoftProgress progress={cents / max} color={argb(paletteAll[i % paletteAll.length])} height={8} style={{ flex: 1 }} />
-                        <span className="t-caption" style={{ marginLeft: 10, color: 'var(--inkSoft)', whiteSpace: 'nowrap' }}>{Money.short(cents)}</span>
+                        <span className="t-caption" style={{ marginLeft: 10, color: 'var(--inkSoft)', whiteSpace: 'nowrap' }}>{hide(Money.short(cents))}</span>
                       </div>
                     )
                   })}
@@ -305,6 +307,7 @@ function StatTile({ label, cents, previous, color, higherIsGood }: { label: stri
 }
 
 function CategoryBreakdown({ slices, total, title }: { slices: Slice[]; total: number; title: string }) {
+  const hide = useHideable()
   const [selected, setSelected] = useState(-1)
   const [expanded, setExpanded] = useState<number | null>(null)
   const current = slices[selected]
@@ -334,7 +337,7 @@ function CategoryBreakdown({ slices, total, title }: { slices: Slice[]; total: n
                 <span className="t-caption" style={{ color: 'var(--inkFaint)' }}>{s.count} movimenti</span>
               </div>
               <div className="col" style={{ alignItems: 'flex-end' }}>
-                <span className="t-label" style={{ color: 'var(--ink)', whiteSpace: 'nowrap' }}>{Money.format(s.cents)}</span>
+                <span className="t-label" style={{ color: 'var(--ink)', whiteSpace: 'nowrap' }}>{hide(Money.format(s.cents))}</span>
                 <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>{percent(s.share)}</span>
               </div>
             </div>
@@ -343,7 +346,7 @@ function CategoryBreakdown({ slices, total, title }: { slices: Slice[]; total: n
                 {s.subs.map((sub) => (
                   <div key={sub.name} className="row" style={{ padding: '3px 0' }}>
                     <span className="t-caption flex1" style={{ color: 'var(--inkSoft)' }}>{sub.name}</span>
-                    <span className="t-caption" style={{ color: 'var(--ink)' }}>{Money.format(sub.cents)}</span>
+                    <span className="t-caption" style={{ color: 'var(--ink)' }}>{hide(Money.format(sub.cents))}</span>
                   </div>
                 ))}
               </div>
@@ -356,6 +359,7 @@ function CategoryBreakdown({ slices, total, title }: { slices: Slice[]; total: n
 }
 
 function Compared({ r }: { r: MonthReport }) {
+  const hide = useHideable()
   const compared = r.expenseSlices.filter((s) => s.prevCents > 0 || s.cents > 0)
   if (!(r.prevExpense > 0 && compared.length)) return null
   return (
@@ -368,12 +372,12 @@ function Compared({ r }: { r: MonthReport }) {
             <div key={s.category.id} className="row">
               <CategoryBadge icon={s.category.icon} color={argb(s.category.color)} size={30} />
               <span className="t-label flex1 ellipsis" style={{ marginLeft: 12, color: 'var(--ink)' }}>{s.category.name}</span>
-              <span className="t-caption" style={{ color: 'var(--inkFaint)', whiteSpace: 'nowrap' }}>{Money.short(s.prevCents)} → </span>
-              <span className="t-caption" style={{ color: 'var(--ink)', whiteSpace: 'nowrap' }}>{Money.short(s.cents)}</span>
+              <span className="t-caption" style={{ color: 'var(--inkFaint)', whiteSpace: 'nowrap' }}>{hide(Money.short(s.prevCents))} → </span>
+              <span className="t-caption" style={{ color: 'var(--ink)', whiteSpace: 'nowrap' }}>{hide(Money.short(s.cents))}</span>
               <span className="t-label" style={{
                 marginLeft: 8, color: Ink, borderRadius: 999, padding: '2px 8px', whiteSpace: 'nowrap',
                 background: delta > 0 ? 'var(--expense)' : 'var(--income)',
-              }}>{(delta > 0 ? '+' : '') + Money.short(delta)}</span>
+              }}>{(delta > 0 ? '+' : '') + hide(Money.short(delta))}</span>
             </div>
           )
         })}

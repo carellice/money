@@ -91,6 +91,7 @@ import com.money.app.ui.components.SpendingCalendar
 import com.money.app.ui.components.TransactionRow
 import com.money.app.ui.components.TrendBars
 import com.money.app.ui.components.bouncyClick
+import com.money.app.ui.components.hideable
 import com.money.app.ui.components.staggered
 import com.money.app.ui.theme.Ink
 import com.money.app.ui.theme.Ui
@@ -304,7 +305,7 @@ fun ReportScreen(onOpenTransaction: (Long) -> Unit, onOpenChat: () -> Unit, onOp
                             if (i > 0) Spacer(Modifier.height(14.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(b.category.name, style = Ui.type.label, color = c.ink, modifier = Modifier.weight(1f))
-                                Text("${Money.short(b.spent)} / ${Money.short(b.budget)}", style = Ui.type.caption, color = c.inkSoft)
+                                Text("${hideable(Money.short(b.spent))} / ${hideable(Money.short(b.budget))}", style = Ui.type.caption, color = c.inkSoft)
                             }
                             Spacer(Modifier.height(6.dp))
                             SoftProgress(
@@ -324,9 +325,9 @@ fun ReportScreen(onOpenTransaction: (Long) -> Unit, onOpenChat: () -> Unit, onOp
                     SplitBar(fixedShare, c.accent, Color(Palette.PEACH))
                     Spacer(Modifier.height(10.dp))
                     Row {
-                        Legend("Fisse ${Money.short(r.fixedExpense)}", c.accent)
+                        Legend("Fisse ${hideable(Money.short(r.fixedExpense))}", c.accent)
                         Spacer(Modifier.weight(1f))
-                        Legend("Variabili ${Money.short(r.variableExpense)}", Color(Palette.PEACH))
+                        Legend("Variabili ${hideable(Money.short(r.variableExpense))}", Color(Palette.PEACH))
                     }
                 }
             }
@@ -345,7 +346,7 @@ fun ReportScreen(onOpenTransaction: (Long) -> Unit, onOpenChat: () -> Unit, onOp
                                 Text(r.paymentNames.label(method), maxLines = 1, overflow = TextOverflow.Ellipsis, style = Ui.type.label, color = c.ink, modifier = Modifier.width(110.dp))
                                 SoftProgress(cents.toFloat() / max, Color(Palette.all[i % Palette.all.size]), Modifier.weight(1f), height = 8.dp)
                                 Spacer(Modifier.width(10.dp))
-                                Text(Money.short(cents), style = Ui.type.caption, color = c.inkSoft)
+                                Text(hideable(Money.short(cents)), style = Ui.type.caption, color = c.inkSoft)
                             }
                         }
                     }
@@ -557,7 +558,7 @@ private fun CategoryBreakdown(slices: List<Slice>, total: Long, title: String, m
                             Text("${s.count} movimenti", style = Ui.type.caption, color = c.inkFaint)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(Money.format(s.cents), style = Ui.type.label, color = c.ink)
+                            Text(hideable(Money.format(s.cents)), style = Ui.type.label, color = c.ink)
                             Text(percent(s.share), style = Ui.type.caption, color = c.inkSoft)
                         }
                     }
@@ -566,7 +567,7 @@ private fun CategoryBreakdown(slices: List<Slice>, total: Long, title: String, m
                             s.subs.forEach { sub ->
                                 Row(Modifier.padding(vertical = 3.dp)) {
                                     Text(sub.name, style = Ui.type.caption, color = c.inkSoft, modifier = Modifier.weight(1f))
-                                    Text(Money.format(sub.cents), style = Ui.type.caption, color = c.ink)
+                                    Text(hideable(Money.format(sub.cents)), style = Ui.type.caption, color = c.ink)
                                 }
                             }
                         }
@@ -585,11 +586,11 @@ private fun DeltaRow(s: Slice) {
         CategoryBadge(s.category.icon, Color(s.category.color), size = 30.dp)
         Spacer(Modifier.width(12.dp))
         Text(s.category.name, style = Ui.type.label, color = c.ink, modifier = Modifier.weight(1f))
-        Text("${Money.short(s.prevCents)} → ", style = Ui.type.caption, color = c.inkFaint)
-        Text(Money.short(s.cents), style = Ui.type.caption, color = c.ink)
+        Text("${hideable(Money.short(s.prevCents))} → ", style = Ui.type.caption, color = c.inkFaint)
+        Text(hideable(Money.short(s.cents)), style = Ui.type.caption, color = c.ink)
         Spacer(Modifier.width(8.dp))
         Text(
-            (if (delta > 0) "+" else "") + Money.short(delta),
+            (if (delta > 0) "+" else "") + hideable(Money.short(delta)),
             style = Ui.type.label,
             color = Ink,
             modifier = Modifier
