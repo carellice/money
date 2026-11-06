@@ -116,8 +116,11 @@ class AiAssistant(
             if (members.isNotEmpty()) appendLine("- la persona è obbligatoria: se non dice chi ha pagato la spesa o di chi è l'entrata, chiediglielo e non preparare ancora il movimento;")
             appendLine("- se manca l'importo o hai dubbi veri sulla categoria, chiedi prima di preparare il movimento;")
             appendLine("- quando hai tutto, scrivi una frase breve di riepilogo e in fondo, su una riga sola, il movimento in questo formato esatto:")
-            appendLine("<movimento>{\"tipo\":\"spesa\",\"importo\":15.00,\"categoryId\":1,\"subcategoryId\":null,\"data\":\"${LocalDate.now()}\",\"metodo\":\"CARD\",\"memberId\":null,\"nota\":\"pranzo\"}</movimento>")
-            appendLine("- \"tipo\" è \"spesa\" o \"entrata\"; usa solo gli id elencati qui sotto;")
+            val exampleCat = cats.firstOrNull { it.type == TxType.EXPENSE && it.parentId == null }?.id ?: 1
+            val exampleMember = members.firstOrNull()?.id?.toString() ?: "null"
+            appendLine("<movimento>{\"tipo\":\"spesa\",\"importo\":15.00,\"categoryId\":$exampleCat,\"subcategoryId\":null,\"data\":\"${LocalDate.now()}\",\"metodo\":\"CARD\",\"memberId\":$exampleMember,\"nota\":\"pranzo\"}</movimento>")
+            appendLine("- \"tipo\" è \"spesa\" o \"entrata\"; \"importo\" è un numero col punto (15.50); usa solo gli id numerici elencati qui sotto;")
+            if (members.isNotEmpty()) appendLine("- \"memberId\" è l'id della persona che ha pagato o che riceve l'entrata, mai null;")
             appendLine("- non dire mai che l'hai già salvato: l'utente lo conferma con un pulsante sotto il tuo messaggio.")
             appendLine("Categorie di spesa (id: nome):")
             appendLine(categoryList(cats, TxType.EXPENSE))
@@ -129,17 +132,26 @@ class AiAssistant(
     }
 
     private fun parseDraft(answer: String, cats: List<CategoryEntity>, payments: Payments, members: List<MemberEntity>): Draft? {
-        val o = DRAFT.find(answer)?.groupValues?.get(1)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return null
-        val type = when (o.optString("tipo").lowercase()) {
-            "spesa" -> TxType.EXPENSE
-            "entrata" -> TxType.INCOME
-            else -> return null
-        }
-        val cents = Math.round(o.optDouble("importo", 0.0) * 100)
+        // The model often bends the format: code fences inside the tag, "15,50", a subcategory id as categoryId, names instead of ids.
+        val raw = DRAFT.find(answer)?.groupValues?.get(1) ?: return null
+        val o = runCatching {
+            JSONObject(raw.substring(raw.indexOf('{'), raw.lastIndexOf('}') + 1).replace(DECIMAL_COMMA, "$1.$2"))
+        }.getOrNull() ?: return null
+        val cents = Math.round(amount(o.opt("importo")) * 100)
         if (cents <= 0) return null
-        val category = cats.firstOrNull { it.id == o.optLong("categoryId", -1) && it.type == type && it.parentId == null } ?: return null
-        val sub = if (o.isNull("subcategoryId")) null else cats.firstOrNull { it.id == o.optLong("subcategoryId", -1) && it.parentId == category.id }
-        val member = if (o.isNull("memberId")) null else members.firstOrNull { it.id == o.optLong("memberId", -1) }
+        val said = when (o.optString("tipo").lowercase().trim()) {
+            "spesa", "uscita", "expense" -> TxType.EXPENSE
+            "entrata", "income" -> TxType.INCOME
+            else -> null
+        }
+        val picked = find(cats, o.opt("categoryId"), said) ?: find(cats, o.opt("categoria"), said) ?: return null
+        val category = picked.parentId?.let { p -> cats.firstOrNull { it.id == p } } ?: picked
+        val type = category.type
+        val sub = picked.takeIf { it.parentId != null }
+            ?: find(cats, o.opt("subcategoryId"), type)?.takeIf { it.parentId == category.id }
+        val member = members.firstOrNull { it.id == idOf(o.opt("memberId")) }
+            ?: members.firstOrNull { it.name.equals(o.optString("memberId").trim(), true) || it.name.equals(o.optString("persona").trim(), true) }
+            ?: members.singleOrNull()
         if (members.isNotEmpty() && member == null) return null
         val date = runCatching { LocalDate.parse(o.optString("data")) }.getOrDefault(LocalDate.now())
         val code = if (o.isNull("metodo")) "" else o.optString("metodo")
@@ -310,7 +322,29 @@ class AiAssistant(
     }
 
     companion object {
-        private val DRAFT = Regex("(?s)<movimento>\\s*(\\{.*?\\})\\s*</movimento>")
+        private val DRAFT = Regex("(?s)<movimento>(.*?)(?:</movimento>|$)")
+        /** 15,50 written as a bare number breaks the JSON. */
+        private val DECIMAL_COMMA = Regex("(?<=:)\\s*(\\d+),(\\d{1,2})(?=\\s*[,}])")
+
+        private fun idOf(v: Any?): Long? = when (v) {
+            is Number -> v.toLong()
+            is String -> v.trim().toDoubleOrNull()?.toLong()
+            else -> null
+        }
+
+        private fun amount(v: Any?): Double = when (v) {
+            is Number -> v.toDouble()
+            is String -> v.replace("€", "").replace("euro", "", true).trim().replace(',', '.').toDoubleOrNull() ?: 0.0
+            else -> 0.0
+        }
+
+        /** Category by id, or by name ("Spesa > Supermercato" or just "Supermercato"), preferring the said [type]. */
+        private fun find(cats: List<CategoryEntity>, v: Any?, type: TxType?): CategoryEntity? {
+            val pool = cats.sortedBy { if (it.type == type) 0 else 1 }
+            idOf(v)?.let { id -> return pool.firstOrNull { it.id == id } }
+            val name = (v as? String)?.substringAfterLast('>')?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            return pool.firstOrNull { it.name.equals(name, true) }
+        }
         private val TAG = Regex("(?s)<movimento>.*?(</movimento>|$)")
 
         /** Chat text without the machine readable movement. */
