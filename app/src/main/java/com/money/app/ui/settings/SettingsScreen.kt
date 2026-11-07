@@ -31,6 +31,9 @@ import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Dns
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Slideshow
+import com.money.app.ui.tour.LocalGuide
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -248,6 +251,11 @@ fun SettingsScreen(
 
             FormLabel("Intelligenza artificiale")
             NavRow(Icons.Rounded.AutoAwesome, "Assistente AI", "Cloudflare Workers AI: commento del mese, chat, categorie automatiche", onOpenAi)
+
+            FormLabel("Guida")
+            val guide = LocalGuide.current
+            NavRow(Icons.Rounded.Slideshow, "Rivedi la presentazione", "Le schermate di benvenuto, tema e colore compresi") { guide.onboarding = true }
+            NavRow(Icons.Rounded.Explore, "Fai il tour guidato", "Ti mostro la Home un pezzo alla volta, primo conto e prima spesa compresi") { guide.start() }
 
             FormLabel("Aggiornamenti")
             val updates = appContainer().updates

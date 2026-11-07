@@ -33,10 +33,10 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Autorenew
 import androidx.compose.material.icons.rounded.DonutLarge
+import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.TouchApp
@@ -44,6 +44,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -120,15 +123,18 @@ fun OnboardingScreen(
     settings: Settings,
     onTheme: (ThemeMode) -> Unit,
     onAccent: (Long) -> Unit,
-    onDone: () -> Unit,
+    /** True when the user wants the guided tour of the app right after. */
+    onDone: (tour: Boolean) -> Unit,
 ) {
     val c = Ui.colors
     val pager = rememberPagerState { lastPage + 1 }
     val scope = rememberCoroutineScope()
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { onDone() }
-    val finish = {
+    var tour by remember { mutableStateOf(false) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { onDone(tour) }
+    val finish = { withTour: Boolean ->
+        tour = withTour
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        else onDone()
+        else onDone(withTour)
     }
 
     BackHandler(enabled = pager.currentPage > 0) {
@@ -187,7 +193,19 @@ fun OnboardingScreen(
                 label = "onboardingButton",
                 modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
             ) { onLast ->
-                if (onLast) PrimaryButton("Iniziamo", finish, icon = Icons.AutoMirrored.Rounded.ArrowForward)
+                if (onLast) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    PrimaryButton("Fammi fare un giro", { finish(true) }, icon = Icons.Rounded.Explore)
+                    Text(
+                        "Inizio da solo",
+                        style = Ui.type.label,
+                        color = c.inkSoft,
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .clip(RoundedCornerShape(50))
+                            .bouncyClick { finish(false) }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                    )
+                }
                 else PrimaryButton(
                     "Avanti",
                     { scope.launch { pager.animateScrollToPage(pager.currentPage + 1) } },

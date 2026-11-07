@@ -78,6 +78,9 @@ import com.money.app.ui.components.hideable
 import com.money.app.ui.components.rememberHideAmountsToggle
 import com.money.app.ui.components.staggered
 import com.money.app.ui.theme.Ink
+import com.money.app.ui.tour.LocalGuide
+import com.money.app.ui.tour.tourSteps
+import com.money.app.ui.tour.tourTarget
 import com.money.app.ui.theme.Ui
 import com.money.app.ui.theme.backdropBlobs
 import com.money.app.ui.theme.blob
@@ -145,6 +148,15 @@ fun HomeScreen(
     ) {
         val list = rememberLazyListState()
         LaunchedEffect(scrollToTop) { if (scrollToTop > 0) list.scrollToItem(0) }
+        // The tour brings what it is talking about into view: the hero on top, then the accounts card.
+        val guide = LocalGuide.current
+        val tourTargetKey = if (guide.active) tourSteps[guide.step].target else null
+        LaunchedEffect(tourTargetKey) {
+            when (tourTargetKey) {
+                "hero" -> list.animateScrollToItem(0)
+                "accounts" -> list.animateScrollToItem(3, scrollOffset = -24)
+            }
+        }
         // The divider under the fixed bar shows up only once content scrolls beneath it.
         val dividerAlpha by animateFloatAsState(if (list.canScrollBackward) 1f else 0f, label = "barDivider")
         Column(Modifier.fillMaxSize()) {
@@ -153,9 +165,9 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 MonthSwitcher(month, vm::setMonth, Modifier.weight(1f))
-                RoundIconButton(Icons.Rounded.AutoAwesome, onOpenChat, contentDescription = "Chiedi a Money")
+                RoundIconButton(Icons.Rounded.AutoAwesome, onOpenChat, Modifier.tourTarget("chat"), contentDescription = "Chiedi a Money")
                 Spacer(Modifier.width(8.dp))
-                RoundIconButton(Icons.Rounded.Settings, onOpenSettings, contentDescription = "Impostazioni")
+                RoundIconButton(Icons.Rounded.Settings, onOpenSettings, Modifier.tourTarget("settings"), contentDescription = "Impostazioni")
             }
             Box(Modifier.fillMaxWidth().height(1.dp).graphicsLayer { alpha = dividerAlpha }.background(c.line))
             LazyColumn(
@@ -168,11 +180,11 @@ fun HomeScreen(
                 val s = state ?: return@LazyColumn
                 val r = s.report
 
-                item { Hero(r, onAdd, Modifier.staggered(0)) }
+                item { Hero(r, onAdd, Modifier.staggered(0).tourTarget("hero")) }
 
                 item { SpendGauge(r, Modifier.staggered(1)) }
 
-                item { AccountsCard(onOpenAccount, Modifier.staggered(2)) }
+                item { AccountsCard(onOpenAccount, Modifier.staggered(2).tourTarget("accounts")) }
 
                 if (r.budgets.isNotEmpty()) {
                     item {

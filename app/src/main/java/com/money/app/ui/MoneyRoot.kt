@@ -111,6 +111,9 @@ import com.money.app.ui.theme.Ink
 import com.money.app.ui.theme.LocalBlobTime
 import com.money.app.ui.theme.Ui
 import com.money.app.ui.theme.blob
+import com.money.app.ui.tour.LocalGuide
+import com.money.app.ui.tour.TourOverlay
+import com.money.app.ui.tour.tourTarget
 import kotlin.math.sin
 
 object Routes {
@@ -177,6 +180,12 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
             popUpTo(nav.graph.findStartDestination().id)
             launchSingleTop = true
         }
+    }
+
+    // The tour points at things on Home, so it always starts from there.
+    val guide = LocalGuide.current
+    LaunchedEffect(guide.active) {
+        if (guide.active && nav.currentDestination?.route != Routes.HOME) switchTab(Routes.HOME)
     }
 
     Box(Modifier.fillMaxSize().background(c.bg)) {
@@ -309,6 +318,14 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
         ) {
             BottomBar(route, switchTab) { nav.navigate(Routes.add()) }
         }
+
+        AnimatedVisibility(
+            visible = guide.active && !guide.paused && route == Routes.HOME,
+            enter = fadeIn(tween(300)),
+            exit = fadeOut(tween(220)),
+        ) {
+            TourOverlay(guide, onAddExpense = { nav.navigate(Routes.add()) })
+        }
     }
 }
 
@@ -360,6 +377,7 @@ private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> U
             Modifier
                 .fillMaxWidth()
                 .height(80.dp)
+                .tourTarget("tabs")
                 .shadow(24.dp, CircleShape, ambientColor = Ink, spotColor = Ink)
                 .clip(CircleShape)
                 .background(c.surface),
@@ -509,6 +527,7 @@ private fun AddButton(onClick: () -> Unit) {
     Box(
         Modifier
             .size(70.dp)
+            .tourTarget("add")
             .graphicsLayer {
                 val breathe = 1f + 0.035f * sin(time.value * 2.2f)
                 scaleX = breathe

@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -101,6 +102,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
+import com.money.app.ui.tour.LocalGuide
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -157,6 +159,12 @@ fun AccountsCard(onOpen: (Long) -> Unit, modifier: Modifier = Modifier) {
     val state by remember(repo) { repo.accountsState() }.collectAsStateWithLifecycle(null)
     val s = state ?: return
     var editing by remember { mutableStateOf<AccountEntity?>(null) }
+    // The tour asks for the first account: the editor opens here, and the tour goes on once it closes.
+    val guide = LocalGuide.current
+    if (guide.addAccountRequest) LaunchedEffect(Unit) {
+        guide.addAccountRequest = false
+        editing = newAccount(s.accounts.size)
+    }
 
     Column(modifier) {
         SectionTitle("Disponibile", action = if (s.accounts.isEmpty()) null else "Nuovo conto", onAction = { editing = newAccount(s.accounts.size) })
@@ -181,10 +189,14 @@ fun AccountsCard(onOpen: (Long) -> Unit, modifier: Modifier = Modifier) {
     editing?.let { account ->
         AccountEditor(
             account, s.accounts,
-            onDismiss = { editing = null },
+            onDismiss = {
+                editing = null
+                guide.resume()
+            },
             onSave = {
                 editing = null
                 scope.launch { repo.saveAccount(it) }
+                guide.resume()
             },
         )
     }

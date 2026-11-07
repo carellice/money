@@ -31,6 +31,8 @@ import com.money.app.ui.components.LocalHideAmounts
 import com.money.app.ui.lock.Biometric
 import com.money.app.ui.lock.LockScreen
 import com.money.app.ui.onboarding.OnboardingScreen
+import com.money.app.ui.tour.Guide
+import com.money.app.ui.tour.LocalGuide
 import com.money.app.ui.theme.MoneyTheme
 import com.money.app.ui.theme.isDarkTheme
 import kotlinx.coroutines.delay
@@ -43,7 +45,7 @@ class MainActivity : FragmentActivity() {
 
     private var locked by mutableStateOf(false)
     private var deepLink by mutableStateOf<String?>(null)
-    private var onboarding by mutableStateOf(false)
+    private val guide = Guide(onboarding = false)
     private var lockEnabled = false
     private var stoppedAt = 0L
     private var authenticating = false
@@ -56,7 +58,7 @@ class MainActivity : FragmentActivity() {
         val initial: Settings = runBlocking { container.settings.current() }
         lockEnabled = initial.lockEnabled
         if (savedInstanceState == null) locked = initial.lockEnabled
-        onboarding = !initial.onboarded
+        guide.onboarding = !initial.onboarded
         handleIntent(intent)
 
         lifecycleScope.launch {
@@ -85,7 +87,7 @@ class MainActivity : FragmentActivity() {
             }
             MoneyTheme(dark, settings.accent) {
                 Box(Modifier.fillMaxSize()) {
-                    CompositionLocalProvider(LocalHideAmounts provides settings.hideAmounts) {
+                    CompositionLocalProvider(LocalHideAmounts provides settings.hideAmounts, LocalGuide provides guide) {
                         MoneyRoot(deepLink, onDeepLinkHandled = { deepLink = null })
                     }
                     AnimatedVisibility(
@@ -96,7 +98,7 @@ class MainActivity : FragmentActivity() {
                         LockScreen(onUnlockRequest = ::unlock)
                     }
                     AnimatedVisibility(
-                        visible = onboarding,
+                        visible = guide.onboarding,
                         enter = fadeIn(),
                         exit = fadeOut() + scaleOut(targetScale = 1.1f),
                     ) {
@@ -104,8 +106,9 @@ class MainActivity : FragmentActivity() {
                             settings = settings,
                             onTheme = { lifecycleScope.launch { container.settings.setTheme(it) } },
                             onAccent = { lifecycleScope.launch { container.settings.setAccent(it) } },
-                            onDone = {
-                                onboarding = false
+                            onDone = { tour ->
+                                guide.onboarding = false
+                                if (tour) guide.start()
                                 lifecycleScope.launch { container.settings.setOnboarded() }
                             },
                         )
