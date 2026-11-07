@@ -80,6 +80,7 @@ import com.money.app.ui.components.ColorSwatches
 import com.money.app.ui.components.FormLabel
 import com.money.app.ui.components.FullScreenPage
 import com.money.app.ui.components.IconPicker
+import com.money.app.ui.components.LocalClosePage
 import com.money.app.ui.components.LocalPayments
 import com.money.app.ui.components.Masked
 import com.money.app.ui.components.Pill
@@ -487,12 +488,13 @@ private fun AccountEditor(
             FormLabel("Colore")
             ColorSwatches(Palette.all, color) { color = it }
             Spacer(Modifier.size(24.dp))
+            val closePage = LocalClosePage.current
             PrimaryButton(
                 "Salva",
                 {
                     var saved = preview.copy(name = name.trim(), methods = methods.joinToString(","))
                     if (isNew) saved = saved.copy(balanceCents = Money.parse(balance) ?: 0L, balanceAt = System.currentTimeMillis())
-                    onSave(saved)
+                    closePage { onSave(saved) }
                 },
                 enabled = name.isNotBlank(),
                 color = Color(color),
@@ -603,9 +605,10 @@ private fun TransferEditor(
                 modifier = Modifier.padding(top = 12.dp),
             )
             Spacer(Modifier.size(24.dp))
+            val closePage = LocalClosePage.current
             PrimaryButton(
                 "Trasferisci ${Money.format(cents)}",
-                { onSave(TransferEntity(fromId = fromId, toId = toId, amountCents = cents, date = date.toEpochDay(), note = note.trim())) },
+                { closePage { onSave(TransferEntity(fromId = fromId, toId = toId, amountCents = cents, date = date.toEpochDay(), note = note.trim())) } },
                 enabled = cents > 0 && fromId != toId && toId != 0L,
                 icon = Icons.Rounded.Check,
             )
@@ -642,9 +645,10 @@ private fun BalanceEditor(account: AccountEntity, balance: Long, onDismiss: () -
                 modifier = Modifier.padding(top = 12.dp),
             )
             Spacer(Modifier.size(24.dp))
+            val closePage = LocalClosePage.current
             PrimaryButton(
                 "Salva",
-                { onSave(account.copy(balanceCents = Money.parse(amount) ?: 0L, balanceAt = System.currentTimeMillis())) },
+                { closePage { onSave(account.copy(balanceCents = Money.parse(amount) ?: 0L, balanceAt = System.currentTimeMillis())) } },
                 color = Color(account.color),
                 icon = Icons.Rounded.Check,
             )
