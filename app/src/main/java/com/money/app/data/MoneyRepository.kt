@@ -24,6 +24,7 @@ class MoneyRepository(
     private val paymentDao = db.payments()
     private val accountDao = db.accounts()
     private val transferDao = db.transfers()
+    private val hiddenDao = db.hiddenPayments()
 
     /** Server mode (data on the CasaOS server, as for the PWA); off keeps everything on the phone. */
     val server = ServerSync(db, serverStore, File(filesDir, "modifiche-da-inviare.json")) { imagesDir }
@@ -65,6 +66,7 @@ class MoneyRepository(
     val recurring: Flow<List<RecurringEntity>> = recurringDao.observeAll()
     val members: Flow<List<MemberEntity>> = memberDao.observeAll()
     val customPayments: Flow<List<CustomPaymentEntity>> = paymentDao.observeAll()
+    val hiddenPayments: Flow<List<HiddenPaymentEntity>> = hiddenDao.observeAll()
     val accounts: Flow<List<AccountEntity>> = accountDao.observeAll()
     val transfers: Flow<List<TransferEntity>> = transferDao.observeAll()
 
@@ -83,7 +85,7 @@ class MoneyRepository(
         txDao.range(from.toEpochDay(), to.toEpochDay())
 
     suspend fun allCategories(): List<CategoryEntity> = categoryDao.all()
-    suspend fun payments(): Payments = Payments(paymentDao.all())
+    suspend fun payments(): Payments = Payments(paymentDao.all(), hiddenDao.all().map { it.method }.toSet())
     suspend fun transaction(id: Long) = txDao.get(id)
     suspend fun recurringItem(id: Long) = recurringDao.get(id)
 
@@ -221,16 +223,26 @@ class MoneyRepository(
         }) { local().id }
     }
 
-    /** Movements and fixed expenses paid that way stay, as "Altro". */
-    suspend fun deleteCustomPayment(method: CustomPaymentEntity) {
+    /** Movements and fixed expenses paid with [choice]. */
+    suspend fun paymentUses(choice: PaymentChoice): Int =
+        txDao.countForPayment(choice.method.name, choice.customId) + recurringDao.countForPayment(choice.method.name, choice.customId)
+
+    /**
+     * Removes the payment method [from] (a built-in one gets hidden): its movements and fixed
+     * expenses move to [to], or to "Altro" without it.
+     */
+    suspend fun removePayment(from: PaymentChoice, to: PaymentChoice?) {
+        val target = to ?: PaymentChoice(PaymentMethod.OTHER)
         suspend fun local() = db.withTransaction {
-            txDao.clearPayment(method.id)
-            recurringDao.clearPayment(method.id)
-            paymentDao.delete(method)
+            txDao.reassignPayment(from.method.name, from.customId, target.method.name, target.customId)
+            recurringDao.reassignPayment(from.method.name, from.customId, target.method.name, target.customId)
+            val customId = from.customId
+            if (customId != null) paymentDao.all().firstOrNull { it.id == customId }?.let { paymentDao.delete(it) }
+            else hiddenDao.insertAll(listOf(HiddenPaymentEntity(from.method)))
         }
-        either(Unit, { submit(Change.DeletePayment(method.id)) }, offline = {
+        either(Unit, { submit(Change.RemovePayment(from, to)) }, offline = {
             local()
-            server.enqueue(Change.DeletePayment(method.id))
+            server.enqueue(Change.RemovePayment(from, to))
         }) { local() }
     }
 
@@ -379,6 +391,8 @@ class MoneyRepository(
         /** Null for backups from before accounts: the ones there are stay. */
         val accounts: List<AccountEntity>? = null,
         val transfers: List<TransferEntity> = emptyList(),
+        /** Built-in methods removed; null (backups, servers before removing them) keeps the ones there are. */
+        val hidden: List<PaymentMethod>? = null,
     )
 
     suspend fun snapshot() = Snapshot(
@@ -406,6 +420,10 @@ class MoneyRepository(
             transferDao.clear()
             accountDao.insertAll(it)
             transferDao.insertAll(snapshot.transfers)
+        }
+        snapshot.hidden?.let {
+            hiddenDao.clear()
+            hiddenDao.insertAll(it.map(::HiddenPaymentEntity))
         }
     }
 }

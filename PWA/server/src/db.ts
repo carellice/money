@@ -12,6 +12,8 @@ import {
   type Category,
   type CustomPayment,
   type Member,
+  type PaymentChoice,
+  type PaymentMethod,
   type Recurring,
   type Transaction,
   type Transfer,
@@ -244,7 +246,7 @@ export function members(): Member[] {
 export function state(): AppState {
   return {
     categories: categories(), transactions: transactions(), recurring: recurring(), members: members(),
-    paymentMethods: paymentMethods(), accounts: moneyAccounts(), transfers: transfers(),
+    paymentMethods: paymentMethods(), hiddenPayments: hiddenPayments(), accounts: moneyAccounts(), transfers: transfers(),
   }
 }
 
@@ -340,6 +342,34 @@ export function deletePaymentMethod(id: number) {
     db.prepare('UPDATE transactions SET paymentId = NULL WHERE paymentId = ?').run(id)
     db.prepare('UPDATE recurring SET paymentId = NULL WHERE paymentId = ?').run(id)
     db.prepare('DELETE FROM payment_methods WHERE id = ?').run(id)
+  })
+}
+
+/** Built-in payment methods the user removed. */
+export function hiddenPayments(): PaymentMethod[] {
+  return JSON.parse(getMeta('hiddenPayments') ?? '[]') as PaymentMethod[]
+}
+
+/**
+ * Removes the payment method [from] (a custom one, or a built-in one that gets hidden): its
+ * movements and fixed expenses move to [to], or to "Altro" without it.
+ */
+export function removePaymentMethod(from: PaymentChoice, to: PaymentChoice | null) {
+  const target = to ?? { method: 'OTHER', customId: null }
+  if (from.customId == null && from.method === 'OTHER') throw new Error('"Altro" non si può eliminare')
+  if (target.customId == null ? target.method === from.method && from.customId == null : target.customId === from.customId) {
+    throw new Error('Scegli un altro metodo di pagamento')
+  }
+  transaction(() => {
+    for (const table of ['transactions', 'recurring']) {
+      if (from.customId != null) {
+        db.prepare(`UPDATE ${table} SET payment = ?, paymentId = ? WHERE paymentId = ?`).run(target.method, target.customId, from.customId)
+      } else {
+        db.prepare(`UPDATE ${table} SET payment = ?, paymentId = ? WHERE payment = ? AND paymentId IS NULL`).run(target.method, target.customId, from.method)
+      }
+    }
+    if (from.customId != null) db.prepare('DELETE FROM payment_methods WHERE id = ?').run(from.customId)
+    else setMeta('hiddenPayments', JSON.stringify([...new Set([...hiddenPayments(), from.method])]))
   })
 }
 

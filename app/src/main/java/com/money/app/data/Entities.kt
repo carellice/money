@@ -165,6 +165,13 @@ data class CustomPaymentEntity(
     val sortOrder: Int = 0,
 )
 
+/** Built-in payment method the user removed: it no longer shows among the choices. */
+@Entity(tableName = "hidden_payments")
+data class HiddenPaymentEntity(@PrimaryKey val method: PaymentMethod)
+
+/** "Altro" can't be removed: custom methods are stored as it, and it takes whatever is left without a method. */
+val PaymentMethod.removable get() = this != PaymentMethod.OTHER
+
 /**
  * What something was paid with: a built-in [method], or the custom one [customId]
  * (stored as [PaymentMethod.OTHER], so versions without custom methods still read it).
@@ -178,9 +185,11 @@ data class PaymentChoice(val method: PaymentMethod, val customId: Long? = null) 
 val TransactionEntity.paymentChoice get() = PaymentChoice(payment, paymentId)
 val RecurringEntity.paymentChoice get() = PaymentChoice(payment, paymentId)
 
-/** Names and icons of every payment method, custom ones included. */
-class Payments(custom: List<CustomPaymentEntity>) {
+/** Names and icons of every payment method, custom ones included; [hidden] built-in ones were removed. */
+class Payments(custom: List<CustomPaymentEntity>, val hidden: Set<PaymentMethod> = emptySet()) {
     val custom: Map<Long, CustomPaymentEntity> = custom.associateBy { it.id }
+    /** Built-in methods still offered. */
+    val builtIns: List<PaymentMethod> get() = PaymentMethod.entries.filter { it !in hidden }
 
     fun label(choice: PaymentChoice): String =
         choice.customId?.let { custom[it]?.name } ?: choice.method.label

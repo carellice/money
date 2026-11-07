@@ -15,6 +15,9 @@ export const paymentMethods: { id: PaymentMethod; label: string; icon: string }[
   { id: 'OTHER', label: 'Altro', icon: 'more' },
 ]
 
+/** "Altro" can't be removed: custom methods are stored as it, and it takes whatever is left without a method. */
+export const removablePayment = (id: PaymentMethod) => id !== 'OTHER'
+
 export function payment(id: PaymentMethod) {
   return paymentMethods.find((p) => p.id === id) ?? paymentMethods[6]
 }
@@ -241,6 +244,8 @@ export type AppState = {
   recurring: Recurring[]
   members: Member[]
   paymentMethods: CustomPayment[]
+  /** Built-in methods the user removed. Servers before removing them don't send it. */
+  hiddenPayments?: PaymentMethod[]
   /** Servers and backups before accounts don't have them. */
   accounts?: Account[]
   transfers?: Transfer[]

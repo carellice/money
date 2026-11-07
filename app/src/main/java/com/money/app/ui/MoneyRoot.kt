@@ -159,7 +159,8 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
     val members by appContainer().repository.members.collectAsStateWithLifecycle(emptyList())
     val membersById = remember(members) { members.associateBy { it.id } }
     val customPayments by appContainer().repository.customPayments.collectAsStateWithLifecycle(emptyList())
-    val payments = remember(customPayments) { Payments(customPayments) }
+    val hiddenPayments by appContainer().repository.hiddenPayments.collectAsStateWithLifecycle(emptyList())
+    val payments = remember(customPayments, hiddenPayments) { Payments(customPayments, hiddenPayments.map { it.method }.toSet()) }
     val accounts by appContainer().repository.accounts.collectAsStateWithLifecycle(emptyList())
 
     LaunchedEffect(deepLinkRoute) {

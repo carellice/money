@@ -2,7 +2,7 @@ import { currentMonth, isoDate, monthEnd, monthKey, monthOf, monthStart, plusYea
 import { Dates, Money, percent } from '../../shared/format.ts'
 import { frequency, paymentChoice, paymentLabel, paymentMethods as builtInPayments, type Category, type PaymentChoice, type CustomPayment, type Recurring, type Transaction, type TxType } from '../../shared/model.ts'
 import { buildReport, type MonthReport } from '../../shared/report.ts'
-import { categories, db, getMeta, members, paymentMethods, recurring, setMeta, transactionsBetween } from './db.ts'
+import { categories, db, getMeta, hiddenPayments, members, paymentMethods, recurring, setMeta, transactionsBetween } from './db.ts'
 
 export class AiError extends Error {}
 
@@ -218,7 +218,7 @@ function chatContext(): string {
     }
   }
   const allMethods: PaymentChoice[] = [
-    ...builtInPayments.map((p) => ({ method: p.id, customId: null })),
+    ...builtInPayments.filter((p) => !hiddenPayments().includes(p.id)).map((p) => ({ method: p.id, customId: null })),
     ...custom.map((c): PaymentChoice => ({ method: 'OTHER', customId: c.id })),
   ]
   lines.push('', "## Metodi di pagamento dell'utente", allMethods.map((c) => paymentLabel(c, custom).label).join(', '))

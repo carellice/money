@@ -166,6 +166,10 @@ class ServerSync(
             db.accounts().insertAll(it)
             db.transfers().insertAll(snapshot.transfers)
         }
+        snapshot.hidden?.let {
+            db.hiddenPayments().clear()
+            db.hiddenPayments().insertAll(it.map(::HiddenPaymentEntity))
+        }
     }
 
     /** Server rows with their images downloaded next to the app's own. */
@@ -177,6 +181,9 @@ class ServerSync(
         json.payments(),
         json.accounts(),
         json.transfers(),
+        json.optJSONArray("hiddenPayments")?.let { list ->
+            (0 until list.length()).mapNotNull { i -> PaymentMethod.entries.firstOrNull { it.name == list.optString(i) } }
+        },
     )
 
     private suspend fun localImage(config: ServerConfig, path: String?): String? {
@@ -272,6 +279,14 @@ class ServerSync(
             id
         }
         is Change.DeletePayment -> delete(config, "/api/payment-methods/", outbox.id(PAYMENTS, change.id))
+        is Change.RemovePayment -> {
+            // Custom methods created offline are named by the id the server gave them.
+            fun PaymentChoice.json() = JSONObject().put("method", method.name)
+                .put("customId", customId?.let { outbox.id(PAYMENTS, it) } ?: JSONObject.NULL)
+            val body = JSONObject().put("from", change.from.json()).put("to", change.to?.json() ?: JSONObject.NULL)
+            client.post(config, "/api/payment-methods/remove", body)
+            0
+        }
         is Change.SaveAccount -> {
             val account = change.account.copy(
                 id = if (change.created) 0 else outbox.id(ACCOUNTS, change.account.id),
@@ -347,6 +362,9 @@ class ServerSync(
         is Change.DeleteMember -> JSONObject().put("type", "member.delete").put("id", change.id)
         is Change.SavePayment -> JSONObject().put("type", "payment").put("created", change.created).put("row", change.method.toJson())
         is Change.DeletePayment -> JSONObject().put("type", "payment.delete").put("id", change.id)
+        is Change.RemovePayment -> JSONObject().put("type", "payment.remove")
+            .put("fromMethod", change.from.method.name).put("fromId", change.from.customId ?: JSONObject.NULL)
+            .put("toMethod", change.to?.method?.name ?: JSONObject.NULL).put("toId", change.to?.customId ?: JSONObject.NULL)
         is Change.SaveAccount -> JSONObject().put("type", "account").put("created", change.created).put("row", change.account.toJson())
         is Change.DeleteAccount -> JSONObject().put("type", "account.delete").put("id", change.id)
         is Change.SaveTransfer -> JSONObject().put("type", "transfer").put("created", change.created).put("row", change.transfer.toJson())
@@ -373,6 +391,11 @@ class ServerSync(
             "member.delete" -> Change.DeleteMember(id)
             "payment" -> Change.SavePayment(json.getJSONObject("row").toPayment(), created)
             "payment.delete" -> Change.DeletePayment(id)
+            "payment.remove" -> Change.RemovePayment(
+                PaymentChoice(PaymentMethod.valueOf(json.getString("fromMethod")), json.optLongOrNull("fromId")),
+                if (json.isNull("toMethod")) null
+                else PaymentChoice(PaymentMethod.valueOf(json.getString("toMethod")), json.optLongOrNull("toId")),
+            )
             "account" -> Change.SaveAccount(json.getJSONObject("row").toAccount(), created)
             "account.delete" -> Change.DeleteAccount(id)
             "transfer" -> Change.SaveTransfer(json.getJSONObject("row").toTransfer(), created)

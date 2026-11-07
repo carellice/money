@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { currentMonth, type Month } from '../../../shared/date.ts'
-import { Palette, type RecurringSort, type Account, type AppState, type Category, type CustomPayment, type Member, type Recurring, type Transaction, type Transfer } from '../../../shared/model.ts'
+import { Palette, type RecurringSort, type Account, type AppState, type Category, type CustomPayment, type Member, type PaymentChoice, type PaymentMethod, type Recurring, type Transaction, type Transfer } from '../../../shared/model.ts'
 import { api } from './api.ts'
 
 // --- device settings (theme, accent, lock): per phone, like the Android DataStore -----------
@@ -105,6 +105,11 @@ const noPayments: CustomPayment[] = []
 /** Custom payment methods (data cached by an older version has none). */
 export const usePaymentMethods = () => useStore((s) => s.data?.paymentMethods ?? noPayments)
 
+const noHidden: PaymentMethod[] = []
+
+/** Built-in payment methods the user removed. */
+export const useHiddenPayments = () => useStore((s) => s.data?.hiddenPayments ?? noHidden)
+
 const noAccounts: Account[] = []
 const noTransfers: Transfer[] = []
 
@@ -204,6 +209,9 @@ export const actions = {
   savePaymentMethod: (method: CustomPayment) =>
     mutate(() => api<{ id: number }>('/api/payment-methods', { method: 'POST', json: method })).then((r) => r.id),
   deletePaymentMethod: (method: CustomPayment) => mutate(() => api('/api/payment-methods/' + method.id, { method: 'DELETE' })),
+  /** Removes [from] (built-in ones get hidden); its movements and fixed expenses move to [to]. */
+  removePaymentMethod: (from: PaymentChoice, to: PaymentChoice | null) =>
+    mutate(() => api('/api/payment-methods/remove', { method: 'POST', json: { from, to } })),
   /** Returns the id of the account. */
   saveAccount: (account: Account) =>
     mutate(() => api<{ id: number }>('/api/accounts', { method: 'POST', json: account })).then((r) => r.id),

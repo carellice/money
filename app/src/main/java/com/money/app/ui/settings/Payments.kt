@@ -22,11 +22,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +49,7 @@ import com.money.app.data.PaymentMethod
 import com.money.app.data.Payments
 import com.money.app.data.accountOf
 import com.money.app.data.methodKey
+import com.money.app.data.removable
 import androidx.compose.ui.text.style.TextOverflow
 import com.money.app.ui.add.NoteField
 import com.money.app.ui.appContainer
@@ -74,9 +77,9 @@ fun PaymentBadge(method: CustomPaymentEntity, size: Dp = 40.dp) {
     }
 }
 
-/** Every payment method, built-in first, as choices. */
+/** Every payment method, built-in first (except the removed ones), as choices. */
 fun allChoices(payments: Payments): List<PaymentChoice> =
-    PaymentMethod.entries.map { PaymentChoice(it) } +
+    payments.builtIns.map { PaymentChoice(it) } +
         payments.custom.values.sortedWith(compareBy({ it.sortOrder }, { it.id })).map { PaymentChoice.custom(it.id) }
 
 /** Badge of any payment method: the custom ones keep their color. */
@@ -107,6 +110,10 @@ fun PaymentPicker(selected: PaymentChoice, onSelect: (PaymentChoice) -> Unit, co
     var open by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf<CustomPaymentEntity?>(null) }
     val account = accounts.accountOf(selected)
+    // A removed built-in method (the default "Carta", say) gives way to the first one left.
+    LaunchedEffect(selected, payments) {
+        if (selected.customId == null && selected.method in payments.hidden) onSelect(allChoices(payments).first())
+    }
 
     Row(
         Modifier
@@ -191,15 +198,33 @@ fun PaymentPicker(selected: PaymentChoice, onSelect: (PaymentChoice) -> Unit, co
 private fun newPayment(count: Int) =
     CustomPaymentEntity(name = "", icon = "card", color = Palette.all[(count + 3) % Palette.all.size])
 
-/** The custom payment methods in the settings, with the button to add one. */
+/** The payment methods in the settings: built-in ones can be removed, custom ones edited, plus the button to add one. */
 @Composable
 fun PaymentsSection() {
     val c = Ui.colors
     val repo = appContainer().repository
     val scope = rememberCoroutineScope()
-    val custom = LocalPayments.current.custom.values.sortedWith(compareBy({ it.sortOrder }, { it.id }))
+    val payments = LocalPayments.current
+    val custom = payments.custom.values.sortedWith(compareBy({ it.sortOrder }, { it.id }))
     var editing by remember { mutableStateOf<CustomPaymentEntity?>(null) }
+    var removing by remember { mutableStateOf<PaymentChoice?>(null) }
 
+    payments.builtIns.filter { it.removable }.forEach { method ->
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .bouncyClick(pressedScale = 0.98f) { removing = PaymentChoice(method) }
+                .clip(RoundedCornerShape(22.dp))
+                .background(c.surface)
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ChoiceBadge(PaymentChoice(method), c.surfaceHigh)
+            Spacer(Modifier.size(14.dp))
+            Text(method.label, style = Ui.type.bodyStrong, color = c.ink, modifier = Modifier.weight(1f))
+            Icon(Icons.Rounded.Delete, "Elimina", tint = c.inkFaint)
+        }
+    }
     custom.forEach { method ->
         Row(
             Modifier
@@ -247,9 +272,79 @@ fun PaymentsSection() {
             },
             onDelete = {
                 editing = null
-                scope.launch { repo.deleteCustomPayment(it) }
+                removing = PaymentChoice.custom(it.id)
             },
         )
+    }
+    removing?.let { RemovePayment(it) { removing = null } }
+}
+
+/**
+ * Removes a payment method. When movements or fixed expenses are paid with it, first asks which
+ * other method they move to.
+ */
+@Composable
+private fun RemovePayment(from: PaymentChoice, onDone: () -> Unit) {
+    val c = Ui.colors
+    val repo = appContainer().repository
+    val scope = rememberCoroutineScope()
+    val payments = LocalPayments.current
+    val name = payments.label(from)
+    var uses by remember { mutableStateOf<Int?>(null) }
+    var target by remember { mutableStateOf<PaymentChoice?>(null) }
+    LaunchedEffect(from) { uses = repo.paymentUses(from) }
+    fun remove(to: PaymentChoice?) {
+        onDone()
+        scope.launch { repo.removePayment(from, to) }
+    }
+
+    when (val count = uses) {
+        null -> Unit
+        0 -> AlertDialog(
+            onDismissRequest = onDone,
+            title = { Text("Eliminare $name?") },
+            text = { Text("Nessun movimento o spesa fissa è pagato così.") },
+            confirmButton = { TextButton({ remove(null) }) { Text("Elimina", color = c.expenseText) } },
+            dismissButton = { TextButton(onDone) { Text("Annulla") } },
+        )
+        else -> FullScreenPage("Elimina $name", onDone) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    (if (count == 1) "1 movimento o spesa fissa è pagato" else "$count movimenti e spese fisse sono pagati") +
+                        " con $name: scegli il metodo su cui spostarli.",
+                    style = Ui.type.body,
+                    color = c.inkSoft,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                allChoices(payments).filter { it != from }.forEach { choice ->
+                    val isSelected = choice == target
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .bouncyClick(pressedScale = 0.98f) { target = choice }
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(if (isSelected) c.surfaceHigh else c.surface)
+                            .padding(horizontal = 18.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ChoiceBadge(choice, c.accent, size = 36.dp)
+                        Spacer(Modifier.size(14.dp))
+                        Text(payments.label(choice), style = Ui.type.bodyStrong, color = c.ink, modifier = Modifier.weight(1f))
+                        if (isSelected) Icon(Icons.Rounded.Check, null, tint = c.ink)
+                    }
+                }
+                Spacer(Modifier.size(16.dp))
+                PrimaryButton("Sposta ed elimina", { target?.let { remove(it) } }, enabled = target != null, color = c.expense, icon = Icons.Rounded.Delete)
+            }
+        }
     }
 }
 
@@ -264,7 +359,6 @@ private fun PaymentEditor(
     var name by remember { mutableStateOf(original.name) }
     var icon by remember { mutableStateOf(original.icon) }
     var color by remember { mutableLongStateOf(original.color) }
-    var confirmDelete by remember { mutableStateOf(false) }
     val preview = original.copy(name = name, icon = icon, color = color)
 
     FullScreenPage(if (original.id == 0L) "Nuovo metodo" else "Modifica metodo", onDismiss) {
@@ -303,25 +397,10 @@ private fun PaymentEditor(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(50))
-                        .bouncyClick { confirmDelete = true }
+                        .bouncyClick { onDelete(original) }
                         .padding(14.dp),
                 )
             }
         }
-    }
-
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Eliminare ${original.name}?") },
-            text = { Text("I movimenti e le spese fisse pagati così restano, con metodo di pagamento \"Altro\".") },
-            confirmButton = {
-                TextButton({
-                    confirmDelete = false
-                    onDelete(original)
-                }) { Text("Elimina", color = c.expenseText) }
-            },
-            dismissButton = { TextButton({ confirmDelete = false }) { Text("Annulla") } },
-        )
     }
 }

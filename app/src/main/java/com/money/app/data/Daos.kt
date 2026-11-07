@@ -80,6 +80,16 @@ interface TransactionDao {
     @Query("UPDATE transactions SET paymentId = NULL WHERE paymentId = :paymentId")
     suspend fun clearPayment(paymentId: Long)
 
+    /** Moves what was paid with [fromMethod]/[fromId] (a custom id, or null for a built-in method) to [toMethod]/[toId]. */
+    @Query(
+        "UPDATE transactions SET payment = :toMethod, paymentId = :toId " +
+            "WHERE (:fromId IS NOT NULL AND paymentId = :fromId) OR (:fromId IS NULL AND paymentId IS NULL AND payment = :fromMethod)"
+    )
+    suspend fun reassignPayment(fromMethod: String, fromId: Long?, toMethod: String, toId: Long?)
+
+    @Query("SELECT COUNT(*) FROM transactions WHERE (:fromId IS NOT NULL AND paymentId = :fromId) OR (:fromId IS NULL AND paymentId IS NULL AND payment = :fromMethod)")
+    suspend fun countForPayment(fromMethod: String, fromId: Long?): Int
+
     /** Settled up: these expenses don't count again. */
     @Query("UPDATE transactions SET settle = 2 WHERE settle = 0 AND id IN (:ids)")
     suspend fun markSettled(ids: List<Long>)
@@ -120,6 +130,15 @@ interface RecurringDao {
     @Query("UPDATE recurring SET paymentId = NULL WHERE paymentId = :paymentId")
     suspend fun clearPayment(paymentId: Long)
 
+    @Query(
+        "UPDATE recurring SET payment = :toMethod, paymentId = :toId " +
+            "WHERE (:fromId IS NOT NULL AND paymentId = :fromId) OR (:fromId IS NULL AND paymentId IS NULL AND payment = :fromMethod)"
+    )
+    suspend fun reassignPayment(fromMethod: String, fromId: Long?, toMethod: String, toId: Long?)
+
+    @Query("SELECT COUNT(*) FROM recurring WHERE (:fromId IS NOT NULL AND paymentId = :fromId) OR (:fromId IS NULL AND paymentId IS NULL AND payment = :fromMethod)")
+    suspend fun countForPayment(fromMethod: String, fromId: Long?): Int
+
     @Query("DELETE FROM recurring")
     suspend fun clear()
 }
@@ -142,6 +161,21 @@ interface MemberDao {
     suspend fun delete(member: MemberEntity)
 
     @Query("DELETE FROM members")
+    suspend fun clear()
+}
+
+@Dao
+interface HiddenPaymentDao {
+    @Query("SELECT * FROM hidden_payments")
+    fun observeAll(): Flow<List<HiddenPaymentEntity>>
+
+    @Query("SELECT * FROM hidden_payments")
+    suspend fun all(): List<HiddenPaymentEntity>
+
+    @Upsert
+    suspend fun insertAll(methods: List<HiddenPaymentEntity>)
+
+    @Query("DELETE FROM hidden_payments")
     suspend fun clear()
 }
 

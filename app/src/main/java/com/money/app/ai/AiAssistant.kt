@@ -107,7 +107,7 @@ class AiAssistant(
     suspend fun save(draft: Draft): Boolean = repo.saveTransaction(draft.tx) >= 0
 
     private fun addRules(cats: List<CategoryEntity>, payments: Payments, members: List<MemberEntity>): String {
-        val methods = PaymentMethod.entries.joinToString(", ") { "${it.name}: ${it.label}" } +
+        val methods = payments.builtIns.joinToString(", ") { "${it.name}: ${it.label}" } +
             payments.custom.values.joinToString("") { ", custom:${it.id}: ${it.name}" }
         return buildString {
             appendLine("## Aggiungere movimenti")
@@ -156,8 +156,8 @@ class AiAssistant(
         val date = runCatching { LocalDate.parse(o.optString("data")) }.getOrDefault(LocalDate.now())
         val code = if (o.isNull("metodo")) "" else o.optString("metodo")
         val choice = code.removePrefix("custom:").toLongOrNull()?.takeIf { code.startsWith("custom:") && it in payments.custom }?.let { PaymentChoice.custom(it) }
-            ?: PaymentMethod.entries.firstOrNull { it.name == code }?.let { PaymentChoice(it) }
-            ?: PaymentChoice(if (type == TxType.INCOME) PaymentMethod.TRANSFER else PaymentMethod.CARD)
+            ?: payments.builtIns.firstOrNull { it.name == code }?.let { PaymentChoice(it) }
+            ?: PaymentChoice((if (type == TxType.INCOME) PaymentMethod.TRANSFER else PaymentMethod.CARD).takeIf { it !in payments.hidden } ?: payments.builtIns.first())
         val note = if (o.isNull("nota")) "" else o.optString("nota").trim()
         val tx = TransactionEntity(
             type = type, amountCents = cents, date = date.toEpochDay(), categoryId = category.id, subcategoryId = sub?.id,
@@ -200,7 +200,7 @@ class AiAssistant(
         }
 
         // Totals by payment method and by person, so questions about them work beyond the last two months too.
-        val methods = PaymentMethod.entries.map { PaymentChoice(it) } +
+        val methods = payments.builtIns.map { PaymentChoice(it) } +
             payments.custom.values.sortedBy { it.sortOrder }.map { PaymentChoice.custom(it.id) }
         sb.appendLine().appendLine("## Metodi di pagamento dell'utente")
         sb.appendLine(methods.joinToString(", ") { payments.label(it) })

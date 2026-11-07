@@ -9,8 +9,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [CategoryEntity::class, TransactionEntity::class, RecurringEntity::class, MemberEntity::class, CustomPaymentEntity::class,
-        AccountEntity::class, TransferEntity::class],
-    version = 6,
+        AccountEntity::class, TransferEntity::class, HiddenPaymentEntity::class],
+    version = 7,
     exportSchema = true,
 )
 abstract class MoneyDatabase : RoomDatabase() {
@@ -21,6 +21,7 @@ abstract class MoneyDatabase : RoomDatabase() {
     abstract fun payments(): CustomPaymentDao
     abstract fun accounts(): AccountDao
     abstract fun transfers(): TransferDao
+    abstract fun hiddenPayments(): HiddenPaymentDao
 
     companion object {
         /** People of the household and whose each movement is. */
@@ -78,9 +79,16 @@ abstract class MoneyDatabase : RoomDatabase() {
             }
         }
 
+        /** Built-in payment methods the user removed. */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `hidden_payments` (`method` TEXT NOT NULL, PRIMARY KEY(`method`))")
+            }
+        }
+
         fun build(context: Context): MoneyDatabase =
             Room.databaseBuilder(context, MoneyDatabase::class.java, "money.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .build()
     }
 }

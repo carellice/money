@@ -23,6 +23,8 @@ sealed interface Change {
     data class DeleteMember(val id: Long) : Change
     data class SavePayment(val method: CustomPaymentEntity, val created: Boolean = false) : Change
     data class DeletePayment(val id: Long) : Change
+    /** [from] goes away (a built-in one gets hidden); what was paid with it moves to [to], or to "Altro". */
+    data class RemovePayment(val from: PaymentChoice, val to: PaymentChoice?) : Change
     data class SaveAccount(val account: AccountEntity, val created: Boolean = false) : Change
     data class DeleteAccount(val id: Long) : Change
     data class SaveTransfer(val transfer: TransferEntity, val created: Boolean = false) : Change
