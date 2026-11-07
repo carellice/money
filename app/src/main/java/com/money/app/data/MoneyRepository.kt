@@ -22,6 +22,8 @@ class MoneyRepository(
     private val recurringDao = db.recurring()
     private val memberDao = db.members()
     private val paymentDao = db.payments()
+    private val accountDao = db.accounts()
+    private val transferDao = db.transfers()
 
     /** Server mode (data on the CasaOS server, as for the PWA); off keeps everything on the phone. */
     val server = ServerSync(db, serverStore, File(filesDir, "modifiche-da-inviare.json")) { imagesDir }
@@ -63,6 +65,11 @@ class MoneyRepository(
     val recurring: Flow<List<RecurringEntity>> = recurringDao.observeAll()
     val members: Flow<List<MemberEntity>> = memberDao.observeAll()
     val customPayments: Flow<List<CustomPaymentEntity>> = paymentDao.observeAll()
+    val accounts: Flow<List<AccountEntity>> = accountDao.observeAll()
+    val transfers: Flow<List<TransferEntity>> = transferDao.observeAll()
+
+    /** Movements registered after [since]: the ones that can move an account balance stated then. */
+    fun transactionsCreatedAfter(since: Long): Flow<List<TransactionEntity>> = txDao.observeCreatedAfter(since)
 
     fun transactionsIn(month: YearMonth): Flow<List<TransactionEntity>> =
         transactionsBetween(month.atDay(1), month.atEndOfMonth())
@@ -227,6 +234,43 @@ class MoneyRepository(
         }) { local() }
     }
 
+    /** Returns the id of the account, or -1 when the server didn't save it. */
+    suspend fun saveAccount(account: AccountEntity): Long {
+        suspend fun local(): AccountEntity {
+            val saved = if (account.id == 0L) account.copy(sortOrder = accountDao.all().size) else account
+            return accountDao.upsert(saved).let { saved.copy(id = if (account.id == 0L) it else account.id) }
+        }
+        return either(-1L, { submit(Change.SaveAccount(account)) }, offline = {
+            local().also { server.enqueue(Change.SaveAccount(it, created = account.id == 0L)) }.id
+        }) { local().id }
+    }
+
+    /** Its transfers go with it; movements stay, they just no longer move any balance. */
+    suspend fun deleteAccount(account: AccountEntity) {
+        suspend fun local() = db.withTransaction {
+            transferDao.deleteFor(account.id)
+            accountDao.delete(account)
+        }
+        either(Unit, { submit(Change.DeleteAccount(account.id)) }, offline = {
+            local()
+            server.enqueue(Change.DeleteAccount(account.id))
+        }) { local() }
+    }
+
+    suspend fun saveTransfer(transfer: TransferEntity): Long {
+        suspend fun local() = transferDao.upsert(transfer).let { if (transfer.id == 0L) it else transfer.id }
+        return either(-1L, { submit(Change.SaveTransfer(transfer)) }, offline = {
+            local().also { server.enqueue(Change.SaveTransfer(transfer.copy(id = it), created = transfer.id == 0L)) }
+        }) { local() }
+    }
+
+    suspend fun deleteTransfer(transfer: TransferEntity) {
+        either(Unit, { submit(Change.DeleteTransfer(transfer.id)) }, offline = {
+            transferDao.delete(transfer.id)
+            server.enqueue(Change.DeleteTransfer(transfer.id))
+        }) { transferDao.delete(transfer.id) }
+    }
+
     /** The server seeds new accounts itself. */
     suspend fun seedIfEmpty() {
         if (server.enabled || categoryDao.count() > 0) return
@@ -332,10 +376,14 @@ class MoneyRepository(
         val recurring: List<RecurringEntity>,
         val members: List<MemberEntity>,
         val payments: List<CustomPaymentEntity> = emptyList(),
+        /** Null for backups from before accounts: the ones there are stay. */
+        val accounts: List<AccountEntity>? = null,
+        val transfers: List<TransferEntity> = emptyList(),
     )
 
-    suspend fun snapshot() =
-        Snapshot(categoryDao.all(), txDao.all(), recurringDao.all(), memberDao.all(), paymentDao.all())
+    suspend fun snapshot() = Snapshot(
+        categoryDao.all(), txDao.all(), recurringDao.all(), memberDao.all(), paymentDao.all(), accountDao.all(), transferDao.all(),
+    )
 
     /** In server mode the backup replaces the account's data on the server. */
     suspend fun replaceAll(snapshot: Snapshot) {
@@ -353,5 +401,11 @@ class MoneyRepository(
         paymentDao.insertAll(snapshot.payments)
         txDao.insertAll(snapshot.transactions)
         recurringDao.insertAll(snapshot.recurring)
+        snapshot.accounts?.let {
+            accountDao.clear()
+            transferDao.clear()
+            accountDao.insertAll(it)
+            transferDao.insertAll(snapshot.transfers)
+        }
     }
 }

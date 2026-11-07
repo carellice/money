@@ -125,6 +125,8 @@ class ServerSync(
         .put("recurring", JSONArray(snapshot.recurring.map { it.toJson().put("imagePath", it.imagePath ?: JSONObject.NULL) }))
         .put("members", JSONArray(snapshot.members.map { it.toJson() }))
         .put("paymentMethods", JSONArray(snapshot.payments.map { it.toJson() }))
+        .apply { snapshot.accounts?.let { put("accounts", JSONArray(it.map { a -> a.toJson() })) } }
+        .put("transfers", JSONArray(snapshot.transfers.map { it.toJson() }))
         .toString()
 
     fun decode(text: String): MoneyRepository.Snapshot {
@@ -135,11 +137,17 @@ class ServerSync(
             json.getJSONArray("recurring").objects().map { it.toRecurring() },
             json.getJSONArray("members").objects().map { it.toMember() },
             json.payments(),
+            json.optJSONArray("accounts")?.objects()?.map { it.toAccount() },
+            json.transfers(),
         )
     }
 
     /** Servers older than custom payment methods don't send them. */
     private fun JSONObject.payments() = optJSONArray("paymentMethods")?.objects()?.map { it.toPayment() }.orEmpty()
+
+    /** Servers older than accounts don't send them. */
+    private fun JSONObject.accounts() = optJSONArray("accounts")?.objects()?.map { it.toAccount() }.orEmpty()
+    private fun JSONObject.transfers() = optJSONArray("transfers")?.objects()?.map { it.toTransfer() }.orEmpty()
 
     private suspend fun replaceLocal(snapshot: MoneyRepository.Snapshot) = db.withTransaction {
         db.transactions().clear()
@@ -152,6 +160,12 @@ class ServerSync(
         db.payments().insertAll(snapshot.payments)
         db.transactions().insertAll(snapshot.transactions)
         db.recurring().insertAll(snapshot.recurring)
+        snapshot.accounts?.let {
+            db.accounts().clear()
+            db.transfers().clear()
+            db.accounts().insertAll(it)
+            db.transfers().insertAll(snapshot.transfers)
+        }
     }
 
     /** Server rows with their images downloaded next to the app's own. */
@@ -161,6 +175,8 @@ class ServerSync(
         json.getJSONArray("recurring").objects().map { it.toRecurring().let { r -> r.copy(imagePath = localImage(config, r.imagePath)) } },
         json.getJSONArray("members").objects().map { it.toMember() },
         json.payments(),
+        json.accounts(),
+        json.transfers(),
     )
 
     private suspend fun localImage(config: ServerConfig, path: String?): String? {
@@ -256,6 +272,30 @@ class ServerSync(
             id
         }
         is Change.DeletePayment -> delete(config, "/api/payment-methods/", outbox.id(PAYMENTS, change.id))
+        is Change.SaveAccount -> {
+            val account = change.account.copy(
+                id = if (change.created) 0 else outbox.id(ACCOUNTS, change.account.id),
+                // Methods created offline are named by the id the server gave them.
+                methods = change.account.methodKeys.joinToString(",") { key ->
+                    key.removePrefix("c").toLongOrNull()?.takeIf { key.startsWith("c") }?.let { "c${outbox.id(PAYMENTS, it)}" } ?: key
+                },
+            )
+            val id = client.post(config, "/api/accounts", account.toJson()).getLong("id")
+            if (change.created) outbox.mapId(ACCOUNTS, change.account.id, id)
+            id
+        }
+        is Change.DeleteAccount -> delete(config, "/api/accounts/", outbox.id(ACCOUNTS, change.id))
+        is Change.SaveTransfer -> {
+            val transfer = change.transfer.copy(
+                id = if (change.created) 0 else outbox.id(TRANSFERS, change.transfer.id),
+                fromId = outbox.id(ACCOUNTS, change.transfer.fromId),
+                toId = outbox.id(ACCOUNTS, change.transfer.toId),
+            )
+            val id = client.post(config, "/api/transfers", transfer.toJson()).getLong("id")
+            if (change.created) outbox.mapId(TRANSFERS, change.transfer.id, id)
+            id
+        }
+        is Change.DeleteTransfer -> delete(config, "/api/transfers/", outbox.id(TRANSFERS, change.id))
         is Change.DeleteImage -> {
             client.deleteImage(config, change.path)
             0
@@ -307,6 +347,10 @@ class ServerSync(
         is Change.DeleteMember -> JSONObject().put("type", "member.delete").put("id", change.id)
         is Change.SavePayment -> JSONObject().put("type", "payment").put("created", change.created).put("row", change.method.toJson())
         is Change.DeletePayment -> JSONObject().put("type", "payment.delete").put("id", change.id)
+        is Change.SaveAccount -> JSONObject().put("type", "account").put("created", change.created).put("row", change.account.toJson())
+        is Change.DeleteAccount -> JSONObject().put("type", "account.delete").put("id", change.id)
+        is Change.SaveTransfer -> JSONObject().put("type", "transfer").put("created", change.created).put("row", change.transfer.toJson())
+        is Change.DeleteTransfer -> JSONObject().put("type", "transfer.delete").put("id", change.id)
         is Change.DeleteImage -> JSONObject().put("type", "image.delete").put("path", change.path)
     }
 
@@ -329,6 +373,10 @@ class ServerSync(
             "member.delete" -> Change.DeleteMember(id)
             "payment" -> Change.SavePayment(json.getJSONObject("row").toPayment(), created)
             "payment.delete" -> Change.DeletePayment(id)
+            "account" -> Change.SaveAccount(json.getJSONObject("row").toAccount(), created)
+            "account.delete" -> Change.DeleteAccount(id)
+            "transfer" -> Change.SaveTransfer(json.getJSONObject("row").toTransfer(), created)
+            "transfer.delete" -> Change.DeleteTransfer(id)
             "image.delete" -> Change.DeleteImage(json.getString("path"))
             else -> throw IllegalArgumentException("modifica sconosciuta ($type)")
         }
@@ -345,6 +393,10 @@ class ServerSync(
             .put("recurring", JSONArray(snapshot.recurring.map { it.toJson() }))
             .put("members", JSONArray(snapshot.members.map { it.toJson() }))
             .put("paymentMethods", JSONArray(snapshot.payments.map { it.toJson() }))
+        snapshot.accounts?.let {
+            root.put("accounts", JSONArray(it.map { a -> a.toJson() }))
+            root.put("transfers", JSONArray(snapshot.transfers.map { t -> t.toJson() }))
+        }
         client.importBackup(config, root.toString())
         // The backup format leaves images out: send them one by one, keeping the same ids.
         snapshot.transactions.filter { it.receiptPath != null }.forEach { tx ->
@@ -440,6 +492,8 @@ class ServerSync(
         private const val CATEGORIES = "categories"
         private const val MEMBERS = "members"
         private const val PAYMENTS = "payments"
+        private const val ACCOUNTS = "accounts"
+        private const val TRANSFERS = "transfers"
 
         /** Names the server gives to uploaded images; the app's own have no random suffix. */
         fun isServerImage(name: String) = name.matches(Regex("(receipt|logo)_\\d+_[0-9a-f]{6}\\.jpg"))

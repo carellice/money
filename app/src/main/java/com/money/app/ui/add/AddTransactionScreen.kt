@@ -89,7 +89,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.money.app.data.CategoryEntity
-import com.money.app.ui.settings.PaymentPills
+import com.money.app.ui.settings.PaymentPicker
 import com.money.app.data.TxType
 import com.money.app.domain.AmountOp
 import com.money.app.ui.components.SwitchRow
@@ -538,7 +538,7 @@ private fun DetailsStep(vm: AddViewModel, accent: Color, onDeleted: () -> Unit) 
         }
 
         Label(if (vm.type == TxType.EXPENSE) "Come hai pagato?" else "Come l'hai ricevuto?")
-        PaymentPills(vm.payment, { vm.payment = it }, color = accent)
+        PaymentPicker(vm.payment, { vm.payment = it }, color = accent)
 
         Label("Nota")
         NoteField(

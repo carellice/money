@@ -182,12 +182,68 @@ export type Member = {
   sortOrder: number
 }
 
+/** Money of the household (a bank account, the cash...), moved by the payment methods it holds. */
+export type Account = {
+  id: number
+  name: string
+  icon: string
+  /** ARGB color. */
+  color: number
+  /** Comma separated [methodKey]s: "CARD,DEBIT,c3". A method belongs to one account at most. */
+  methods: string
+  /** The balance stated at [balanceAt]: movements and transfers registered after it move it. */
+  balanceCents: number
+  /** Epoch millis. */
+  balanceAt: number
+  sortOrder: number
+}
+
+/** Money moved from one account to another: neither an expense nor an income. */
+export type Transfer = {
+  id: number
+  fromId: number
+  toId: number
+  amountCents: number
+  /** Epoch day. */
+  date: number
+  note: string
+  createdAt: number
+}
+
+/** "CARD", or "c3" for the custom method 3. */
+export const methodKey = (c: PaymentChoice) => (c.customId != null ? `c${c.customId}` : c.method)
+
+export const accountMethods = (a: Account) => (a.methods ? a.methods.split(',') : [])
+
+/** The account holding [choice], if any. */
+export const accountOf = (choice: PaymentChoice, accounts: Account[]) =>
+  accounts.find((a) => accountMethods(a).includes(methodKey(choice)))
+
+/** Movements of [account] registered after its stated balance, so the ones that move it. */
+export const accountTransactions = (account: Account, accounts: Account[], transactions: Transaction[]) =>
+  transactions.filter((t) => t.createdAt > account.balanceAt && accountOf(paymentChoice(t), accounts)?.id === account.id)
+
+/** Transfers in or out of [account] registered after its stated balance. */
+export const accountTransfers = (account: Account, transfers: Transfer[]) =>
+  transfers.filter((t) => t.createdAt > account.balanceAt && (t.fromId === account.id || t.toId === account.id))
+
+/** What [account] holds now: its stated balance plus what was registered after it. */
+export function balanceOf(account: Account, accounts: Account[], transactions: Transaction[], transfers: Transfer[]): number {
+  let cents = account.balanceCents
+  for (const t of accountTransactions(account, accounts, transactions)) cents += t.type === 'INCOME' ? t.amountCents : -t.amountCents
+  for (const t of accountTransfers(account, transfers)) cents += t.toId === account.id ? t.amountCents : -t.amountCents
+  return cents
+}
+
 export type AppState = {
   categories: Category[]
   transactions: Transaction[]
   recurring: Recurring[]
   members: Member[]
   paymentMethods: CustomPayment[]
+  /** Servers and backups before accounts don't have them. */
+  accounts?: Account[]
+  transfers?: Transfer[]
 }
 
 /** Pastel palette shared by categories and fixed expenses. */

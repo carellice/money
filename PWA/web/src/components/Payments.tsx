@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { argb, paletteAll, paymentMethods, sameChoice, type CustomPayment, type PaymentChoice } from '../../../shared/model.ts'
-import { actions, usePaymentMethods } from '../lib/store.ts'
+import {
+  accountMethods, accountOf, argb, methodKey, paletteAll, paymentLabel, paymentMethods, sameChoice, type CustomPayment, type PaymentChoice,
+} from '../../../shared/model.ts'
+import { actions, useAccounts, usePaymentMethods } from '../lib/store.ts'
 import { Ink } from '../lib/theme.ts'
 import { AppIcon, Bouncy, ColorSwatches, FormLabel, Icon, IconPicker, NoteField, Pill, PrimaryButton } from './ui.tsx'
 import { AlertDialog, FullPage, toast } from './overlays.tsx'
@@ -17,34 +19,86 @@ export function PaymentBadge({ method, size = 40 }: { method: CustomPayment; siz
 const newPayment = (count: number): CustomPayment =>
   ({ id: 0, name: '', icon: 'card', color: paletteAll[(count + 3) % paletteAll.length], sortOrder: 0 })
 
-/**
- * Built-in and custom payment methods to pick from, plus "Nuovo" to add one on the spot:
- * the new method is selected as soon as it is saved.
- */
-export function PaymentPills({ selected, onSelect, color }: { selected: PaymentChoice; onSelect: (c: PaymentChoice) => void; color?: string }) {
-  const custom = usePaymentMethods()
-  const [creating, setCreating] = useState<CustomPayment | null>(null)
+/** Every payment method, built-in first, as choices. */
+export function allChoices(custom: CustomPayment[]): PaymentChoice[] {
+  return [
+    ...paymentMethods.map((m): PaymentChoice => ({ method: m.id, customId: null })),
+    ...custom.map((m): PaymentChoice => ({ method: 'OTHER', customId: m.id })),
+  ]
+}
+
+/** Badge of any payment method: the custom ones keep their color. */
+function ChoiceBadge({ choice, custom, color, size = 40 }: { choice: PaymentChoice; custom: CustomPayment[]; color: string; size?: number }) {
+  const own = choice.customId != null ? custom.find((c) => c.id === choice.customId) : undefined
   return (
-    <div className="flow">
-      {paymentMethods.map((m) => {
-        const choice = { method: m.id, customId: null }
-        return <Pill key={m.id} text={m.label} selected={sameChoice(selected, choice)} onClick={() => onSelect(choice)} color={color} appIcon={m.icon} />
-      })}
-      {custom.map((m) => {
-        const choice: PaymentChoice = { method: 'OTHER', customId: m.id }
-        return <Pill key={'c' + m.id} text={m.name} selected={sameChoice(selected, choice)} onClick={() => onSelect(choice)} color={argb(m.color)} appIcon={m.icon} />
-      })}
-      <Pill text="Nuovo" selected={false} onClick={() => setCreating(newPayment(custom.length))} color={color} icon="add" />
+    <div className="center" style={{ width: size, height: size, borderRadius: size * 0.36, background: own ? argb(own.color) : color, flexShrink: 0 }}>
+      <AppIcon name={paymentLabel(choice, custom).icon} size={size * 0.5} color={Ink} />
+    </div>
+  )
+}
+
+/**
+ * The chosen payment method as one field; tapping it opens the list of every method, grouped
+ * by the account it moves, plus "Nuovo" to add one on the spot (selected as soon as it is saved).
+ */
+export function PaymentPicker({ selected, onSelect, color = 'var(--accent)' }: { selected: PaymentChoice; onSelect: (c: PaymentChoice) => void; color?: string }) {
+  const custom = usePaymentMethods()
+  const accounts = useAccounts()
+  const [open, setOpen] = useState(false)
+  const [creating, setCreating] = useState<CustomPayment | null>(null)
+  const account = accountOf(selected, accounts)
+  const choices = allChoices(custom)
+  const groups = [
+    ...accounts.map((a) => ({ title: a.name, items: choices.filter((c) => accountMethods(a).includes(methodKey(c))) })),
+    { title: accounts.length ? 'Senza conto' : '', items: choices.filter((c) => !accountOf(c, accounts)) },
+  ].filter((g) => g.items.length > 0)
+  return (
+    <>
+      <Bouncy pressedScale={0.98} onClick={() => setOpen(true)} className="row" style={{ borderRadius: 22, background: 'var(--surface)', padding: '12px 18px' }}>
+        <ChoiceBadge choice={selected} custom={custom} color={color} />
+        <div className="col flex1" style={{ marginLeft: 14, minWidth: 0 }}>
+          <span className="t-bodyStrong ellipsis" style={{ color: 'var(--ink)' }}>{paymentLabel(selected, custom).label}</span>
+          {account && <span className="t-caption ellipsis" style={{ color: 'var(--inkSoft)' }}>{account.name}</span>}
+        </div>
+        <span className="t-label" style={{ color: 'var(--inkSoft)' }}>Cambia</span>
+        <Icon name="keyboard_arrow_right" color="var(--inkFaint)" />
+      </Bouncy>
+      {open && (
+        <FullPage title="Metodo di pagamento" onDismiss={() => setOpen(false)}>
+          <div className="col" style={{ padding: '0 20px 32px', gap: 8 }}>
+            {groups.map((g) => (
+              <div key={g.title} className="col" style={{ gap: 8 }}>
+                {g.title && <FormLabel text={g.title} />}
+                {g.items.map((choice) => {
+                  const isSelected = sameChoice(selected, choice)
+                  return (
+                    <Bouncy key={methodKey(choice)} pressedScale={0.98} className="row"
+                      onClick={() => { onSelect(choice); setOpen(false) }}
+                      style={{ borderRadius: 22, padding: '10px 18px', background: isSelected ? 'var(--surfaceHigh)' : 'var(--surface)' }}>
+                      <ChoiceBadge choice={choice} custom={custom} color={color} size={36} />
+                      <span className="t-bodyStrong flex1 ellipsis" style={{ marginLeft: 14, color: 'var(--ink)' }}>{paymentLabel(choice, custom).label}</span>
+                      {isSelected && <Icon name="check" color="var(--ink)" />}
+                    </Bouncy>
+                  )
+                })}
+              </div>
+            ))}
+            <div style={{ height: 8 }} />
+            <Pill text="Nuovo metodo" selected={false} onClick={() => setCreating(newPayment(custom.length))} color={color} icon="add" />
+          </div>
+        </FullPage>
+      )}
       {creating && (
         <PaymentEditor original={creating} onDismiss={() => setCreating(null)} onDelete={() => {}}
           onSave={(m) => {
             setCreating(null)
+            setOpen(false)
             actions.savePaymentMethod(m)
               .then((id) => onSelect({ method: 'OTHER', customId: id }))
               .catch((e) => toast(e.message, true))
           }} />
       )}
-    </div>
+    </>
   )
 }
 

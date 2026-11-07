@@ -58,6 +58,7 @@ import com.money.app.domain.MonthReport
 import com.money.app.domain.ReportBuilder
 import com.money.app.domain.percent
 import com.money.app.ui.appContainer
+import com.money.app.ui.accounts.AccountsCard
 import com.money.app.ui.appViewModel
 import com.money.app.ui.update.UpdateBanner
 import com.money.app.ui.components.AnimatedAmount
@@ -126,6 +127,7 @@ fun HomeScreen(
     onOpenRecurringItem: (Long) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenChat: () -> Unit,
+    onOpenAccount: (Long) -> Unit,
     /** Changes when the Home tab is selected again, to jump back to the top. */
     scrollToTop: Int = 0,
 ) {
@@ -169,6 +171,8 @@ fun HomeScreen(
                 item { Hero(r, onAdd, Modifier.staggered(0)) }
 
                 item { SpendGauge(r, Modifier.staggered(1)) }
+
+                item { AccountsCard(onOpenAccount, Modifier.staggered(2)) }
 
                 if (r.budgets.isNotEmpty()) {
                     item {

@@ -10,7 +10,8 @@ object Backup {
     private const val VERSION = 1
 
     suspend fun export(repo: MoneyRepository, out: OutputStream) {
-        val (categories, transactions, recurring, members, payments) = repo.snapshot()
+        val snapshot = repo.snapshot()
+        val (categories, transactions, recurring, members, payments) = snapshot
         val root = JSONObject()
             .put("app", "Money")
             .put("version", VERSION)
@@ -20,6 +21,8 @@ object Backup {
             .put("recurring", JSONArray(recurring.map { it.toJson() }))
             .put("members", JSONArray(members.map { it.toJson() }))
             .put("paymentMethods", JSONArray(payments.map { it.toJson() }))
+            .put("accounts", JSONArray(snapshot.accounts.orEmpty().map { it.toJson() }))
+            .put("transfers", JSONArray(snapshot.transfers.map { it.toJson() }))
         out.bufferedWriter().use { it.write(root.toString(2)) }
     }
 
@@ -37,6 +40,11 @@ object Backup {
         val payments = root.optJSONArray("paymentMethods")?.objects()?.map { it.toPayment() }.orEmpty()
         val knownPayments = payments.map { it.id }.toSet()
         fun Long?.ifKnown() = this?.takeIf { it in knownPayments }
+        // Accounts came last: a backup without them keeps the ones there are.
+        val accounts = root.optJSONArray("accounts")?.objects()?.map { it.toAccount() }
+        val knownAccounts = accounts.orEmpty().map { it.id }.toSet()
+        val transfers = root.optJSONArray("transfers")?.objects()?.map { it.toTransfer() }.orEmpty()
+            .filter { it.fromId in knownAccounts && it.toId in knownAccounts }
         repo.replaceAll(
             MoneyRepository.Snapshot(
                 categories,
@@ -49,6 +57,8 @@ object Backup {
                 recurring.map { it.copy(paymentId = it.paymentId.ifKnown()) },
                 members,
                 payments,
+                accounts,
+                transfers,
             )
         )
         return transactions.size

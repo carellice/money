@@ -4,7 +4,7 @@ import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } f
 import { randomBytes } from 'node:crypto'
 import { extname, join, normalize } from 'node:path'
 import { parseMonthKey } from '../../shared/date.ts'
-import type { Category, CustomPayment, Member, Recurring, Transaction, TxType } from '../../shared/model.ts'
+import type { Account, Category, CustomPayment, Member, Recurring, Transaction, Transfer, TxType } from '../../shared/model.ts'
 import * as data from './db.ts'
 import { exportBackup, importBackup } from './backup.ts'
 import * as ai from './ai.ts'
@@ -243,6 +243,25 @@ route('POST', '/api/payment-methods', async (req, res) => {
 
 route('DELETE', '/api/payment-methods/:id', (_req, res, [id]) => {
   data.deletePaymentMethod(Number(id))
+  json(res, 200, { ok: true })
+})
+
+route('POST', '/api/accounts', async (req, res) => {
+  json(res, 200, { id: data.saveAccount(await readJson<Account>(req)) })
+})
+
+route('DELETE', '/api/accounts/:id', (_req, res, [id]) => {
+  data.deleteAccount(Number(id))
+  json(res, 200, { ok: true })
+})
+
+route('POST', '/api/transfers', async (req, res) => {
+  const transfer = await readJson<Transfer>(req)
+  json(res, 200, { id: data.saveTransfer({ ...transfer, createdAt: transfer.createdAt || Date.now() }) })
+})
+
+route('DELETE', '/api/transfers/:id', (_req, res, [id]) => {
+  data.deleteTransfer(Number(id))
   json(res, 200, { ok: true })
 })
 

@@ -52,6 +52,10 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions")
     suspend fun all(): List<TransactionEntity>
 
+    /** The ones that move account balances stated at [since] or later. */
+    @Query("SELECT * FROM transactions WHERE createdAt > :since")
+    fun observeCreatedAfter(since: Long): Flow<List<TransactionEntity>>
+
     @Query("SELECT * FROM transactions WHERE id = :id")
     suspend fun get(id: Long): TransactionEntity?
 

@@ -61,7 +61,7 @@ import com.money.app.ui.components.PrimaryButton
 import com.money.app.ui.components.RecurringLogo
 import com.money.app.ui.components.TopBar
 import com.money.app.ui.settings.MemberAvatar
-import com.money.app.ui.settings.PaymentPills
+import com.money.app.ui.settings.PaymentPicker
 import com.money.app.ui.theme.Ui
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -220,7 +220,7 @@ fun RecurringRegisterScreen(onClose: () -> Unit) {
                 Pill(if (other) Dates.long(vm.date) else "Altra data", other, { pickingDate = true }, icon = Icons.Rounded.CalendarMonth)
             }
             FormLabel("Metodo di pagamento")
-            PaymentPills(vm.payment ?: item.paymentChoice, { vm.payment = it })
+            PaymentPicker(vm.payment ?: item.paymentChoice, { vm.payment = it })
 
             FormLabel(if (item.installments != null) "Prossima rata" else "Prossimo rinnovo")
             val presets = Frequency.entries.map { vm.renewal(item, it) to it.step }

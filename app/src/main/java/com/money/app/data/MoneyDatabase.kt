@@ -8,8 +8,9 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [CategoryEntity::class, TransactionEntity::class, RecurringEntity::class, MemberEntity::class, CustomPaymentEntity::class],
-    version = 5,
+    entities = [CategoryEntity::class, TransactionEntity::class, RecurringEntity::class, MemberEntity::class, CustomPaymentEntity::class,
+        AccountEntity::class, TransferEntity::class],
+    version = 6,
     exportSchema = true,
 )
 abstract class MoneyDatabase : RoomDatabase() {
@@ -18,6 +19,8 @@ abstract class MoneyDatabase : RoomDatabase() {
     abstract fun recurring(): RecurringDao
     abstract fun members(): MemberDao
     abstract fun payments(): CustomPaymentDao
+    abstract fun accounts(): AccountDao
+    abstract fun transfers(): TransferDao
 
     companion object {
         /** People of the household and whose each movement is. */
@@ -59,9 +62,25 @@ abstract class MoneyDatabase : RoomDatabase() {
             }
         }
 
+        /** Accounts of the household and the transfers between them. */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `accounts` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `icon` TEXT NOT NULL, `color` INTEGER NOT NULL, `methods` TEXT NOT NULL, " +
+                        "`balanceCents` INTEGER NOT NULL, `balanceAt` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `transfers` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`fromId` INTEGER NOT NULL, `toId` INTEGER NOT NULL, `amountCents` INTEGER NOT NULL, " +
+                        "`date` INTEGER NOT NULL, `note` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)"
+                )
+            }
+        }
+
         fun build(context: Context): MoneyDatabase =
             Room.databaseBuilder(context, MoneyDatabase::class.java, "money.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
     }
 }

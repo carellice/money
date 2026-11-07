@@ -44,12 +44,17 @@ import com.money.app.data.CustomPaymentEntity
 import com.money.app.data.Palette
 import com.money.app.data.PaymentChoice
 import com.money.app.data.PaymentMethod
+import com.money.app.data.Payments
+import com.money.app.data.accountOf
+import com.money.app.data.methodKey
+import androidx.compose.ui.text.style.TextOverflow
 import com.money.app.ui.add.NoteField
 import com.money.app.ui.appContainer
 import com.money.app.ui.components.AppIcons
 import com.money.app.ui.components.ColorSwatches
 import com.money.app.ui.components.FormLabel
 import com.money.app.ui.components.IconPicker
+import com.money.app.ui.components.LocalAccounts
 import com.money.app.ui.components.LocalPayments
 import com.money.app.ui.components.Pill
 import com.money.app.ui.components.PrimaryButton
@@ -69,28 +74,101 @@ fun PaymentBadge(method: CustomPaymentEntity, size: Dp = 40.dp) {
     }
 }
 
+/** Every payment method, built-in first, as choices. */
+fun allChoices(payments: Payments): List<PaymentChoice> =
+    PaymentMethod.entries.map { PaymentChoice(it) } +
+        payments.custom.values.sortedWith(compareBy({ it.sortOrder }, { it.id })).map { PaymentChoice.custom(it.id) }
+
+/** Badge of any payment method: the custom ones keep their color. */
+@Composable
+private fun ChoiceBadge(choice: PaymentChoice, color: Color, size: Dp = 40.dp) {
+    val payments = LocalPayments.current
+    val own = choice.customId?.let { payments.custom[it] }
+    Box(
+        Modifier.size(size).clip(RoundedCornerShape(size * 0.36f)).background(own?.let { Color(it.color) } ?: color),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(AppIcons[payments.icon(choice)], null, tint = Ink, modifier = Modifier.size(size * 0.5f))
+    }
+}
+
 /**
- * Built-in and custom payment methods to pick from, plus "Nuovo" to add one on the spot:
- * the new method is selected as soon as it is saved.
+ * The chosen payment method as one field; tapping it opens the list of every method, grouped
+ * by the account it moves, plus "Nuovo metodo" to add one on the spot (selected once saved).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun PaymentPills(selected: PaymentChoice, onSelect: (PaymentChoice) -> Unit, color: Color = Ui.colors.accent) {
+fun PaymentPicker(selected: PaymentChoice, onSelect: (PaymentChoice) -> Unit, color: Color = Ui.colors.accent) {
+    val c = Ui.colors
     val repo = appContainer().repository
     val scope = rememberCoroutineScope()
-    val custom = LocalPayments.current.custom.values.sortedWith(compareBy({ it.sortOrder }, { it.id }))
+    val payments = LocalPayments.current
+    val accounts = LocalAccounts.current
+    var open by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf<CustomPaymentEntity?>(null) }
+    val account = accounts.accountOf(selected)
 
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        PaymentMethod.entries.forEach { method ->
-            val choice = PaymentChoice(method)
-            Pill(method.label, selected == choice, { onSelect(choice) }, color = color, icon = AppIcons[method.icon])
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .bouncyClick(pressedScale = 0.98f) { open = true }
+            .clip(RoundedCornerShape(22.dp))
+            .background(c.surface)
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ChoiceBadge(selected, color)
+        Spacer(Modifier.size(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(payments.label(selected), style = Ui.type.bodyStrong, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            account?.let { Text(it.name, style = Ui.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
-        custom.forEach { method ->
-            val choice = PaymentChoice.custom(method.id)
-            Pill(method.name, selected == choice, { onSelect(choice) }, color = Color(method.color), icon = AppIcons[method.icon])
+        Text("Cambia", style = Ui.type.label, color = c.inkSoft)
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = c.inkFaint)
+    }
+
+    if (open) {
+        val choices = allChoices(payments)
+        val groups = (accounts.map { a -> a.name to choices.filter { it.methodKey in a.methodKeys } } +
+            ((if (accounts.isEmpty()) "" else "Senza conto") to choices.filter { accounts.accountOf(it) == null }))
+            .filter { it.second.isNotEmpty() }
+        FullScreenPage("Metodo di pagamento", { open = false }) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                groups.forEach { (title, items) ->
+                    if (title.isNotEmpty()) FormLabel(title)
+                    items.forEach { choice ->
+                        val isSelected = choice == selected
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .bouncyClick(pressedScale = 0.98f) {
+                                    onSelect(choice)
+                                    open = false
+                                }
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(if (isSelected) c.surfaceHigh else c.surface)
+                                .padding(horizontal = 18.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            ChoiceBadge(choice, color, size = 36.dp)
+                            Spacer(Modifier.size(14.dp))
+                            Text(payments.label(choice), style = Ui.type.bodyStrong, color = c.ink, modifier = Modifier.weight(1f))
+                            if (isSelected) Icon(Icons.Rounded.Check, null, tint = c.ink)
+                        }
+                    }
+                }
+                Spacer(Modifier.size(8.dp))
+                Pill("Nuovo metodo", false, { creating = newPayment(payments.custom.size) }, color = color, icon = Icons.Rounded.Add)
+            }
         }
-        Pill("Nuovo", false, { creating = newPayment(custom.size) }, color = color, icon = Icons.Rounded.Add)
     }
 
     creating?.let { method ->
@@ -99,6 +177,7 @@ fun PaymentPills(selected: PaymentChoice, onSelect: (PaymentChoice) -> Unit, col
             onDismiss = { creating = null },
             onSave = {
                 creating = null
+                open = false
                 scope.launch {
                     val id = repo.saveCustomPayment(it)
                     if (id >= 0) onSelect(PaymentChoice.custom(id))

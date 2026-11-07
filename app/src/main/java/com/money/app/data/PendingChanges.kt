@@ -23,6 +23,10 @@ sealed interface Change {
     data class DeleteMember(val id: Long) : Change
     data class SavePayment(val method: CustomPaymentEntity, val created: Boolean = false) : Change
     data class DeletePayment(val id: Long) : Change
+    data class SaveAccount(val account: AccountEntity, val created: Boolean = false) : Change
+    data class DeleteAccount(val id: Long) : Change
+    data class SaveTransfer(val transfer: TransferEntity, val created: Boolean = false) : Change
+    data class DeleteTransfer(val id: Long) : Change
     /** Server image ("/images/...") no longer used. */
     data class DeleteImage(val path: String) : Change
 }

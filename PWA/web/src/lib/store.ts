@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { currentMonth, type Month } from '../../../shared/date.ts'
-import { Palette, type RecurringSort, type AppState, type Category, type CustomPayment, type Member, type Recurring, type Transaction } from '../../../shared/model.ts'
+import { Palette, type RecurringSort, type Account, type AppState, type Category, type CustomPayment, type Member, type Recurring, type Transaction, type Transfer } from '../../../shared/model.ts'
 import { api } from './api.ts'
 
 // --- device settings (theme, accent, lock): per phone, like the Android DataStore -----------
@@ -105,6 +105,13 @@ const noPayments: CustomPayment[] = []
 /** Custom payment methods (data cached by an older version has none). */
 export const usePaymentMethods = () => useStore((s) => s.data?.paymentMethods ?? noPayments)
 
+const noAccounts: Account[] = []
+const noTransfers: Transfer[] = []
+
+/** Accounts of the household (servers before accounts send none). */
+export const useAccounts = () => useStore((s) => s.data?.accounts ?? noAccounts)
+export const useTransfers = () => useStore((s) => s.data?.transfers ?? noTransfers)
+
 export function setMonth(month: Month) {
   set({ month })
 }
@@ -197,6 +204,12 @@ export const actions = {
   savePaymentMethod: (method: CustomPayment) =>
     mutate(() => api<{ id: number }>('/api/payment-methods', { method: 'POST', json: method })).then((r) => r.id),
   deletePaymentMethod: (method: CustomPayment) => mutate(() => api('/api/payment-methods/' + method.id, { method: 'DELETE' })),
+  /** Returns the id of the account. */
+  saveAccount: (account: Account) =>
+    mutate(() => api<{ id: number }>('/api/accounts', { method: 'POST', json: account })).then((r) => r.id),
+  deleteAccount: (account: Account) => mutate(() => api('/api/accounts/' + account.id, { method: 'DELETE' })),
+  saveTransfer: (transfer: Transfer) => mutate(() => api('/api/transfers', { method: 'POST', json: transfer })),
+  deleteTransfer: (transfer: Transfer) => mutate(() => api('/api/transfers/' + transfer.id, { method: 'DELETE' })),
 
   async uploadImage(blob: Blob, prefix: 'receipt' | 'logo'): Promise<string> {
     const { path } = await api<{ path: string }>(`/api/images?prefix=${prefix}`, {

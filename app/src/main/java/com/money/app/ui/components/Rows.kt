@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.money.app.data.AccountEntity
 import com.money.app.data.CategoryEntity
 import com.money.app.data.MemberEntity
 import com.money.app.data.Payments
@@ -59,6 +60,9 @@ val LocalMembers = compositionLocalOf<Map<Long, MemberEntity>> { emptyMap() }
 
 /** Payment method names, custom ones included. */
 val LocalPayments = compositionLocalOf { Payments.builtIn }
+
+/** Accounts of the household, to tell which one a payment method moves. */
+val LocalAccounts = compositionLocalOf<List<AccountEntity>> { emptyList() }
 
 @Composable
 fun TransactionRow(

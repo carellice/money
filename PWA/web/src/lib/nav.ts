@@ -5,7 +5,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 
 export type Route =
   | 'home' | 'transactions' | 'recurring' | 'report'
-  | 'add' | 'recurringEdit' | 'recurringRegister' | 'recurringPayments' | 'categories' | 'settings' | 'chat' | 'aiSettings'
+  | 'add' | 'account' | 'recurringEdit' | 'recurringRegister' | 'recurringPayments' | 'categories' | 'settings' | 'chat' | 'aiSettings'
 
 export type Params = { type?: 'EXPENSE' | 'INCOME'; id?: number; kind?: 'SUBSCRIPTION' | 'FIXED' | 'FINANCING' }
 

@@ -13,6 +13,7 @@ import { Bouncy, ColorSwatches, FormLabel, Icon, NoteField, PrimaryButton, Segme
 import { AlertDialog, FullPage, toast } from '../components/overlays.tsx'
 import { deviceLockAvailable, registerDeviceLock } from './Lock.tsx'
 import { PaymentsSection } from '../components/Payments.tsx'
+import { AccountsSection } from './Accounts.tsx'
 
 type UpdateState = 'idle' | 'checking' | 'upToDate' | 'available' | 'failed'
 
@@ -121,6 +122,9 @@ export function SettingsScreen() {
 
           <FormLabel text="Persone" />
           <MembersSection members={members} />
+
+          <FormLabel text="Conti" />
+          <AccountsSection />
 
           <FormLabel text="Metodi di pagamento" />
           <PaymentsSection />

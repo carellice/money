@@ -13,6 +13,7 @@ import {
   SoftProgress, Staggered, toggleHideAmounts, useHideable,
 } from '../components/ui.tsx'
 import { fastOutSlowIn } from '../components/motion.ts'
+import { AccountsCard } from './Accounts.tsx'
 
 export function HomeScreen() {
   const month = useStore((s) => s.month)
@@ -65,6 +66,7 @@ function HomeContent({ report: r, upcoming }: { report: MonthReport; upcoming: R
     <>
       <Staggered index={0}><Hero r={r} onAdd={(type) => navigate('add', { type })} /></Staggered>
       <Staggered index={1}><SpendGauge r={r} /></Staggered>
+      <Staggered index={2}><AccountsCard /></Staggered>
 
       {r.budgets.length > 0 && (
         <Staggered index={2}>

@@ -10,7 +10,7 @@ import { close, useBackHandler } from '../lib/nav.ts'
 import { actions, getStore, useStore } from '../lib/store.ts'
 import { FormLabel, Pill, PrimaryButton, RecurringLogo, TopBar } from '../components/ui.tsx'
 import { DatePickerDialog, toast } from '../components/overlays.tsx'
-import { PaymentPills } from '../components/Payments.tsx'
+import { PaymentPicker } from '../components/Payments.tsx'
 import { MemberAvatar } from './Settings.tsx'
 import { AmountStep } from './AddTransaction.tsx'
 
@@ -130,7 +130,7 @@ function RegisterForm({ item }: { item: Recurring }) {
           <Pill text={otherDate ? Dates.long(date) : 'Altra data'} selected={otherDate} onClick={() => setPicking('date')} icon="calendar_month" />
         </div>
         <FormLabel text="Metodo di pagamento" />
-        <PaymentPills selected={method} onSelect={setMethod} />
+        <PaymentPicker selected={method} onSelect={setMethod} />
 
         <FormLabel text={item.installments != null ? 'Prossima rata' : 'Prossimo rinnovo'} />
         <div className="flow">

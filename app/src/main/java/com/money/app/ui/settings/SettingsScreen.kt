@@ -1,5 +1,6 @@
 package com.money.app.ui.settings
 
+import com.money.app.ui.accounts.AccountsSection
 import android.Manifest
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
@@ -118,7 +119,13 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 }
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onOpenCategories: () -> Unit, onOpenAi: () -> Unit, onOpenServer: () -> Unit) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onOpenCategories: () -> Unit,
+    onOpenAi: () -> Unit,
+    onOpenServer: () -> Unit,
+    onOpenAccount: (Long) -> Unit,
+) {
     val vm = appViewModel { c, _ -> SettingsViewModel(c) }
     val settings by vm.settings.collectAsStateWithLifecycle()
     val members by vm.members.collectAsStateWithLifecycle()
@@ -201,6 +208,9 @@ fun SettingsScreen(onBack: () -> Unit, onOpenCategories: () -> Unit, onOpenAi: (
 
             FormLabel("Persone")
             MembersSection(members, vm::saveMember, vm::deleteMember)
+
+            FormLabel("Conti")
+            AccountsSection(onOpenAccount)
 
             FormLabel("Metodi di pagamento")
             PaymentsSection()

@@ -7,12 +7,14 @@ import {
   afterPayment,
   defaultExpenseCategories,
   defaultIncomeCategories,
+  type Account,
   type AppState,
   type Category,
   type CustomPayment,
   type Member,
   type Recurring,
   type Transaction,
+  type Transfer,
   type TxType,
 } from '../../shared/model.ts'
 import { nextAfter } from '../../shared/recurrence.ts'
@@ -46,6 +48,12 @@ CREATE TABLE IF NOT EXISTS members (
 CREATE TABLE IF NOT EXISTS payment_methods (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, icon TEXT NOT NULL, color INTEGER NOT NULL,
   sortOrder INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS accounts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, icon TEXT NOT NULL, color INTEGER NOT NULL,
+  methods TEXT NOT NULL, balanceCents INTEGER NOT NULL, balanceAt INTEGER NOT NULL, sortOrder INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS transfers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, fromId INTEGER NOT NULL, toId INTEGER NOT NULL,
+  amountCents INTEGER NOT NULL, date INTEGER NOT NULL, note TEXT NOT NULL, createdAt INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY NOT NULL, json TEXT NOT NULL, reminders INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS ai_cache (month TEXT PRIMARY KEY NOT NULL, signature TEXT NOT NULL, text TEXT NOT NULL);
@@ -185,6 +193,24 @@ export function paymentMethods(): CustomPayment[] {
   return (db.prepare('SELECT * FROM payment_methods ORDER BY sortOrder, id').all() as Row[]).map(toPayment)
 }
 
+const toAccount = (r: Row): Account => ({
+  id: num(r.id), name: String(r.name), icon: String(r.icon), color: num(r.color), methods: String(r.methods),
+  balanceCents: num(r.balanceCents), balanceAt: num(r.balanceAt), sortOrder: num(r.sortOrder),
+})
+
+const toTransfer = (r: Row): Transfer => ({
+  id: num(r.id), fromId: num(r.fromId), toId: num(r.toId), amountCents: num(r.amountCents), date: num(r.date),
+  note: String(r.note), createdAt: num(r.createdAt),
+})
+
+export function moneyAccounts(): Account[] {
+  return (db.prepare('SELECT * FROM accounts ORDER BY sortOrder, id').all() as Row[]).map(toAccount)
+}
+
+export function transfers(): Transfer[] {
+  return (db.prepare('SELECT * FROM transfers ORDER BY date DESC, createdAt DESC').all() as Row[]).map(toTransfer)
+}
+
 export function categories(): Category[] {
   return (db.prepare('SELECT * FROM categories ORDER BY sortOrder, name').all() as Row[]).map(toCategory)
 }
@@ -218,7 +244,7 @@ export function members(): Member[] {
 export function state(): AppState {
   return {
     categories: categories(), transactions: transactions(), recurring: recurring(), members: members(),
-    paymentMethods: paymentMethods(),
+    paymentMethods: paymentMethods(), accounts: moneyAccounts(), transfers: transfers(),
   }
 }
 
@@ -229,6 +255,8 @@ const recurringColumns = ['kind', 'name', 'amountCents', 'categoryId', 'subcateg
 const categoryColumns = ['name', 'icon', 'color', 'type', 'parentId', 'budgetCents', 'sortOrder'] as const
 const memberColumns = ['name', 'color', 'sortOrder'] as const
 const paymentColumns = ['name', 'icon', 'color', 'sortOrder'] as const
+const accountColumns = ['name', 'icon', 'color', 'methods', 'balanceCents', 'balanceAt', 'sortOrder'] as const
+const transferColumns = ['fromId', 'toId', 'amountCents', 'date', 'note', 'createdAt'] as const
 
 type Sql = string | number | null
 
@@ -313,6 +341,31 @@ export function deletePaymentMethod(id: number) {
     db.prepare('UPDATE recurring SET paymentId = NULL WHERE paymentId = ?').run(id)
     db.prepare('DELETE FROM payment_methods WHERE id = ?').run(id)
   })
+}
+
+/** Returns the id of the account. */
+export function saveAccount(account: Account): number {
+  return transaction(() => {
+    const sortOrder = account.id === 0 ? moneyAccounts().length : account.sortOrder
+    return upsert('accounts', accountColumns, { ...account, sortOrder })
+  })
+}
+
+/** Its transfers go with it; movements stay, they just no longer move any balance. */
+export function deleteAccount(id: number) {
+  transaction(() => {
+    db.prepare('DELETE FROM transfers WHERE fromId = ? OR toId = ?').run(id, id)
+    db.prepare('DELETE FROM accounts WHERE id = ?').run(id)
+  })
+}
+
+/** Returns the id of the transfer. */
+export function saveTransfer(transfer: Transfer): number {
+  return transaction(() => upsert('transfers', transferColumns, transfer))
+}
+
+export function deleteTransfer(id: number) {
+  transaction(() => db.prepare('DELETE FROM transfers WHERE id = ?').run(id))
 }
 
 /**
@@ -425,6 +478,13 @@ export function replaceAll(snapshot: AppState) {
     snapshot.paymentMethods.forEach((p) => upsert('payment_methods', paymentColumns, p))
     snapshot.transactions.forEach((t) => upsert('transactions', txColumns, t))
     snapshot.recurring.forEach((r) => upsert('recurring', recurringColumns, r))
+    // Backups from before accounts leave the ones on the server as they are.
+    if (snapshot.accounts) {
+      db.exec('DELETE FROM accounts')
+      db.exec('DELETE FROM transfers')
+      snapshot.accounts.forEach((a) => upsert('accounts', accountColumns, a))
+      for (const t of snapshot.transfers ?? []) upsert('transfers', transferColumns, t)
+    }
     db.exec('DELETE FROM ai_cache')
   })
 }

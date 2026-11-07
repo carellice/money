@@ -103,7 +103,9 @@ import com.money.app.ui.settings.ServerSettingsScreen
 import com.money.app.ui.settings.SettingsScreen
 import com.money.app.ui.transactions.TransactionsScreen
 import com.money.app.ui.components.LocalMembers
+import com.money.app.ui.components.LocalAccounts
 import com.money.app.ui.components.LocalPayments
+import com.money.app.ui.accounts.AccountScreen
 import com.money.app.data.Payments
 import com.money.app.ui.theme.Ink
 import com.money.app.ui.theme.LocalBlobTime
@@ -124,15 +126,18 @@ object Routes {
     private const val ADD = "add"
     private const val RECURRING_EDIT = "recurring_edit"
     private const val RECURRING_REGISTER = "recurring_register"
+    private const val ACCOUNT = "account"
     const val RECURRING_PAYMENTS = "recurring_payments"
 
     const val ADD_PATTERN = "$ADD?type={type}&id={id}"
     const val RECURRING_EDIT_PATTERN = "$RECURRING_EDIT?id={id}&kind={kind}"
     const val RECURRING_REGISTER_PATTERN = "$RECURRING_REGISTER?id={id}"
+    const val ACCOUNT_PATTERN = "$ACCOUNT?id={id}"
 
     fun add(type: TxType = TxType.EXPENSE, id: Long = 0) = "$ADD?type=${type.name}&id=$id"
     fun recurringEdit(id: Long = 0, kind: RecurringKind = RecurringKind.SUBSCRIPTION) = "$RECURRING_EDIT?id=$id&kind=${kind.name}"
     fun recurringRegister(id: Long) = "$RECURRING_REGISTER?id=$id"
+    fun account(id: Long) = "$ACCOUNT?id=$id"
 
     val topLevel = setOf(HOME, TRANSACTIONS, RECURRING, REPORT)
 }
@@ -152,6 +157,7 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
     val membersById = remember(members) { members.associateBy { it.id } }
     val customPayments by appContainer().repository.customPayments.collectAsStateWithLifecycle(emptyList())
     val payments = remember(customPayments) { Payments(customPayments) }
+    val accounts by appContainer().repository.accounts.collectAsStateWithLifecycle(emptyList())
 
     LaunchedEffect(deepLinkRoute) {
         if (deepLinkRoute != null && deepLinkRoute in Routes.topLevel) {
@@ -174,7 +180,7 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize().background(c.bg)) {
-        CompositionLocalProvider(LocalMembers provides membersById, LocalPayments provides payments) {
+        CompositionLocalProvider(LocalMembers provides membersById, LocalPayments provides payments, LocalAccounts provides accounts) {
             NavHost(
                 navController = nav,
                 startDestination = Routes.HOME,
@@ -204,6 +210,7 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
                         onOpenRecurringItem = { nav.navigate(Routes.recurringEdit(it)) },
                         onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                         onOpenChat = { nav.navigate(Routes.CHAT) },
+                        onOpenAccount = { nav.navigate(Routes.account(it)) },
                         scrollToTop = homeScrollReset,
                     )
                 }
@@ -255,6 +262,15 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
                 ) {
                     RecurringRegisterScreen(onClose = { nav.closeScreen(Routes.RECURRING_REGISTER_PATTERN) })
                 }
+                composable(
+                    Routes.ACCOUNT_PATTERN,
+                    arguments = listOf(navArgument("id") { type = NavType.LongType; defaultValue = 0L }),
+                ) {
+                    AccountScreen(
+                        onBack = { nav.closeScreen(Routes.ACCOUNT_PATTERN) },
+                        onOpenTransaction = { nav.navigate(Routes.add(id = it)) },
+                    )
+                }
                 composable(Routes.RECURRING_PAYMENTS) {
                     RecurringPaymentsScreen(onBack = { nav.closeScreen(Routes.RECURRING_PAYMENTS) })
                 }
@@ -267,6 +283,7 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
                         onOpenCategories = { nav.navigate(Routes.CATEGORIES) },
                         onOpenAi = { nav.navigate(Routes.AI_SETTINGS) },
                         onOpenServer = { nav.navigate(Routes.SERVER_SETTINGS) },
+                        onOpenAccount = { nav.navigate(Routes.account(it)) },
                     )
                 }
                 composable(Routes.CHAT) {

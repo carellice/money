@@ -17,7 +17,7 @@ import { BlobBox, BlobLayer, PX } from '../components/Blob.tsx'
 import { Bouncy, CategoryBadge, Icon, NoteField, Pill, PrimaryButton, RoundIconButton, Segmented, Staggered, SwitchRow, TopBar, categoryLabel } from '../components/ui.tsx'
 import { AlertDialog, DatePickerDialog, toast } from '../components/overlays.tsx'
 import { MemberAvatar } from './Settings.tsx'
-import { PaymentPills } from '../components/Payments.tsx'
+import { PaymentPicker } from '../components/Payments.tsx'
 import { ThinkingDots } from './Chat.tsx'
 import { Expand } from './RecurringEdit.tsx'
 import { fastOutSlowIn, spring, tween } from '../components/motion.ts'
@@ -507,7 +507,7 @@ function DetailsStep(p: {
         </div>
 
         {label(p.type === 'EXPENSE' ? 'Come hai pagato?' : "Come l'hai ricevuto?")}
-        <PaymentPills selected={p.method} onSelect={p.setMethod} color={p.accent} />
+        <PaymentPicker selected={p.method} onSelect={p.setMethod} color={p.accent} />
 
         {label('Nota')}
         <NoteField value={p.note} onChange={p.setNote} placeholder={p.type === 'EXPENSE' ? 'Es. pizza con gli amici' : 'Es. stipendio di ottobre'} />

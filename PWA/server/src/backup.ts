@@ -1,4 +1,4 @@
-import type { AppState, Category, CustomPayment, Member, Recurring, Transaction } from '../../shared/model.ts'
+import type { Account, AppState, Category, CustomPayment, Member, Recurring, Transaction, Transfer } from '../../shared/model.ts'
 import { replaceAll, state } from './db.ts'
 
 // JSON backup of the whole database, same format as the Android app, so files can move between the two.
@@ -12,7 +12,7 @@ const optNum = (o: Json, key: string) => (o[key] == null ? null : Number(o[key])
 const str = (o: Json, key: string, fallback = '') => (o[key] == null ? fallback : String(o[key]))
 
 export function exportBackup(): string {
-  const { categories, transactions, recurring, members, paymentMethods } = state()
+  const { categories, transactions, recurring, members, paymentMethods, accounts = [], transfers = [] } = state()
   return JSON.stringify({
     app: 'Money',
     version: VERSION,
@@ -35,6 +35,13 @@ export function exportBackup(): string {
     })),
     members: members.map((m) => ({ id: m.id, name: m.name, color: m.color, sortOrder: m.sortOrder })),
     paymentMethods: paymentMethods.map((p) => ({ id: p.id, name: p.name, icon: p.icon, color: p.color, sortOrder: p.sortOrder })),
+    accounts: accounts.map((a) => ({
+      id: a.id, name: a.name, icon: a.icon, color: a.color, methods: a.methods, balanceCents: a.balanceCents,
+      balanceAt: a.balanceAt, sortOrder: a.sortOrder,
+    })),
+    transfers: transfers.map((t) => ({
+      id: t.id, fromId: t.fromId, toId: t.toId, amountCents: t.amountCents, date: t.date, note: t.note, createdAt: t.createdAt,
+    })),
   }, null, 2)
 }
 
@@ -85,7 +92,17 @@ export function importBackup(text: string): number {
     installments: optNum(o, 'installments'), installmentsPaid: Number(o.installmentsPaid ?? 0),
   }))
   if (!root.categories || !root.transactions || !root.recurring) throw new Error('Backup incompleto')
-  const snapshot: AppState = { categories, transactions, recurring, members, paymentMethods }
+  // Accounts came last: a backup without them keeps the ones there are.
+  const accounts: Account[] | undefined = Array.isArray(root.accounts) ? list('accounts').map((o) => ({
+    id: Number(o.id), name: str(o, 'name'), icon: str(o, 'icon', 'bank'), color: Number(o.color), methods: str(o, 'methods'),
+    balanceCents: Number(o.balanceCents ?? 0), balanceAt: Number(o.balanceAt ?? 0), sortOrder: Number(o.sortOrder ?? 0),
+  })) : undefined
+  const knownAccounts = new Set(accounts?.map((a) => a.id))
+  const transfers: Transfer[] = list('transfers').map((o) => ({
+    id: Number(o.id), fromId: Number(o.fromId), toId: Number(o.toId), amountCents: Number(o.amountCents), date: Number(o.date),
+    note: str(o, 'note'), createdAt: Number(o.createdAt ?? 0),
+  })).filter((t) => knownAccounts.has(t.fromId) && knownAccounts.has(t.toId))
+  const snapshot: AppState = { categories, transactions, recurring, members, paymentMethods, accounts, transfers }
   replaceAll(snapshot)
   return transactions.length
 }

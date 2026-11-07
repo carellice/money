@@ -80,7 +80,7 @@ import com.money.app.brand.Brand
 import com.money.app.brand.Brands
 import com.money.app.data.Frequency
 import com.money.app.data.Palette
-import com.money.app.ui.settings.PaymentPills
+import com.money.app.ui.settings.PaymentPicker
 import com.money.app.data.RecurringKind
 import com.money.app.data.TxType
 import com.money.app.domain.Dates
@@ -296,7 +296,7 @@ fun RecurringEditScreen(onClose: () -> Unit) {
             }
 
             FormLabel("Metodo di pagamento")
-            PaymentPills(vm.payment, { vm.payment = it })
+            PaymentPicker(vm.payment, { vm.payment = it })
 
             FormLabel("Promemoria")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

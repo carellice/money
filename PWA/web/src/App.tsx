@@ -19,6 +19,7 @@ import { RecurringPaymentsScreen } from './screens/RecurringPayments.tsx'
 import { RecurringRegisterScreen } from './screens/RecurringRegister.tsx'
 import { ReportScreen } from './screens/Report.tsx'
 import { AddTransactionScreen } from './screens/AddTransaction.tsx'
+import { AccountScreen } from './screens/Accounts.tsx'
 import { CategoriesScreen } from './screens/Categories.tsx'
 import { SettingsScreen } from './screens/Settings.tsx'
 import { ChatScreen } from './screens/Chat.tsx'
@@ -139,6 +140,7 @@ function Screen({ entry }: { entry: Entry }) {
     case 'recurring': return <RecurringScreen />
     case 'report': return <ReportScreen />
     case 'add': return <AddTransactionScreen type={p.type ?? 'EXPENSE'} id={p.id ?? 0} />
+    case 'account': return <AccountScreen id={p.id ?? 0} />
     case 'recurringEdit': return <RecurringEditScreen id={p.id ?? 0} kind={p.kind ?? 'SUBSCRIPTION'} />
     case 'recurringRegister': return <RecurringRegisterScreen id={p.id ?? 0} />
     case 'recurringPayments': return <RecurringPaymentsScreen />

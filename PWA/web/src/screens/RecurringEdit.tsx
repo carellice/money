@@ -16,7 +16,7 @@ import {
 } from '../components/ui.tsx'
 import { AlertDialog, DatePickerDialog, FullPage, toast } from '../components/overlays.tsx'
 import { spring } from '../components/motion.ts'
-import { PaymentPills } from '../components/Payments.tsx'
+import { PaymentPicker } from '../components/Payments.tsx'
 
 const reminderOptions: [number, string][] = [[-1, 'No'], [0, 'Il giorno stesso'], [1, '1 giorno prima'], [2, '2 giorni prima'], [3, '3 giorni prima'], [7, '1 settimana prima']]
 
@@ -307,7 +307,7 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
           </Expand>
 
           <FormLabel text="Metodo di pagamento" />
-          <PaymentPills selected={method} onSelect={setMethod} />
+          <PaymentPicker selected={method} onSelect={setMethod} />
 
           <FormLabel text="Promemoria" />
           <div className="flow">
