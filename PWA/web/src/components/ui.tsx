@@ -207,6 +207,11 @@ export function useHideable() {
   return (text: string) => hidden ? '••••' : text
 }
 
+/** Account balances are hidden with every amount, or on their own. */
+export const useBalancesHidden = () => useStore((s) => s.settings.hideAmounts || s.settings.hideBalances)
+
+export const toggleHideBalances = () => updateSettings({ hideBalances: !getStore().settings.hideBalances })
+
 export const toggleHideAmounts = () => updateSettings({ hideAmounts: !getStore().settings.hideAmounts })
 
 /** Eye that hides or reveals amounts everywhere they are maskable. */

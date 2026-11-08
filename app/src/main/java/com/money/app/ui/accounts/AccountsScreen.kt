@@ -29,6 +29,8 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SwapVert
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -89,6 +91,8 @@ import com.money.app.ui.components.SectionTitle
 import com.money.app.ui.components.SoftCard
 import com.money.app.ui.components.TopBar
 import com.money.app.ui.components.TransactionRow
+import com.money.app.ui.components.balancesHidden
+import com.money.app.ui.components.rememberHideBalancesToggle
 import com.money.app.ui.components.bouncyClick
 import com.money.app.ui.components.hideable
 import com.money.app.ui.settings.allChoices
@@ -146,7 +150,7 @@ private fun AccountRow(account: AccountEntity, balance: Long, onClick: () -> Uni
         AccountBadge(account, size = 36.dp)
         Spacer(Modifier.size(12.dp))
         Text(account.name, style = Ui.type.label, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Text(hideable(Money.format(balance)), style = Ui.type.label, color = if (balance < 0) c.expenseText else c.ink)
+        Text(if (balancesHidden()) "••••" else Money.format(balance), style = Ui.type.label, color = if (balance < 0) c.expenseText else c.ink)
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = c.inkFaint)
     }
 }
@@ -176,8 +180,19 @@ fun AccountsCard(onOpen: (Long) -> Unit, modifier: Modifier = Modifier) {
                 PrimaryButton("Aggiungi un conto", { editing = newAccount(0) }, icon = Icons.Rounded.Add)
             } else {
                 val total = s.total
-                Masked(Ui.type.display, c.ink) {
-                    Text(Money.format(total), style = Ui.type.display, color = if (total < 0) c.expenseText else c.ink)
+                val hidden = balancesHidden()
+                // One tap hides or shows just the balances; the eye only says so.
+                Row(Modifier.bouncyClick(pressedScale = 0.97f, onClick = rememberHideBalancesToggle()), verticalAlignment = Alignment.CenterVertically) {
+                    Masked(Ui.type.display, c.ink, hidden = hidden) {
+                        Text(Money.format(total), style = Ui.type.display, color = if (total < 0) c.expenseText else c.ink)
+                    }
+                    Spacer(Modifier.size(10.dp))
+                    Icon(
+                        if (hidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                        contentDescription = if (hidden) "Mostra saldi" else "Nascondi saldi",
+                        tint = c.inkFaint,
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
                 s.accounts.forEach { account ->
                     Spacer(Modifier.height(14.dp))
@@ -312,7 +327,7 @@ fun AccountScreen(onBack: () -> Unit, onOpenTransaction: (Long) -> Unit) {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         AccountBadge(account, size = 56.dp)
                         Spacer(Modifier.height(6.dp))
-                        Masked(Ui.type.display, c.ink) {
+                        Masked(Ui.type.display, c.ink, Modifier.bouncyClick(pressedScale = 0.97f, onClick = rememberHideBalancesToggle()), hidden = balancesHidden()) {
                             Text(Money.format(balance), style = Ui.type.display, color = if (balance < 0) c.expenseText else c.ink)
                         }
                         Text(

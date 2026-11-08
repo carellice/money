@@ -10,7 +10,7 @@ import { actions, useAccounts, usePaymentMethods, useStore, useTransfers } from 
 import { Ink } from '../lib/theme.ts'
 import {
   AmountField, AppIcon, Bouncy, ColorSwatches, FormLabel, Icon, IconPicker, Masked, NoteField, Pill, PrimaryButton, SectionTitle,
-  SoftCard, TopBar, useHideable,
+  SoftCard, TopBar, toggleHideBalances, useBalancesHidden, useHideable,
 } from '../components/ui.tsx'
 import { AlertDialog, DatePickerDialog, FullPage, toast } from '../components/overlays.tsx'
 import { allChoices } from '../components/Payments.tsx'
@@ -43,12 +43,12 @@ function useBalances(): Map<number, number> {
 }
 
 function AccountRow({ account, balance, onClick }: { account: Account; balance: number; onClick: () => void }) {
-  const hide = useHideable()
+  const hidden = useBalancesHidden()
   return (
     <Bouncy pressedScale={0.98} onClick={onClick} className="row">
       <AccountBadge account={account} size={36} />
       <span className="t-label flex1 ellipsis" style={{ marginLeft: 12, color: 'var(--ink)' }}>{account.name}</span>
-      <span className="t-label" style={{ color: balance < 0 ? 'var(--expenseText)' : 'var(--ink)' }}>{hide(Money.format(balance))}</span>
+      <span className="t-label" style={{ color: balance < 0 ? 'var(--expenseText)' : 'var(--ink)' }}>{hidden ? '••••' : Money.format(balance)}</span>
       <Icon name="keyboard_arrow_right" color="var(--inkFaint)" />
     </Bouncy>
   )
@@ -60,6 +60,7 @@ export function AccountsCard() {
   const balances = useBalances()
   const [editing, setEditing] = useState<Account | null>(null)
   const total = [...balances.values()].reduce((a, b) => a + b, 0)
+  const hidden = useBalancesHidden()
   return (
     <>
       <SectionTitle text="Disponibile" action={accounts.length ? 'Nuovo conto' : undefined} onAction={() => setEditing(newAccount(accounts.length))} />
@@ -70,9 +71,13 @@ export function AccountsCard() {
         </SoftCard>
       ) : (
         <SoftCard style={{ gap: 14 }}>
-          <Masked className="t-display" color="var(--ink)">
-            <span className="t-display" style={{ color: total < 0 ? 'var(--expenseText)' : 'var(--ink)' }}>{Money.format(total)}</span>
-          </Masked>
+          {/* One tap hides or shows just the balances; the eye only says so. */}
+          <Bouncy pressedScale={0.97} onClick={toggleHideBalances} className="row" style={{ gap: 10, alignSelf: 'flex-start' }}>
+            <Masked className="t-display" color="var(--ink)" hidden={hidden}>
+              <span className="t-display" style={{ color: total < 0 ? 'var(--expenseText)' : 'var(--ink)' }}>{Money.format(total)}</span>
+            </Masked>
+            <Icon name={hidden ? 'visibility_off' : 'visibility'} size={20} color="var(--inkFaint)" label={hidden ? 'Mostra saldi' : 'Nascondi saldi'} />
+          </Bouncy>
           {accounts.map((a) => (
             <AccountRow key={a.id} account={a} balance={balances.get(a.id) ?? 0} onClick={() => navigate('account', { id: a.id })} />
           ))}
@@ -132,6 +137,7 @@ function AccountContent({ account }: { account: Account }) {
   const [page, setPage] = useState<'edit' | 'transfer' | 'balance' | null>(null)
   const [removing, setRemoving] = useState<Transfer | null>(null)
   const hide = useHideable()
+  const balancesHidden = useBalancesHidden()
 
   const categories = useMemo(() => new Map((data?.categories ?? []).map((c) => [c.id, c])), [data])
   const history = useMemo(() => {
@@ -153,9 +159,11 @@ function AccountContent({ account }: { account: Account }) {
       <div className="col nav-pad" style={{ padding: '0 20px 32px', gap: 12 }}>
         <SoftCard style={{ alignItems: 'center', gap: 6 }}>
           <AccountBadge account={account} size={56} />
-          <Masked className="t-display" color="var(--ink)">
+          <Bouncy pressedScale={0.97} onClick={toggleHideBalances}>
+          <Masked className="t-display" color="var(--ink)" hidden={balancesHidden}>
             <span className="t-display" style={{ color: balance < 0 ? 'var(--expenseText)' : 'var(--ink)' }}>{Money.format(balance)}</span>
           </Masked>
+          </Bouncy>
           <span className="t-caption" style={{ color: 'var(--inkSoft)', textAlign: 'center' }}>
             {names.length ? names.join(' · ') : 'Nessun metodo di pagamento: tocca Modifica per sceglierli'}
           </span>

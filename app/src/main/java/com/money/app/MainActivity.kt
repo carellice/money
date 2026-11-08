@@ -28,6 +28,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.money.app.data.Settings
 import com.money.app.ui.MoneyRoot
 import com.money.app.ui.components.LocalHideAmounts
+import com.money.app.ui.components.LocalHideBalances
 import com.money.app.ui.lock.Biometric
 import com.money.app.ui.lock.LockScreen
 import com.money.app.ui.onboarding.OnboardingScreen
@@ -87,7 +88,7 @@ class MainActivity : FragmentActivity() {
             }
             MoneyTheme(dark, settings.accent) {
                 Box(Modifier.fillMaxSize()) {
-                    CompositionLocalProvider(LocalHideAmounts provides settings.hideAmounts, LocalGuide provides guide) {
+                    CompositionLocalProvider(LocalHideAmounts provides settings.hideAmounts, LocalHideBalances provides settings.hideBalances, LocalGuide provides guide) {
                         MoneyRoot(deepLink, onDeepLinkHandled = { deepLink = null })
                     }
                     AnimatedVisibility(

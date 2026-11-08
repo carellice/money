@@ -246,6 +246,22 @@ fun rememberHideAmountsToggle(): () -> Unit {
     return { scope.launch { settings.setHideAmounts(!hidden) } }
 }
 
+/** True when the user chose to hide only the account balances (Disponibile). */
+val LocalHideBalances = compositionLocalOf { false }
+
+/** Account balances are hidden with every amount, or on their own. */
+@Composable
+fun balancesHidden(): Boolean = LocalHideAmounts.current || LocalHideBalances.current
+
+/** Flips the saved hide-balances choice. */
+@Composable
+fun rememberHideBalancesToggle(): () -> Unit {
+    val hidden = LocalHideBalances.current
+    val settings = appContainer().settings
+    val scope = rememberCoroutineScope()
+    return { scope.launch { settings.setHideBalances(!hidden) } }
+}
+
 /** [text] or dots when amounts are hidden, for amounts inside longer strings. */
 @Composable
 fun hideable(text: String): String = if (LocalHideAmounts.current) "••••" else text
