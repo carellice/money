@@ -1,5 +1,6 @@
 package com.money.app.ui.settings
 
+import com.money.app.ui.theme.linen
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
@@ -167,7 +168,7 @@ fun ServerSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val c = Ui.colors
 
-    Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
+    Column(Modifier.fillMaxSize().linen(c.isDark).imePadding()) {
         TopBar("Server CasaOS", onBack)
         Column(
             Modifier

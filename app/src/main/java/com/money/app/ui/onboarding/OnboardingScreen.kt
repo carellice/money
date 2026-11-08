@@ -1,5 +1,13 @@
 package com.money.app.ui.onboarding
 
+import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.linen
+import com.money.app.ui.theme.paper
+import com.money.app.ui.theme.well
+import com.money.app.ui.theme.gel
+import com.money.app.ui.theme.LocalSkeuo
+import com.money.app.ui.theme.accentShown
+import com.money.app.ui.components.onGel
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -144,7 +152,7 @@ fun OnboardingScreen(
     Box(
         Modifier
             .fillMaxSize()
-            .background(c.bg)
+            .linen(c.isDark)
             .backdropBlobs(listOf(c.accent, c.income, Color(Palette.ROSE)), alpha = if (c.isDark) 0.10f else 0.22f)
             .statusBarsPadding()
             .navigationBarsPadding(),
@@ -230,8 +238,8 @@ private fun FeaturePage(page: Page, index: Int) {
         verticalArrangement = Arrangement.Center,
     ) {
         Box(Modifier.size(260.dp), contentAlignment = Alignment.Center) {
-            // A small companion blob orbits the main one, each page with its own shape.
-            Box(
+            // A small companion blob orbits the main one, each page with its own shape (classic style only).
+            if (!LocalSkeuo.current) Box(
                 Modifier
                     .size(70.dp)
                     .align(Alignment.TopEnd)
@@ -244,7 +252,7 @@ private fun FeaturePage(page: Page, index: Int) {
             Box(
                 Modifier
                     .size(210.dp)
-                    .blob(Brush.linearGradient(listOf(color, c.accent)), seed = 20 + index, amplitude = 0.1f),
+                    .skin({ blob(color, seed = 20 + index, amplitude = 0.1f) }) { blob(Brush.linearGradient(listOf(color, c.accent)), seed = 20 + index, amplitude = 0.1f) },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(page.icon, null, tint = Ink, modifier = Modifier.size(88.dp))
@@ -263,12 +271,11 @@ private fun FeaturePage(page: Page, index: Int) {
                 page.chips.forEach { chip ->
                     Text(
                         chip,
-                        style = Ui.type.caption,
+                        style = Ui.type.caption.onGel(),
                         color = Ink,
                         maxLines = 1,
                         modifier = Modifier
-                            .clip(CircleShape)
-                            .background(color)
+                            .skin({ gel(color, CircleShape) }) { clip(CircleShape).background(color) }
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                     )
                 }
@@ -320,7 +327,7 @@ private fun PersonalizePage(settings: Settings, onTheme: (ThemeMode) -> Unit, on
         Spacer(Modifier.height(20.dp))
         FormLabel("Colore principale")
         Spacer(Modifier.height(4.dp))
-        ColorSwatches(Palette.all, settings.accent, onAccent)
+        ColorSwatches(Palette.all, settings.accent, accentShown(), onAccent)
     }
 }
 

@@ -25,6 +25,8 @@ data class Settings(
     val hideAmounts: Boolean = false,
     /** Only the account balances (Disponibile) shown as dots. */
     val hideBalances: Boolean = false,
+    /** Skeuomorphic look (leather, paper, glossy buttons) instead of the classic one. */
+    val skeuo: Boolean = false,
 )
 
 private val Context.dataStore by preferencesDataStore("settings")
@@ -39,6 +41,7 @@ class SettingsStore(private val context: Context) {
         val recurringSort = stringPreferencesKey("recurring_sort")
         val hideAmounts = booleanPreferencesKey("hide_amounts")
         val hideBalances = booleanPreferencesKey("hide_balances")
+        val skeuo = booleanPreferencesKey("skeuo")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
@@ -53,6 +56,7 @@ class SettingsStore(private val context: Context) {
     suspend fun setRecurringSort(sort: RecurringSort) = context.dataStore.edit { it[Keys.recurringSort] = sort.name }
     suspend fun setHideAmounts(hidden: Boolean) = context.dataStore.edit { it[Keys.hideAmounts] = hidden }
     suspend fun setHideBalances(hidden: Boolean) = context.dataStore.edit { it[Keys.hideBalances] = hidden }
+    suspend fun setSkeuo(enabled: Boolean) = context.dataStore.edit { it[Keys.skeuo] = enabled }
 
     private fun Preferences.toSettings() = Settings(
         theme = this[Keys.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
@@ -63,5 +67,6 @@ class SettingsStore(private val context: Context) {
         recurringSort = this[Keys.recurringSort]?.let { runCatching { RecurringSort.valueOf(it) }.getOrNull() } ?: RecurringSort.NEXT,
         hideAmounts = this[Keys.hideAmounts] ?: false,
         hideBalances = this[Keys.hideBalances] ?: false,
+        skeuo = this[Keys.skeuo] ?: false,
     )
 }

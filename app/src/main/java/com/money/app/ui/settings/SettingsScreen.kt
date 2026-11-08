@@ -1,5 +1,11 @@
 package com.money.app.ui.settings
 
+import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.linen
+import com.money.app.ui.theme.paper
+import com.money.app.ui.theme.well
+import com.money.app.ui.theme.gel
+import com.money.app.ui.theme.accentShown
 import com.money.app.ui.accounts.AccountsSection
 import android.Manifest
 import android.appwidget.AppWidgetManager
@@ -93,6 +99,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setLock(enabled: Boolean) = viewModelScope.launch { container.settings.setLock(enabled) }
     fun setReminders(enabled: Boolean) = viewModelScope.launch { container.settings.setReminders(enabled) }
     fun setAccent(color: Long) = viewModelScope.launch { container.settings.setAccent(color) }
+    fun setSkeuo(enabled: Boolean) = viewModelScope.launch { container.settings.setSkeuo(enabled) }
 
     val members: StateFlow<List<MemberEntity>> =
         container.repository.members.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -148,7 +155,7 @@ fun SettingsScreen(
         if (!granted) toast("Senza permesso per le notifiche i promemoria non possono arrivare.")
     }
 
-    Column(Modifier.fillMaxSize().background(c.bg)) {
+    Column(Modifier.fillMaxSize().linen(c.isDark)) {
         TopBar("Impostazioni", onBack)
         Column(
             Modifier
@@ -163,6 +170,13 @@ fun SettingsScreen(
                 ThemeMode.entries.map { it.label },
                 ThemeMode.entries.indexOf(settings.theme),
                 { vm.setTheme(ThemeMode.entries[it]) },
+            )
+
+            FormLabel("Stile")
+            Segmented(
+                listOf("Classico", "Skeuomorfico"),
+                if (settings.skeuo) 1 else 0,
+                { vm.setSkeuo(it == 1) },
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -180,7 +194,7 @@ fun SettingsScreen(
                     )
                 }
             }
-            ColorSwatches(Palette.all, settings.accent, vm::setAccent)
+            ColorSwatches(Palette.all, settings.accent, accentShown(), vm::setAccent)
 
             FormLabel("Privacy")
             SwitchRow(
@@ -311,8 +325,7 @@ private fun NavRow(icon: ImageVector, title: String, subtitle: String, onClick: 
         Modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.bouncyClick(pressedScale = 0.98f, onClick = onClick) else Modifier)
-            .clip(RoundedCornerShape(22.dp))
-            .background(c.surface)
+            .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(22.dp)).background(c.surface) }
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

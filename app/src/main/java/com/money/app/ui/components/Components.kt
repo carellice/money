@@ -1,5 +1,6 @@
 package com.money.app.ui.components
 
+import com.money.app.ui.theme.LocalSkeuo
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -77,9 +78,24 @@ import com.money.app.domain.Dates
 import com.money.app.domain.Money
 import com.money.app.ui.appContainer
 import com.money.app.ui.theme.BlobShape
+import com.money.app.ui.theme.IconShape
 import com.money.app.ui.theme.Ink
 import com.money.app.ui.theme.Ui
 import com.money.app.ui.theme.blob
+import com.money.app.ui.theme.Thread
+import com.money.app.ui.theme.darken
+import com.money.app.ui.theme.gel
+import com.money.app.ui.theme.leather
+import com.money.app.ui.theme.lighten
+import com.money.app.ui.theme.paper
+import com.money.app.ui.theme.well
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlinx.coroutines.launch
 import java.io.File
 import java.time.YearMonth
@@ -149,6 +165,7 @@ fun RecurringLogo(
     size: Dp = 48.dp,
     animated: Boolean = false,
 ) {
+    if (LocalSkeuo.current) return RecurringLogoSkeuo(brandKey = brandKey, imagePath = imagePath, icon = icon, color = color, modifier = modifier, size = size, animated = animated)
     val brand = Brands.find(brandKey)
     when {
         imagePath != null -> AsyncImage(
@@ -156,6 +173,49 @@ fun RecurringLogo(
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = modifier.size(size).clip(BlobShape(imagePath.hashCode())),
+        )
+        brand != null -> Box(
+            modifier.size(size).blob(brand.color, seed = brand.key.hashCode(), amplitude = 0.08f, animated = animated),
+            contentAlignment = Alignment.Center,
+        ) {
+            val tint = if (brand.isLight) Ink else Color.White
+            val vector = brand.vector
+            if (vector != null) {
+                Icon(vector, contentDescription = brand.name, tint = tint, modifier = Modifier.size(size * 0.44f))
+            } else {
+                Text(
+                    brand.monogram.orEmpty(),
+                    color = tint,
+                    style = Ui.type.label.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = (size.value * if ((brand.monogram?.length ?: 1) > 2) 0.24f else 0.34f).sp,
+                    ),
+                    maxLines = 1,
+                )
+            }
+        }
+        else -> CategoryBadge(icon, color, modifier, size, animated = animated)
+    }
+}
+
+/** Logo of a fixed expense: custom picture, preset brand, or category-style icon. */
+@Composable
+private fun RecurringLogoSkeuo(
+    brandKey: String?,
+    imagePath: String?,
+    icon: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    size: Dp = 48.dp,
+    animated: Boolean = false,
+) {
+    val brand = Brands.find(brandKey)
+    when {
+        imagePath != null -> AsyncImage(
+            model = File(imagePath),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier.size(size).clip(IconShape),
         )
         brand != null -> Box(
             modifier.size(size).blob(brand.color, seed = brand.key.hashCode(), amplitude = 0.08f, animated = animated),
@@ -307,6 +367,7 @@ fun Pill(
     icon: ImageVector? = null,
     leading: (@Composable () -> Unit)? = null,
 ) {
+    if (LocalSkeuo.current) return PillSkeuo(text = text, selected = selected, onClick = onClick, modifier = modifier, color = color, icon = icon, leading = leading)
     val c = Ui.colors
     val bg by animateColorAsState(if (selected) color else c.surfaceHigh, label = "pillBg")
     val fg by animateColorAsState(if (selected) Ink else c.ink, label = "pillFg")
@@ -330,6 +391,42 @@ fun Pill(
     }
 }
 
+@Composable
+private fun PillSkeuo(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    color: Color = Ui.colors.accent,
+    icon: ImageVector? = null,
+    leading: (@Composable () -> Unit)? = null,
+) {
+    val c = Ui.colors
+    val fg = if (selected) Ink else c.ink
+    Row(
+        modifier
+            .bouncyClick(onClick = onClick)
+            .then(if (selected) Modifier.gel(color, CircleShape) else Modifier.paper(c.surface, CircleShape, elevation = 2.dp, dark = c.isDark))
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        leading?.let {
+            it()
+            Spacer(Modifier.width(8.dp))
+        }
+        icon?.let {
+            Icon(it, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(text, style = Ui.type.label.onGel(selected), color = fg, maxLines = 1)
+    }
+}
+
+/** On a gel fill the letterpress edge turns into a soft white highlight. */
+@Composable
+fun TextStyle.onGel(gel: Boolean = true): TextStyle =
+    if (gel && LocalSkeuo.current) copy(shadow = Shadow(Color.White.copy(alpha = 0.45f), Offset(0f, 1.2f), 0f)) else this
+
 /** Pill selector with a springy sliding indicator. */
 @Composable
 fun Segmented(
@@ -339,6 +436,7 @@ fun Segmented(
     modifier: Modifier = Modifier,
     colors: List<Color>? = null,
 ) {
+    if (LocalSkeuo.current) return SegmentedSkeuo(options = options, selected = selected, onSelect = onSelect, modifier = modifier, colors = colors)
     val c = Ui.colors
     BoxWithConstraints(
         modifier
@@ -375,8 +473,70 @@ fun Segmented(
     }
 }
 
+/** Recessed track with a glossy segment that slides on a spring, like the old iOS segmented control. */
+@Composable
+private fun SegmentedSkeuo(
+    options: List<String>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    colors: List<Color>? = null,
+) {
+    val c = Ui.colors
+    BoxWithConstraints(
+        modifier
+            .well(c.surfaceHigh, RoundedCornerShape(14.dp), c.isDark)
+            .padding(4.dp)
+    ) {
+        val w = maxWidth / options.size
+        val offset by animateDpAsState(w * selected, spring(dampingRatio = 0.7f, stiffness = 380f), label = "segOffset")
+        val indicator by animateColorAsState(colors?.getOrNull(selected) ?: c.accent, label = "segColor")
+        Box(
+            Modifier
+                .offset(x = offset)
+                .width(w)
+                .height(40.dp)
+                .gel(indicator, RoundedCornerShape(11.dp))
+        )
+        Row(Modifier.fillMaxWidth().height(40.dp)) {
+            options.forEachIndexed { i, label ->
+                val fg by animateColorAsState(if (i == selected) Ink else c.inkSoft, label = "segFg")
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(11.dp))
+                        .clickable { onSelect(i) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(label, style = Ui.type.label.onGel(i == selected), color = fg, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun SoftCard(
+    modifier: Modifier = Modifier,
+    color: Color = Ui.colors.surface,
+    padding: Dp = 20.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    if (LocalSkeuo.current) return SoftCardSkeuo(modifier = modifier, color = color, padding = padding, content = content)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(color)
+            .padding(padding),
+        content = content,
+    )
+}
+
+/** A sheet of cream paper resting on the linen. */
+@Composable
+private fun SoftCardSkeuo(
     modifier: Modifier = Modifier,
     color: Color = Ui.colors.surface,
     padding: Dp = 20.dp,
@@ -385,8 +545,7 @@ fun SoftCard(
     Column(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(color)
+            .paper(color, RoundedCornerShape(18.dp), dark = Ui.colors.isDark)
             .padding(padding),
         content = content,
     )
@@ -399,6 +558,7 @@ fun SectionTitle(
     action: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
+    if (LocalSkeuo.current) return SectionTitleSkeuo(text = text, modifier = modifier, action = action, onAction = onAction)
     Row(modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text, style = Ui.type.titleSmall, color = Ui.colors.ink, modifier = Modifier.weight(1f))
         if (action != null && onAction != null) {
@@ -416,6 +576,29 @@ fun SectionTitle(
 }
 
 @Composable
+private fun SectionTitleSkeuo(
+    text: String,
+    modifier: Modifier = Modifier,
+    action: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    Row(modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(text, style = Ui.type.titleSmall, color = Ui.colors.inkSoft, modifier = Modifier.weight(1f))
+        if (action != null && onAction != null) {
+            Text(
+                action,
+                style = Ui.type.label.onGel(),
+                color = Ink,
+                modifier = Modifier
+                    .bouncyClick(onClick = onAction)
+                    .gel(Ui.colors.accent, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 5.dp),
+            )
+        }
+    }
+}
+
+@Composable
 fun RoundIconButton(
     icon: ImageVector,
     onClick: () -> Unit,
@@ -425,6 +608,7 @@ fun RoundIconButton(
     size: Dp = 44.dp,
     contentDescription: String? = null,
 ) {
+    if (LocalSkeuo.current) return RoundIconButtonSkeuo(icon = icon, onClick = onClick, modifier = modifier, background = background, tint = tint, size = size, contentDescription = contentDescription)
     Box(
         modifier
             .size(size)
@@ -437,6 +621,41 @@ fun RoundIconButton(
     }
 }
 
+/** Round domed button, like a metal knob; a custom [background] turns it into a gel. */
+@Composable
+private fun RoundIconButtonSkeuo(
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    background: Color = Ui.colors.surfaceHigh,
+    tint: Color = Ui.colors.ink,
+    size: Dp = 44.dp,
+    contentDescription: String? = null,
+) {
+    val c = Ui.colors
+    val custom = background != c.surfaceHigh
+    Box(
+        modifier
+            .size(size)
+            .bouncyClick(onClick = onClick)
+            .then(if (custom) Modifier.gel(background, CircleShape) else Modifier.knob(c.isDark)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = contentDescription, tint = if (custom) tint else c.inkSoft, modifier = Modifier.size(size * 0.5f))
+    }
+}
+
+/** Domed metal button: vertical shading, a shine on top, dark rim and a shadow under. */
+fun Modifier.knob(dark: Boolean): Modifier = drawBehind {
+    val r = size.minDimension / 2
+    val center = Offset(size.width / 2, size.height / 2)
+    drawCircle(Color.Black.copy(alpha = 0.3f), r, center + Offset(0f, 1.5.dp.toPx()))
+    val base = if (dark) Color(0xFF4A4038) else Color(0xFFF2ECE2)
+    drawCircle(Brush.verticalGradient(listOf(base.lighten(0.5f), base, base.darken(0.18f))), r, center)
+    drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = if (dark) 0.18f else 0.7f), Color.Transparent), center - Offset(0f, r * 0.45f), r * 0.8f), r, center)
+    drawCircle(Color.Black.copy(alpha = if (dark) 0.6f else 0.28f), r - 0.5.dp.toPx(), center, style = Stroke(1.dp.toPx()))
+}
+
 @Composable
 fun TopBar(
     title: String,
@@ -444,6 +663,7 @@ fun TopBar(
     modifier: Modifier = Modifier,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
+    if (LocalSkeuo.current) return TopBarSkeuo(title = title, onBack = onBack, modifier = modifier, actions = actions)
     Row(
         modifier
             .fillMaxWidth()
@@ -465,6 +685,37 @@ fun TopBar(
     }
 }
 
+/** Stitched leather toolbar running under the status bar, title stamped in cream thread colour. */
+@Composable
+private fun TopBarSkeuo(
+    title: String,
+    onBack: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .shadow(8.dp, RectangleShape)
+            .leather(RectangleShape, corner = 0.dp)
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (onBack != null) RoundIconButton(Icons.AutoMirrored.Rounded.ArrowBack, onBack, contentDescription = "Indietro")
+        Text(
+            title,
+            style = Ui.type.title.copy(shadow = Shadow(Color.Black.copy(alpha = 0.8f), Offset(0f, -1.5f), 0f)),
+            color = Thread,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        actions()
+    }
+}
+
 @Composable
 fun PrimaryButton(
     text: String,
@@ -474,6 +725,7 @@ fun PrimaryButton(
     color: Color = Ui.colors.accent,
     icon: ImageVector? = null,
 ) {
+    if (LocalSkeuo.current) return PrimaryButtonSkeuo(text = text, onClick = onClick, modifier = modifier, enabled = enabled, color = color, icon = icon)
     val bg by animateColorAsState(if (enabled) color else Ui.colors.surfaceHigh, label = "btnBg")
     val fg by animateColorAsState(if (enabled) Ink else Ui.colors.inkFaint, label = "btnFg")
     Row(
@@ -495,7 +747,61 @@ fun PrimaryButton(
 }
 
 @Composable
+private fun PrimaryButtonSkeuo(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    color: Color = Ui.colors.accent,
+    icon: ImageVector? = null,
+) {
+    val c = Ui.colors
+    val bg by animateColorAsState(if (enabled) color else c.surfaceHigh, label = "btnBg")
+    val fg by animateColorAsState(if (enabled) Ink else c.inkFaint, label = "btnFg")
+    Row(
+        modifier
+            .fillMaxWidth()
+            .height(58.dp)
+            .bouncyClick(enabled = enabled, pressedScale = 0.96f, onClick = onClick)
+            .gel(bg, RoundedCornerShape(16.dp)),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        icon?.let {
+            Icon(it, contentDescription = null, tint = fg, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(text, style = Ui.type.bodyStrong.copy(fontSize = 17.sp).onGel(enabled), color = fg)
+    }
+}
+
+@Composable
 fun MonthSwitcher(
+    month: YearMonth,
+    onChange: (YearMonth) -> Unit,
+    modifier: Modifier = Modifier,
+    style: TextStyle = Ui.type.titleSmall,
+) {
+    if (LocalSkeuo.current) return MonthSwitcherSkeuo(month = month, onChange = onChange, modifier = modifier, style = style)
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        RoundIconButton(Icons.Rounded.ChevronLeft, { onChange(month.minusMonths(1)) }, size = 36.dp, contentDescription = "Mese precedente")
+        AnimatedContent(
+            targetState = month,
+            transitionSpec = {
+                val dir = if (targetState > initialState) 1 else -1
+                (slideInHorizontally { it * dir / 2 } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir / 2 } + fadeOut())
+            },
+            label = "month",
+            modifier = Modifier.width(150.dp),
+        ) {
+            Text(Dates.monthYear(it), style = style, color = Ui.colors.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        }
+        RoundIconButton(Icons.Rounded.ChevronRight, { onChange(month.plusMonths(1)) }, size = 36.dp, contentDescription = "Mese successivo")
+    }
+}
+
+@Composable
+private fun MonthSwitcherSkeuo(
     month: YearMonth,
     onChange: (YearMonth) -> Unit,
     modifier: Modifier = Modifier,
@@ -510,9 +816,9 @@ fun MonthSwitcher(
                 (slideInHorizontally { it * dir / 2 } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir / 2 } + fadeOut())
             },
             label = "month",
-            modifier = Modifier.width(150.dp),
+            modifier = Modifier.width(176.dp),
         ) {
-            Text(Dates.monthYear(it), style = style, color = Ui.colors.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(Dates.monthYear(it), style = style, color = Ui.colors.ink, textAlign = TextAlign.Center, maxLines = 1, softWrap = false, modifier = Modifier.fillMaxWidth())
         }
         RoundIconButton(Icons.Rounded.ChevronRight, { onChange(month.plusMonths(1)) }, size = 36.dp, contentDescription = "Mese successivo")
     }
@@ -543,11 +849,32 @@ fun SoftProgress(
     height: Dp = 10.dp,
     track: Color = Ui.colors.surfaceHigh,
 ) {
+    if (LocalSkeuo.current) return SoftProgressSkeuo(progress = progress, color = color, modifier = modifier, height = height, track = track)
     val anim = remember { Animatable(0f) }
     LaunchedEffect(progress) {
         anim.animateTo(progress.coerceIn(0f, 1f), spring(dampingRatio = 0.75f, stiffness = 60f))
     }
     Box(modifier.fillMaxWidth().height(height).clip(CircleShape).background(track)) {
         Box(Modifier.fillMaxWidth(anim.value.coerceIn(0f, 1f)).fillMaxHeight().clip(CircleShape).background(color))
+    }
+}
+
+/** Recessed groove filled with a glossy bar that springs into place. */
+@Composable
+private fun SoftProgressSkeuo(
+    progress: Float,
+    color: Color,
+    modifier: Modifier = Modifier,
+    height: Dp = 10.dp,
+    track: Color = Ui.colors.surfaceHigh,
+) {
+    val anim = remember { Animatable(0f) }
+    LaunchedEffect(progress) {
+        anim.animateTo(progress.coerceIn(0f, 1f), spring(dampingRatio = 0.75f, stiffness = 60f))
+    }
+    Box(modifier.fillMaxWidth().height(height).well(track, CircleShape, Ui.colors.isDark)) {
+        if (anim.value > 0.001f) {
+            Box(Modifier.fillMaxWidth(anim.value.coerceIn(0f, 1f)).fillMaxHeight().gel(color, CircleShape, drop = false))
+        }
     }
 }

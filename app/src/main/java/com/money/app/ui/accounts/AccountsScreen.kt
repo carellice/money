@@ -1,5 +1,10 @@
 package com.money.app.ui.accounts
 
+import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.linen
+import com.money.app.ui.theme.paper
+import com.money.app.ui.theme.well
+import com.money.app.ui.theme.gel
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -136,7 +141,7 @@ private fun newAccount(count: Int) =
 @Composable
 fun AccountBadge(account: AccountEntity, size: Dp = 40.dp) {
     Box(
-        Modifier.size(size).clip(RoundedCornerShape(size * 0.36f)).background(Color(account.color)),
+        Modifier.size(size).skin({ gel(Color(account.color), RoundedCornerShape(size * 0.26f)) }) { clip(RoundedCornerShape(size * 0.36f)).background(Color(account.color)) },
         contentAlignment = Alignment.Center,
     ) {
         Icon(AppIcons[account.icon], null, tint = Ink, modifier = Modifier.size(size * 0.5f))
@@ -232,8 +237,7 @@ fun AccountsSection(onOpen: (Long) -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .bouncyClick(pressedScale = 0.98f) { onOpen(account.id) }
-                .clip(RoundedCornerShape(22.dp))
-                .background(c.surface)
+                .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(22.dp)).background(c.surface) }
                 .padding(horizontal = 18.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -247,8 +251,7 @@ fun AccountsSection(onOpen: (Long) -> Unit) {
         Modifier
             .fillMaxWidth()
             .bouncyClick(pressedScale = 0.98f) { editing = newAccount(accounts.size) }
-            .clip(RoundedCornerShape(22.dp))
-            .background(c.surface)
+            .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(22.dp)).background(c.surface) }
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -307,7 +310,7 @@ fun AccountScreen(onBack: () -> Unit, onOpenTransaction: (Long) -> Unit) {
     val s = state
     val account = s?.accounts?.firstOrNull { it.id == vm.id }
 
-    Column(Modifier.fillMaxSize().background(c.bg)) {
+    Column(Modifier.fillMaxSize().linen(c.isDark)) {
         TopBar(account?.name ?: "Conto", onBack = onBack)
         if (s == null || account == null) return@Column
         val balance = s.balance(account)

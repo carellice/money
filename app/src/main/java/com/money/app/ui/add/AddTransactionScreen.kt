@@ -1,5 +1,11 @@
 package com.money.app.ui.add
 
+import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.linen
+import com.money.app.ui.theme.paper
+import com.money.app.ui.theme.well
+import com.money.app.ui.theme.gel
+import androidx.compose.ui.graphics.lerp
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -130,7 +136,7 @@ fun AddTransactionScreen(onClose: () -> Unit) {
 
     BackHandler(enabled = vm.step > 0 && !vm.isEdit) { vm.step-- }
 
-    Box(Modifier.fillMaxSize().background(c.bg)) {
+    Box(Modifier.fillMaxSize().linen(c.isDark)) {
         Column(Modifier.fillMaxSize().imePadding()) {
             TopBar(
                 title = when {
@@ -234,8 +240,10 @@ fun AmountPad(calc: AmountCalc, prompt: String, accent: Color, onNext: () -> Uni
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(170.dp)
-                .blob(accent.copy(alpha = 0.22f), seed = 5, amplitude = 0.1f),
+                // Skeuomorphic: a recessed display, like the screen of a card terminal.
+                .skin({ padding(top = 10.dp).height(150.dp).well(lerp(c.surfaceHigh, accent, 0.16f), RoundedCornerShape(20.dp), c.isDark) }) {
+                    height(170.dp).blob(accent.copy(alpha = 0.22f), seed = 5, amplitude = 0.1f)
+                },
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -308,8 +316,7 @@ private fun Keypad(
                             .weight(1f)
                             .height(62.dp)
                             .bouncyClick(pressedScale = 0.88f) { if (k == "<") onBackspace() else onKey(k) }
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(c.surface),
+                            .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(24.dp)).background(c.surface) },
                         contentAlignment = Alignment.Center,
                     ) {
                         if (k == "<") {
@@ -414,8 +421,7 @@ private fun CategoryStep(vm: AddViewModel, categories: List<CategoryEntity>) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-                    .background(c.surface)
+                    .skin({ paper(c.surface, RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)).background(c.surface) }
                     .padding(20.dp)
                     .navigationBarsPadding()
             ) {
@@ -629,8 +635,7 @@ fun NoteField(value: String, onChange: (String) -> Unit, placeholder: String, mo
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(c.surface)
+                    .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(20.dp)).background(c.surface) }
                     .padding(horizontal = 18.dp, vertical = 16.dp)
             ) {
                 if (value.isEmpty()) Text(placeholder, style = Ui.type.body, color = c.inkFaint)
@@ -677,8 +682,7 @@ private fun ReceiptPicker(path: String?, onCamera: () -> Unit, onGallery: () -> 
                         Modifier
                             .weight(1f)
                             .bouncyClick(onClick = action)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(c.surface)
+                            .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(20.dp)).background(c.surface) }
                             .padding(vertical = 18.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,

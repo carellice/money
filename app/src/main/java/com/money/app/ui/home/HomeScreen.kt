@@ -1,5 +1,7 @@
 package com.money.app.ui.home
 
+import com.money.app.ui.theme.blob
+import com.money.app.ui.theme.LocalSkeuo
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -83,7 +85,16 @@ import com.money.app.ui.tour.tourSteps
 import com.money.app.ui.tour.tourTarget
 import com.money.app.ui.theme.Ui
 import com.money.app.ui.theme.backdropBlobs
-import com.money.app.ui.theme.blob
+import com.money.app.ui.theme.Thread
+import com.money.app.ui.theme.gel
+import com.money.app.ui.theme.leather
+import com.money.app.ui.components.onGel
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -272,6 +283,7 @@ fun HomeScreen(
 
 @Composable
 private fun Hero(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifier = Modifier) {
+    if (LocalSkeuo.current) return HeroSkeuo(r = r, onAdd = onAdd, modifier = modifier)
     val c = Ui.colors
     val float = rememberInfiniteTransition(label = "float")
     val bob by float.animateFloat(
@@ -328,22 +340,75 @@ private fun Hero(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifier = M
     }
 }
 
+/** A stitched leather wallet: the month's balance stamped in, entrate and uscite as glossy buttons. */
 @Composable
-private fun MiniBlob(label: String, cents: Long, color: Color, seed: Int, modifier: Modifier, onClick: () -> Unit) {
-    Box(
+private fun HeroSkeuo(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifier = Modifier) {
+    val c = Ui.colors
+    val toggleHidden = rememberHideAmountsToggle()
+    val stamp = Shadow(Color.Black.copy(alpha = 0.85f), Offset(0f, -1.5f), 0f)
+    val shape = RoundedCornerShape(22.dp)
+    Column(
         modifier
-            .size(118.dp)
-            .bouncyClick(onClick = onClick)
-            .blob(color, seed = seed, amplitude = 0.1f),
-        contentAlignment = Alignment.Center,
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .shadow(12.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+            .leather(shape, corner = 22.dp, shade = 0.05f)
+            .padding(horizontal = 22.dp, vertical = 22.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
-            Masked(Ui.type.titleSmall, Ink) {
-                Text(Money.format(cents), style = Ui.type.titleSmall, color = Ink, maxLines = 1)
+        Column(
+            Modifier.fillMaxWidth().bouncyClick(pressedScale = 0.97f, onClick = toggleHidden),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("SALDO DEL MESE", style = Ui.type.caption.copy(letterSpacing = 0.25.em, shadow = stamp), color = Thread)
+            Spacer(Modifier.height(4.dp))
+            AnimatedAmount(
+                r.balance,
+                Ui.type.hero.copy(fontSize = 52.sp, lineHeight = 56.sp, shadow = Shadow(Color.Black.copy(alpha = 0.9f), Offset(0f, 2.5f), 3f)),
+                color = Color(0xFFFFF4DE),
+                decimalsScale = 0.45f,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (r.savingsRate != null) {
+                    Text(
+                        if (r.balance >= 0) "risparmi ${percent(r.savingsRate)}" else "in rosso",
+                        style = Ui.type.label.copy(shadow = stamp),
+                        color = Thread.copy(alpha = 0.9f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                // The whole wallet toggles; the eye only says so.
+                val hidden = LocalHideAmounts.current
+                Icon(
+                    if (hidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                    contentDescription = if (hidden) "Mostra importi" else "Nascondi importi",
+                    tint = Thread.copy(alpha = 0.8f),
+                    modifier = Modifier.size(18.dp),
+                )
             }
-            Text("+ aggiungi", style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
         }
+        Spacer(Modifier.height(18.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            HeroButton("entrate", r.income, c.income, Modifier.weight(1f)) { onAdd(TxType.INCOME) }
+            HeroButton("uscite", r.expense, c.expense, Modifier.weight(1f)) { onAdd(TxType.EXPENSE) }
+        }
+    }
+}
+
+@Composable
+private fun HeroButton(label: String, cents: Long, color: Color, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier
+            .bouncyClick(onClick = onClick)
+            .gel(color, RoundedCornerShape(14.dp))
+            .padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(label, style = Ui.type.caption.onGel(), color = Ink.copy(alpha = 0.8f))
+        Masked(Ui.type.titleSmall.onGel(), Ink) {
+            Text(Money.format(cents), style = Ui.type.titleSmall.onGel(), color = Ink, maxLines = 1)
+        }
+        Text("+ aggiungi", style = Ui.type.caption.onGel(), color = Ink.copy(alpha = 0.75f))
     }
 }
 
@@ -396,3 +461,23 @@ private fun UpcomingBubble(item: RecurringEntity, onClick: () -> Unit) {
         )
     }
 }
+
+@Composable
+private fun MiniBlob(label: String, cents: Long, color: Color, seed: Int, modifier: Modifier, onClick: () -> Unit) {
+    Box(
+        modifier
+            .size(118.dp)
+            .bouncyClick(onClick = onClick)
+            .blob(color, seed = seed, amplitude = 0.1f),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(label, style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
+            Masked(Ui.type.titleSmall, Ink) {
+                Text(Money.format(cents), style = Ui.type.titleSmall, color = Ink, maxLines = 1)
+            }
+            Text("+ aggiungi", style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
+        }
+    }
+}
+

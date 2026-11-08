@@ -1,5 +1,10 @@
 package com.money.app.ui.transactions
 
+import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.linen
+import com.money.app.ui.theme.paper
+import com.money.app.ui.theme.well
+import com.money.app.ui.theme.gel
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -211,7 +216,7 @@ fun TransactionsScreen(onOpen: (Long) -> Unit) {
                         },
                         modifier = Modifier.animateItem().staggered(gi),
                     ) {
-                        TransactionRow(tx, s.categories, { onOpen(tx.id) }, Modifier.background(c.bg))
+                        TransactionRow(tx, s.categories, { onOpen(tx.id) }, Modifier.skin({ padding(vertical = 3.dp).paper(c.surface, RoundedCornerShape(14.dp), elevation = 2.dp, dark = c.isDark).padding(horizontal = 12.dp) }) { background(c.bg) })
                     }
                 }
             }
@@ -240,7 +245,7 @@ private fun SwipeRow(onDelete: () -> Unit, modifier: Modifier = Modifier, conten
             val active = state.targetValue == SwipeToDismissBoxValue.EndToStart
             val bg by animateColorAsState(if (active) c.expense else c.surfaceHigh, label = "swipeBg")
             Box(
-                Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).background(bg).padding(horizontal = 24.dp),
+                Modifier.fillMaxSize().skin({ padding(vertical = 3.dp).well(bg, RoundedCornerShape(14.dp), c.isDark) }) { clip(RoundedCornerShape(24.dp)).background(bg) }.padding(horizontal = 24.dp),
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 Icon(Icons.Rounded.Delete, "Elimina", tint = if (active) Ink else c.inkSoft)
@@ -262,8 +267,7 @@ private fun SearchField(value: String, onChange: (String) -> Unit) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(50))
-                    .background(c.surface)
+                    .skin({ well(c.surface, RoundedCornerShape(50), c.isDark) }) { clip(RoundedCornerShape(50)).background(c.surface) }
                     .padding(horizontal = 18.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

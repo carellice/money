@@ -1,5 +1,6 @@
 package com.money.app.ui.recurring
 
+import com.money.app.ui.theme.linen
 import com.money.app.ui.components.FullScreenPage
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Add
@@ -130,7 +131,7 @@ fun RecurringEditScreen(onClose: () -> Unit) {
         if (needsPermission) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) else vm.save(context, onClose)
     }
 
-    Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
+    Column(Modifier.fillMaxSize().linen(c.isDark).imePadding()) {
         TopBar(
             title = when {
                 vm.isEdit -> "Modifica"

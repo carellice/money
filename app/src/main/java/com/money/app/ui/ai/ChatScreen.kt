@@ -1,5 +1,10 @@
 package com.money.app.ui.ai
 
+import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.linen
+import com.money.app.ui.theme.paper
+import com.money.app.ui.theme.well
+import com.money.app.ui.theme.gel
 import androidx.compose.animation.AnimatedVisibility
 import android.Manifest
 import android.content.pm.PackageManager
@@ -213,7 +218,7 @@ fun ChatScreen(onBack: () -> Unit, onOpenAiSettings: () -> Unit) {
         if (last > 0) list.animateScrollToItem(last)
     }
 
-    Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
+    Column(Modifier.fillMaxSize().linen(c.isDark).imePadding()) {
         TopBar("Chiedi a Money", onBack) {
             if (vm.messages.isNotEmpty()) RoundIconButton(Icons.Rounded.DeleteSweep, vm::reset, contentDescription = "Nuova chat")
         }
@@ -264,8 +269,7 @@ fun ChatScreen(onBack: () -> Unit, onOpenAiSettings: () -> Unit) {
                 item {
                     Box(
                         Modifier
-                            .clip(RoundedCornerShape(22.dp, 22.dp, 22.dp, 6.dp))
-                            .background(c.surface)
+                            .skin({ paper(c.surface, RoundedCornerShape(22.dp, 22.dp, 22.dp, 6.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(22.dp, 22.dp, 22.dp, 6.dp)).background(c.surface) }
                             .padding(horizontal = 18.dp, vertical = 16.dp)
                     ) { ThinkingDots(c.accentText) }
                 }
@@ -308,8 +312,7 @@ fun ChatScreen(onBack: () -> Unit, onOpenAiSettings: () -> Unit) {
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(26.dp))
-                            .background(c.surface)
+                            .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(26.dp)).background(c.surface) }
                             .padding(horizontal = 18.dp, vertical = 15.dp)
                     ) {
                         if (input.isEmpty()) Text("Scrivi o manda un vocale…", style = Ui.type.body, color = c.inkFaint)
@@ -364,8 +367,7 @@ private fun VoiceBar(recording: Boolean, level: Float, onCancel: () -> Unit, onS
         Row(
             Modifier
                 .weight(1f)
-                .clip(RoundedCornerShape(26.dp))
-                .background(c.surface)
+                .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(26.dp)).background(c.surface) }
                 .padding(horizontal = 18.dp, vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -443,8 +445,7 @@ private fun DraftCard(draft: Draft, outcome: Boolean?, onConfirm: () -> Unit, on
     Column(
         Modifier
             .widthIn(max = 320.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .background(c.surface)
+            .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(22.dp)).background(c.surface) }
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {

@@ -1,5 +1,6 @@
 package com.money.app.ui.components
 
+import com.money.app.ui.theme.LocalSkeuo
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -22,8 +23,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,6 +38,14 @@ import androidx.compose.foundation.layout.height
 import com.money.app.domain.AmountOp
 import com.money.app.ui.theme.Ink
 import com.money.app.ui.theme.Ui
+import com.money.app.ui.theme.gel
+import com.money.app.ui.theme.skin
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import com.money.app.ui.theme.paper
+import com.money.app.ui.theme.well
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxHeight
 
 @Composable
 fun FormLabel(text: String, modifier: Modifier = Modifier) {
@@ -53,6 +60,7 @@ fun SwitchRow(
     onChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (LocalSkeuo.current) return SwitchRowSkeuo(title = title, subtitle = subtitle, checked = checked, onChange = onChange, modifier = modifier)
     val c = Ui.colors
     Row(
         modifier
@@ -79,6 +87,64 @@ fun SwitchRow(
                 uncheckedTrackColor = c.surfaceHigh,
                 uncheckedBorderColor = c.surfaceHigh,
             ),
+        )
+    }
+}
+
+@Composable
+private fun SwitchRowSkeuo(
+    title: String,
+    subtitle: String?,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val c = Ui.colors
+    Row(
+        modifier
+            .fillMaxWidth()
+            .paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark)
+            .bouncyClick(pressedScale = 0.98f) { onChange(!checked) }
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = Ui.type.bodyStrong, color = c.ink)
+            subtitle?.let { Text(it, style = Ui.type.caption, color = c.inkSoft) }
+        }
+        Spacer(Modifier.size(12.dp))
+        ToggleSwitch(checked, onChange)
+    }
+}
+
+/** Old-school slide toggle: a recessed track that fills with gel, and a domed knob that slides on a spring. */
+@Composable
+fun ToggleSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val c = Ui.colors
+    val t by animateFloatAsState(if (checked) 1f else 0f, spring(dampingRatio = 0.7f, stiffness = 500f), label = "toggle")
+    val shape = RoundedCornerShape(50)
+    Box(
+        modifier
+            .size(width = 64.dp, height = 32.dp)
+            .well(c.surfaceHigh, shape, c.isDark)
+            .clickable { onChange(!checked) },
+    ) {
+        // The fill grows from the left as the knob travels.
+        Box(Modifier.fillMaxHeight().fillMaxWidth(0.3f + 0.7f * t).gel(c.accent, shape, drop = false).graphicsLayer { alpha = t })
+        Text(
+            "I", style = Ui.type.label.onGel(), color = Ink.copy(alpha = 0.7f),
+            modifier = Modifier.align(Alignment.CenterStart).padding(start = 14.dp).graphicsLayer { alpha = t },
+        )
+        Text(
+            "O", style = Ui.type.label, color = c.inkFaint,
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 11.dp).graphicsLayer { alpha = 1f - t },
+        )
+        Box(
+            Modifier
+                .padding(2.dp)
+                .size(28.dp)
+                .graphicsLayer { translationX = t * 32.dp.toPx() }
+                .knob(c.isDark),
         )
     }
 }
@@ -110,8 +176,7 @@ fun AmountField(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(c.surface)
+                    .skin({ well(c.surfaceHigh, RoundedCornerShape(16.dp), c.isDark) }) { clip(RoundedCornerShape(24.dp)).background(c.surface) }
                     .padding(horizontal = 20.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -138,8 +203,7 @@ fun OperationKeys(value: String, onChange: (String) -> Unit, modifier: Modifier 
                     .bouncyClick(pressedScale = 0.9f, enabled = value.isNotEmpty()) {
                         onChange(value.trimEnd { AmountOp.of(it) != null } + op.sign)
                     }
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(c.surfaceHigh),
+                    .skin({ paper(c.surface, RoundedCornerShape(12.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(18.dp)).background(c.surfaceHigh) },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(op.sign, style = Ui.type.title, color = if (value.isNotEmpty()) c.ink else c.inkFaint)
@@ -149,7 +213,8 @@ fun OperationKeys(value: String, onChange: (String) -> Unit, modifier: Modifier 
 }
 
 @Composable
-fun ColorSwatches(colors: List<Long>, selected: Long, onSelect: (Long) -> Unit) {
+/** [shown] maps a stored colour to the one painted, for the accent whose default looks different in this theme. */
+fun ColorSwatches(colors: List<Long>, selected: Long, shown: (Long) -> Long = { it }, onSelect: (Long) -> Unit) {
     // Padding leaves room for the enlarged selected swatch, which LazyRow would clip.
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -163,8 +228,7 @@ fun ColorSwatches(colors: List<Long>, selected: Long, onSelect: (Long) -> Unit) 
                     .size(40.dp)
                     .graphicsLayer { scaleX = scale; scaleY = scale }
                     .bouncyClick { onSelect(value) }
-                    .clip(CircleShape)
-                    .background(Color(value))
+                    .skin({ gel(Color(shown(value)), CircleShape) }) { clip(CircleShape).background(Color(value)) }
                     .then(if (isSelected) Modifier.border(3.dp, Ui.colors.ink, CircleShape) else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
@@ -184,8 +248,10 @@ fun IconPicker(selected: String, color: Color, onSelect: (String) -> Unit) {
                 Modifier
                     .size(48.dp)
                     .bouncyClick { onSelect(key) }
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (isSelected) color else c.surface),
+                    .skin({
+                        if (isSelected) gel(color, RoundedCornerShape(12.dp))
+                        else paper(c.surface, RoundedCornerShape(12.dp), elevation = 2.dp, dark = c.isDark)
+                    }) { clip(RoundedCornerShape(16.dp)).background(if (isSelected) color else c.surface) },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(AppIcons[key], null, tint = if (isSelected) Ink else c.inkSoft, modifier = Modifier.size(22.dp))

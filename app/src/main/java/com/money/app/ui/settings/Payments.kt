@@ -1,5 +1,10 @@
 package com.money.app.ui.settings
 
+import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.linen
+import com.money.app.ui.theme.paper
+import com.money.app.ui.theme.well
+import com.money.app.ui.theme.gel
 import com.money.app.ui.components.FullScreenPage
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -70,7 +75,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun PaymentBadge(method: CustomPaymentEntity, size: Dp = 40.dp) {
     Box(
-        Modifier.size(size).clip(RoundedCornerShape(size * 0.36f)).background(Color(method.color)),
+        Modifier.size(size).skin({ gel(Color(method.color), RoundedCornerShape(size * 0.26f)) }) { clip(RoundedCornerShape(size * 0.36f)).background(Color(method.color)) },
         contentAlignment = Alignment.Center,
     ) {
         Icon(AppIcons[method.icon], null, tint = Ink, modifier = Modifier.size(size * 0.5f))
@@ -88,7 +93,7 @@ private fun ChoiceBadge(choice: PaymentChoice, color: Color, size: Dp = 40.dp) {
     val payments = LocalPayments.current
     val own = choice.customId?.let { payments.custom[it] }
     Box(
-        Modifier.size(size).clip(RoundedCornerShape(size * 0.36f)).background(own?.let { Color(it.color) } ?: color),
+        Modifier.size(size).skin({ gel(own?.let { Color(it.color) } ?: color, RoundedCornerShape(size * 0.26f)) }) { clip(RoundedCornerShape(size * 0.36f)).background(own?.let { Color(it.color) } ?: color) },
         contentAlignment = Alignment.Center,
     ) {
         Icon(AppIcons[payments.icon(choice)], null, tint = Ink, modifier = Modifier.size(size * 0.5f))
@@ -119,8 +124,7 @@ fun PaymentPicker(selected: PaymentChoice, onSelect: (PaymentChoice) -> Unit, co
         Modifier
             .fillMaxWidth()
             .bouncyClick(pressedScale = 0.98f) { open = true }
-            .clip(RoundedCornerShape(22.dp))
-            .background(c.surface)
+            .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(22.dp)).background(c.surface) }
             .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -160,8 +164,7 @@ fun PaymentPicker(selected: PaymentChoice, onSelect: (PaymentChoice) -> Unit, co
                                     onSelect(choice)
                                     open = false
                                 }
-                                .clip(RoundedCornerShape(22.dp))
-                                .background(if (isSelected) c.surfaceHigh else c.surface)
+                                .skin({ if (isSelected) well(c.surfaceHigh, RoundedCornerShape(16.dp), c.isDark) else paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(22.dp)).background(if (isSelected) c.surfaceHigh else c.surface) }
                                 .padding(horizontal = 18.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -214,8 +217,7 @@ fun PaymentsSection() {
             Modifier
                 .fillMaxWidth()
                 .bouncyClick(pressedScale = 0.98f) { removing = PaymentChoice(method) }
-                .clip(RoundedCornerShape(22.dp))
-                .background(c.surface)
+                .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(22.dp)).background(c.surface) }
                 .padding(horizontal = 18.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -230,8 +232,7 @@ fun PaymentsSection() {
             Modifier
                 .fillMaxWidth()
                 .bouncyClick(pressedScale = 0.98f) { editing = method }
-                .clip(RoundedCornerShape(22.dp))
-                .background(c.surface)
+                .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(22.dp)).background(c.surface) }
                 .padding(horizontal = 18.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -245,8 +246,7 @@ fun PaymentsSection() {
         Modifier
             .fillMaxWidth()
             .bouncyClick(pressedScale = 0.98f) { editing = newPayment(custom.size) }
-            .clip(RoundedCornerShape(22.dp))
-            .background(c.surface)
+            .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(22.dp)).background(c.surface) }
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -332,8 +332,7 @@ private fun RemovePayment(from: PaymentChoice, onDone: () -> Unit, onRemove: (Pa
                         Modifier
                             .fillMaxWidth()
                             .bouncyClick(pressedScale = 0.98f) { target = choice }
-                            .clip(RoundedCornerShape(22.dp))
-                            .background(if (isSelected) c.surfaceHigh else c.surface)
+                            .skin({ if (isSelected) well(c.surfaceHigh, RoundedCornerShape(16.dp), c.isDark) else paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(22.dp)).background(if (isSelected) c.surfaceHigh else c.surface) }
                             .padding(horizontal = 18.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

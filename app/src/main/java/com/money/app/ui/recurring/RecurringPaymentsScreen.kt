@@ -1,5 +1,6 @@
 package com.money.app.ui.recurring
 
+import com.money.app.ui.theme.linen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,7 +52,7 @@ fun RecurringPaymentsScreen(onBack: () -> Unit) {
     var kind by rememberSaveable { mutableStateOf<RecurringKind?>(null) }
     var yearly by rememberSaveable { mutableStateOf(false) }
     val c = Ui.colors
-    Column(Modifier.fillMaxSize().background(c.bg)) {
+    Column(Modifier.fillMaxSize().linen(c.isDark)) {
         TopBar("Metodi di pagamento", onBack = onBack)
         val active = all?.filter { it.active } ?: return@Column
         val visible = if (kind == null) active else active.filter { it.kind == kind }

@@ -1,5 +1,10 @@
 package com.money.app.ui.categories
 
+import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.linen
+import com.money.app.ui.theme.paper
+import com.money.app.ui.theme.well
+import com.money.app.ui.theme.gel
 import com.money.app.ui.components.FullScreenPage
 import androidx.compose.foundation.layout.Box
 import android.widget.Toast
@@ -99,7 +104,7 @@ fun CategoriesScreen(onBack: () -> Unit) {
     val type = if (tab == 0) TxType.EXPENSE else TxType.INCOME
     val tops = all.filter { it.parentId == null && it.type == type }
 
-    Column(Modifier.fillMaxSize().background(c.bg)) {
+    Column(Modifier.fillMaxSize().linen(c.isDark)) {
         TopBar("Categorie e budget", onBack) {
             RoundIconButton(Icons.Rounded.Add, {
                 editing = Editing(
@@ -133,8 +138,7 @@ fun CategoriesScreen(onBack: () -> Unit) {
                         .animateItem()
                         .staggered(tops.indexOf(cat), step = 30L)
                         .bouncyClick(pressedScale = 0.97f) { editing = Editing(cat, subs) }
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(c.surface)
+                        .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(24.dp)).background(c.surface) }
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

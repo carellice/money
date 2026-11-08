@@ -1,5 +1,10 @@
 package com.money.app.ui.ai
 
+import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.linen
+import com.money.app.ui.theme.paper
+import com.money.app.ui.theme.well
+import com.money.app.ui.theme.gel
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -97,7 +102,7 @@ fun AiSettingsScreen(onBack: () -> Unit) {
     val c = Ui.colors
     val custom = aiModels.none { it.id == vm.model }
 
-    Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
+    Column(Modifier.fillMaxSize().linen(c.isDark).imePadding()) {
         TopBar("Assistente AI", onBack)
         Column(
             Modifier
@@ -232,8 +237,7 @@ internal fun Field(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(c.surface)
+                    .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(20.dp)).background(c.surface) }
                     .padding(horizontal = 18.dp, vertical = 16.dp)
             ) {
                 if (value.isEmpty()) Text(placeholder, style = Ui.type.body, color = c.inkFaint)

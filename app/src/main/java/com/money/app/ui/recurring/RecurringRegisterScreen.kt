@@ -1,5 +1,6 @@
 package com.money.app.ui.recurring
 
+import com.money.app.ui.theme.linen
 import com.money.app.data.afterPayment
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -161,7 +162,7 @@ fun RecurringRegisterScreen(onClose: () -> Unit) {
 
     BackHandler(enabled = !vm.amountStep) { vm.amountStep = true }
 
-    Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
+    Column(Modifier.fillMaxSize().linen(c.isDark).imePadding()) {
         TopBar("Aggiungi alle spese", onBack = onClose)
         val item = vm.item ?: return@Column
         val header = @Composable {

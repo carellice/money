@@ -1,5 +1,6 @@
 package com.money.app.ui.lock
 
+import com.money.app.ui.theme.linen
 import android.content.Context
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
@@ -62,7 +63,7 @@ object Biometric {
 fun LockScreen(onUnlockRequest: () -> Unit) {
     val c = Ui.colors
     LaunchedEffect(Unit) { onUnlockRequest() }
-    Box(Modifier.fillMaxSize().background(c.bg), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().linen(c.isDark), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 Modifier

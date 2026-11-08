@@ -1,5 +1,6 @@
 package com.money.app.ui.components
 
+import com.money.app.ui.theme.linen
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -78,7 +79,7 @@ fun FullScreenPage(
             enter = slideInVertically(spring(dampingRatio = 0.85f, stiffness = 320f)) { it / 2 } + fadeIn(),
             exit = slideOutVertically(tween(260)) { it / 2 } + fadeOut(tween(200)),
         ) {
-            Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
+            Column(Modifier.fillMaxSize().linen(c.isDark).imePadding()) {
                 TopBar(title, onBack = close, actions = actions)
                 CompositionLocalProvider(LocalClosePage provides closeThen) { content() }
             }

@@ -28,6 +28,7 @@
 | 📊 **Report del mese** | Pagella da A a F, grafico per categoria, calendario delle spese, trend di 6 mesi, confronto col mese prima, budget. Esporta in PDF o come immagine. |
 | 🤖 **Assistente AI** | Con Cloudflare Workers AI: commento del mese con consigli, chat sulle tue spese, movimenti aggiunti scrivendo o a voce ("aggiungi una spesa di 15 € per il pranzo", con conferma prima di salvare), categoria automatica dalla descrizione, resoconto di fine mese. |
 | 🎨 **Tuo, davvero** | Tema chiaro o scuro, colore principale a scelta, blocco con impronta, backup in JSON. |
+| 🪵 **Stile skeuomorfico** | Da **Impostazioni → Stile** scegli tra la grafica classica e quella skeuomorfica: sfondo in lino, card di carta, pelle cucita, bottoni lucidi e interruttori come una volta. Funziona col tema chiaro e scuro. |
 | 🧭 **Tour guidato** | Dopo la presentazione, se vuoi, un giro della Home un pezzo alla volta che ti accompagna a creare il primo conto e la prima spesa. Presentazione e tour si rivedono da **Impostazioni → Guida**. |
 | 🏠 **Dati sul tuo server, se vuoi** | Facoltativo: collega l'app al tuo server CasaOS dove gira la PWA di Money. Telefono e PWA vedono gli stessi dati. |
 | ⬆️ **Si aggiorna da sola** | L'app controlla le release di questo repository e installa la nuova versione con un tocco. |
@@ -91,4 +92,5 @@ app/src/main/java/com/money/app/
 ## 📄 Crediti
 
 - Font [Bricolage Grotesque](https://github.com/ateliertriay/bricolage) (SIL OFL).
+- Texture della pelle dello stile skeuomorfico generata con ChatGPT.
 - Loghi dei servizi da [Simple Icons](https://simpleicons.org) (CC0). I marchi appartengono ai rispettivi proprietari.

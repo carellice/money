@@ -1,5 +1,18 @@
 package com.money.app.ui.recurring
 
+import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.linen
+import com.money.app.ui.theme.paper
+import com.money.app.ui.theme.well
+import com.money.app.ui.theme.gel
+import com.money.app.ui.theme.leather
+import com.money.app.ui.theme.Thread
+import com.money.app.ui.theme.LocalSkeuo
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.foundation.lazy.LazyRow
 import com.money.app.data.installmentsLeft
@@ -130,12 +143,28 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onRegister: (Long) -> Unit, onAdd: (
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(190.dp)
+                    .skin({ height(170.dp) }) { height(190.dp) }
                     .staggered(0)
-                    .blob(Brush.linearGradient(listOf(c.accent, Color(Palette.SKY))), seed = 404, amplitude = 0.05f, speed = 0.6f),
+                    .skin({
+                        shadow(12.dp, RoundedCornerShape(22.dp), ambientColor = Color.Black, spotColor = Color.Black)
+                            .leather(RoundedCornerShape(22.dp), corner = 22.dp, shade = 0.05f)
+                    }) { blob(Brush.linearGradient(listOf(c.accent, Color(Palette.SKY))), seed = 404, amplitude = 0.05f, speed = 0.6f) },
                 contentAlignment = Alignment.Center,
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (LocalSkeuo.current) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    val stamp = Shadow(Color.Black.copy(alpha = 0.85f), Offset(0f, -1.5f), 0f)
+                    Text("OGNI MESE, IN MEDIA", style = Ui.type.caption.copy(letterSpacing = 0.25.em, shadow = stamp), color = Thread)
+                    AnimatedAmount(
+                        monthly,
+                        Ui.type.display.copy(fontSize = 46.sp, lineHeight = 50.sp, shadow = Shadow(Color.Black.copy(alpha = 0.9f), Offset(0f, 2.5f), 3f)),
+                        color = Color(0xFFFFF4DE), decimalsScale = 0.45f, masked = false,
+                    )
+                    Text(
+                        "${Money.short(monthly * 12)} l'anno · abbonamenti ${Money.short(subscriptions)}/mese",
+                        style = Ui.type.caption.copy(shadow = stamp),
+                        color = Thread.copy(alpha = 0.9f),
+                    )
+                } else Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("ogni mese, in media", style = Ui.type.caption, color = Ink.copy(alpha = 0.8f))
                     AnimatedAmount(monthly, Ui.type.display, color = Ink, decimalsScale = 0.45f, masked = false)
                     Text(
@@ -191,8 +220,7 @@ private fun RecurringCard(item: RecurringEntity, modifier: Modifier, onLongClick
         modifier
             .fillMaxWidth()
             .bouncyClick(pressedScale = 0.97f, onLongClick = onLongClick, onClick = onClick)
-            .clip(RoundedCornerShape(28.dp))
-            .background(c.surface)
+            .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(28.dp)).background(c.surface) }
             .padding(14.dp)
             .alpha(if (item.active) 1f else 0.5f),
         verticalAlignment = Alignment.CenterVertically,
@@ -304,8 +332,7 @@ private fun PaymentsEntry(active: List<RecurringEntity>, onClick: () -> Unit, mo
         modifier
             .fillMaxWidth()
             .bouncyClick(pressedScale = 0.97f, onClick = onClick)
-            .clip(RoundedCornerShape(28.dp))
-            .background(c.surface)
+            .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(28.dp)).background(c.surface) }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

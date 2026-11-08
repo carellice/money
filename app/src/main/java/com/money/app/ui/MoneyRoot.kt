@@ -1,5 +1,8 @@
 package com.money.app.ui
 
+import com.money.app.ui.theme.LocalSkeuo
+import com.money.app.ui.theme.BlobSpec
+import com.money.app.ui.theme.blob
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -23,7 +26,6 @@ import kotlin.math.abs
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.withTransform
-import com.money.app.ui.theme.BlobSpec
 import androidx.compose.ui.unit.Dp
 import kotlin.math.max
 import kotlin.math.min
@@ -110,7 +112,18 @@ import com.money.app.data.Payments
 import com.money.app.ui.theme.Ink
 import com.money.app.ui.theme.LocalBlobTime
 import com.money.app.ui.theme.Ui
-import com.money.app.ui.theme.blob
+import com.money.app.ui.theme.Thread
+import com.money.app.ui.theme.gel
+import com.money.app.ui.theme.leather
+import com.money.app.ui.theme.lighten
+import com.money.app.ui.theme.linen
+import com.money.app.ui.theme.well
+import com.money.app.ui.components.knob
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shadow
 import com.money.app.ui.tour.LocalGuide
 import com.money.app.ui.tour.TourOverlay
 import com.money.app.ui.tour.tourTarget
@@ -189,7 +202,7 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
         if (guide.active && nav.currentDestination?.route != Routes.HOME) switchTab(Routes.HOME)
     }
 
-    Box(Modifier.fillMaxSize().background(c.bg)) {
+    Box(Modifier.fillMaxSize().linen(c.isDark)) {
         CompositionLocalProvider(LocalMembers provides membersById, LocalPayments provides payments, LocalAccounts provides accounts) {
             NavHost(
                 navController = nav,
@@ -352,18 +365,9 @@ private fun tabEnter(dir: Int): EnterTransition =
 private fun tabExit(dir: Int): ExitTransition =
     slideOutHorizontally(spring(dampingRatio = 0.85f, stiffness = 380f)) { -dir * it / 4 } + fadeOut(tween(160))
 
-/** The capsule wraps the whole selected tab, icon and label, with a little air around it. */
-private val CapsuleInset = 2.dp
-
-/** How much bigger than the capsule the resting blob is. */
-private object BlobGrowth {
-    const val width = 1.22f
-    const val height = 1.14f
-}
-private val CapsuleHeight = 64.dp
-
 @Composable
 private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> Unit) {
+    if (LocalSkeuo.current) return BottomBarSkeuo(route = route, onSelect = onSelect, onAdd = onAdd)
     val c = Ui.colors
     val density = LocalDensity.current
     val selected = tabs.indexOfFirst { it.route == route }
@@ -401,6 +405,150 @@ private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> U
         AddButton(onAdd)
     }
 }
+
+@Composable
+private fun BottomBarSkeuo(route: String?, onSelect: (String) -> Unit, onAdd: () -> Unit) {
+    val selected = tabs.indexOfFirst { it.route == route }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        val shape = RoundedCornerShape(24.dp)
+        BoxWithConstraints(
+            Modifier
+                .fillMaxWidth()
+                .height(78.dp)
+                .tourTarget("tabs")
+                .shadow(16.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+                .leather(shape, corner = 24.dp, shade = 0.15f),
+        ) {
+            // Tabs share what the side padding and the room for the add button leave.
+            val slot = (maxWidth - 20.dp - 80.dp) / 4
+            if (selected >= 0) {
+                val x by animateDpAsState(
+                    10.dp + slot * selected + if (selected >= 2) 80.dp else 0.dp,
+                    spring(dampingRatio = 0.75f, stiffness = 420f),
+                    label = "tabWell",
+                )
+                // The chosen tab sits in a darker pocket pressed into the leather.
+                Box(
+                    Modifier
+                        .offset(x = x + 3.dp, y = 9.dp)
+                        .size(slot - 6.dp, 60.dp)
+                        .well(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(14.dp), dark = true),
+                )
+            }
+            Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Every tab owns an equal slice of the full bar height, so the touch target is large.
+                tabs.forEachIndexed { i, tab ->
+                    if (i == 2) Spacer(Modifier.width(80.dp))
+                    SkeuoTabItem(tab, i == selected, Modifier.weight(1f)) { onSelect(tab.route) }
+                }
+            }
+        }
+        AddButton(onAdd)
+    }
+}
+
+@Composable
+private fun SkeuoTabItem(tab: Tab, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val c = Ui.colors
+    // Lit like a backlit icon when chosen, debossed into the leather otherwise.
+    val fg by animateColorAsState(if (selected) c.accent.lighten(0.25f) else Thread.copy(alpha = 0.55f), label = "tabFg")
+    val scale = remember { Animatable(1f) }
+    var armed by remember { mutableStateOf(false) }
+    LaunchedEffect(selected) {
+        if (armed && selected) {
+            scale.snapTo(0.7f)
+            scale.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 420f))
+        }
+        armed = true
+    }
+    Column(
+        modifier
+            .fillMaxHeight()
+            .bouncyClick(pressedScale = 0.9f, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            // Glow behind the lit icon.
+            if (selected) Box(Modifier.size(30.dp).drawBehind {
+                drawCircle(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.55f), Color.Transparent)))
+            })
+            Icon(
+                tab.icon, null, tint = fg,
+                modifier = Modifier
+                    .size(26.dp)
+                    .graphicsLayer {
+                        scaleX = scale.value
+                        scaleY = scale.value
+                    },
+            )
+        }
+        Spacer(Modifier.height(3.dp))
+        Text(
+            tab.label,
+            style = Ui.type.caption.copy(shadow = Shadow(Color.Black.copy(alpha = 0.8f), Offset(0f, -1.2f), 0f)),
+            color = fg,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun AddButton(onClick: () -> Unit) {
+    if (LocalSkeuo.current) return AddButtonSkeuo(onClick = onClick)
+    val c = Ui.colors
+    val time = LocalBlobTime.current
+    Box(
+        Modifier
+            .size(70.dp)
+            .tourTarget("add")
+            .graphicsLayer {
+                val breathe = 1f + 0.035f * sin(time.value * 2.2f)
+                scaleX = breathe
+                scaleY = breathe
+            }
+            .bouncyClick(pressedScale = 0.85f, onClick = onClick)
+            // Only the outline, so it doesn't look like the selected tab.
+            .blob(c.accent, seed = 3, amplitude = 0.09f, speed = 1.4f, stroke = 3.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Rounded.Add, "Aggiungi", tint = c.accentText, modifier = Modifier.size(32.dp))
+    }
+}
+
+/** Big glossy brass button set in a metal ring, raised above the bar. */
+@Composable
+private fun AddButtonSkeuo(onClick: () -> Unit) {
+    val c = Ui.colors
+    Box(
+        Modifier
+            .size(74.dp)
+            .tourTarget("add")
+            .bouncyClick(pressedScale = 0.88f, onClick = onClick)
+            .knob(c.isDark)
+            .padding(6.dp)
+            .gel(c.accent, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Rounded.Add, "Aggiungi", tint = Ink, modifier = Modifier.size(34.dp))
+    }
+}
+
+/** The capsule wraps the whole selected tab, icon and label, with a little air around it. */
+private val CapsuleInset = 2.dp
+
+/** How much bigger than the capsule the resting blob is. */
+private object BlobGrowth {
+    const val width = 1.22f
+    const val height = 1.14f
+}
+private val CapsuleHeight = 64.dp
 
 /**
  * The capsule behind the selected tab. Its two ends move on their own springs: the one in front
@@ -521,24 +669,3 @@ private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier, onLabelWidt
     }
 }
 
-@Composable
-private fun AddButton(onClick: () -> Unit) {
-    val c = Ui.colors
-    val time = LocalBlobTime.current
-    Box(
-        Modifier
-            .size(70.dp)
-            .tourTarget("add")
-            .graphicsLayer {
-                val breathe = 1f + 0.035f * sin(time.value * 2.2f)
-                scaleX = breathe
-                scaleY = breathe
-            }
-            .bouncyClick(pressedScale = 0.85f, onClick = onClick)
-            // Only the outline, so it doesn't look like the selected tab.
-            .blob(c.accent, seed = 3, amplitude = 0.09f, speed = 1.4f, stroke = 3.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(Icons.Rounded.Add, "Aggiungi", tint = c.accentText, modifier = Modifier.size(32.dp))
-    }
-}

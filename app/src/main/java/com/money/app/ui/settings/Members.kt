@@ -1,5 +1,10 @@
 package com.money.app.ui.settings
 
+import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.linen
+import com.money.app.ui.theme.paper
+import com.money.app.ui.theme.well
+import com.money.app.ui.theme.gel
 import com.money.app.ui.components.FullScreenPage
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -52,7 +57,7 @@ import com.money.app.ui.theme.Ui
 @Composable
 fun MemberAvatar(member: MemberEntity, size: Dp = 40.dp) {
     Box(
-        Modifier.size(size).clip(CircleShape).background(Color(member.color)),
+        Modifier.size(size).skin({ gel(Color(member.color), CircleShape) }) { clip(CircleShape).background(Color(member.color)) },
         contentAlignment = Alignment.Center,
     ) {
         Text(member.name.take(1).uppercase(), style = Ui.type.bodyStrong, color = Ink)
@@ -69,8 +74,7 @@ fun MembersSection(members: List<MemberEntity>, onSave: (MemberEntity) -> Unit, 
             Modifier
                 .fillMaxWidth()
                 .bouncyClick(pressedScale = 0.98f) { editing = member }
-                .clip(RoundedCornerShape(22.dp))
-                .background(c.surface)
+                .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(22.dp)).background(c.surface) }
                 .padding(horizontal = 18.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -86,8 +90,7 @@ fun MembersSection(members: List<MemberEntity>, onSave: (MemberEntity) -> Unit, 
             .bouncyClick(pressedScale = 0.98f) {
                 editing = MemberEntity(name = "", color = Palette.all[members.size % Palette.all.size])
             }
-            .clip(RoundedCornerShape(22.dp))
-            .background(c.surface)
+            .skin({ paper(c.surface, RoundedCornerShape(16.dp), elevation = 3.dp, dark = c.isDark) }) { clip(RoundedCornerShape(22.dp)).background(c.surface) }
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

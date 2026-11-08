@@ -12,6 +12,11 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -71,6 +76,13 @@ class BlobShape(seed: Int, private val time: Float = 0f, amplitude: Float = 0.07
         Outline.Generic(spec.path(size, time))
 }
 
+/** Rounded "app icon" square that stands in for the organic outline in the skeuomorphic style. */
+val IconShape = RoundedCornerShape(26)
+
+/** [BlobShape] or, in the skeuomorphic style, [IconShape]. */
+@Composable
+fun blobShape(seed: Int): Shape = if (LocalSkeuo.current) IconShape else remember(seed) { BlobShape(seed) }
+
 /** Draws a living blob behind the content, filled or, with [stroke], only its outline. Only the draw phase reads the clock. */
 @Composable
 fun Modifier.blob(
@@ -81,6 +93,12 @@ fun Modifier.blob(
     speed: Float = 1f,
     stroke: Dp? = null,
 ): Modifier {
+    if (LocalSkeuo.current) return drawBehind {
+        // Glossy gel "app icon", or an engraved rim with [stroke].
+        val outline = IconShape.createOutline(size, layoutDirection, this)
+        if (stroke == null) drawGel(outline, color, drop = color.alpha > 0.6f)
+        else drawOutline(outline, color, style = Stroke(stroke.toPx()))
+    }
     val time = LocalBlobTime.current
     val spec = remember(seed, amplitude) { BlobSpec(seed, amplitude = amplitude) }
     val path = remember { Path() }
@@ -101,6 +119,15 @@ fun Modifier.blob(
     amplitude: Float = 0.07f,
     speed: Float = 1f,
 ): Modifier {
+    if (LocalSkeuo.current) return drawBehind {
+        val outline = IconShape.createOutline(size, layoutDirection, this)
+        translate(top = 2.dp.toPx()) { drawOutline(outline, Color.Black.copy(alpha = 0.3f)) }
+        drawOutline(outline, brush)
+        clipRect(bottom = size.height * 0.5f) {
+            drawOutline(outline, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.5f), Color.White.copy(alpha = 0.1f)), endY = size.height * 0.5f))
+        }
+        drawOutline(outline, Color.Black.copy(alpha = 0.35f), style = Stroke(1.dp.toPx()))
+    }
     val time = LocalBlobTime.current
     val spec = remember(seed, amplitude) { BlobSpec(seed, amplitude = amplitude) }
     val path = remember { Path() }
@@ -112,6 +139,8 @@ fun Modifier.blob(
 /** Soft floating blobs used as page backdrop. */
 @Composable
 fun Modifier.backdropBlobs(colors: List<Color>, alpha: Float = 0.16f): Modifier {
+    // The skeuomorphic pages already sit on linen.
+    if (LocalSkeuo.current) return this
     val time = LocalBlobTime.current
     val specs = remember(colors.size) { List(colors.size) { BlobSpec(100 + it * 7, amplitude = 0.12f) } }
     val path = remember { Path() }
