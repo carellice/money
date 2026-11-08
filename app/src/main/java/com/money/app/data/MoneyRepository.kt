@@ -2,6 +2,7 @@ package com.money.app.data
 
 import androidx.room.withTransaction
 import com.money.app.domain.Recurrence
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -51,6 +52,9 @@ class MoneyRepository(
             if (e.offline && offline != null) return offline()
             _errors.tryEmit("Modifica non salvata: ${e.message}")
             failed
+        } catch (e: CancellationException) {
+            // The screen that started the change went away: not a server error, and the server may have applied it.
+            throw e
         } catch (e: Exception) {
             _errors.tryEmit("Modifica non salvata: ${e.message ?: "errore del server"}")
             failed

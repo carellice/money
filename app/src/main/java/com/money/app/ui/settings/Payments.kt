@@ -276,7 +276,10 @@ fun PaymentsSection() {
             },
         )
     }
-    removing?.let { RemovePayment(it) { removing = null } }
+    // The removal runs in this section's scope: the dialog closes right away and would cancel it mid-request.
+    removing?.let { from ->
+        RemovePayment(from, onDone = { removing = null }) { to -> scope.launch { repo.removePayment(from, to) } }
+    }
 }
 
 /**
@@ -284,10 +287,9 @@ fun PaymentsSection() {
  * other method they move to.
  */
 @Composable
-private fun RemovePayment(from: PaymentChoice, onDone: () -> Unit) {
+private fun RemovePayment(from: PaymentChoice, onDone: () -> Unit, onRemove: (PaymentChoice?) -> Unit) {
     val c = Ui.colors
     val repo = appContainer().repository
-    val scope = rememberCoroutineScope()
     val payments = LocalPayments.current
     val name = payments.label(from)
     var uses by remember { mutableStateOf<Int?>(null) }
@@ -295,7 +297,7 @@ private fun RemovePayment(from: PaymentChoice, onDone: () -> Unit) {
     LaunchedEffect(from) { uses = repo.paymentUses(from) }
     fun remove(to: PaymentChoice?) {
         onDone()
-        scope.launch { repo.removePayment(from, to) }
+        onRemove(to)
     }
 
     when (val count = uses) {
