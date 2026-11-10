@@ -77,7 +77,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   return (
     <div style={{ position: 'relative', height: '100%', background: 'var(--bg)', overflow: 'hidden' }}>
       <BackdropBlobs colors={['var(--accent)', 'var(--income)', argb(Palette.ROSE)]} alpha={dark ? 0.1 : 0.22} />
-      <div className="col status-pad nav-pad" style={{ position: 'relative', height: '100%' }}>
+      <div className="col status-pad nav-pad desk-narrow" style={{ position: 'relative', height: '100%' }}>
         <div className="row" style={{ height: 56, padding: '0 20px', flexShrink: 0 }}>
           <span className="t-titleSmall flex1" style={{ color: 'var(--ink)' }}>Money</span>
           <Bouncy onClick={() => goTo(lastPage)} disabled={onLast} className="t-label"

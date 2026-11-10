@@ -129,7 +129,7 @@ export function ChatScreen() {
   }
 
   return (
-    <div className="col" style={{ height: '100%' }}>
+    <div className="col desk-column" style={{ height: '100%' }}>
       <TopBar title="Chiedi a Money" onBack={() => close('chat')} actions={
         messages.length > 0 ? <RoundIconButton icon="delete_sweep" onClick={() => { setMessages([]); setError(null) }} label="Nuova chat" /> : undefined
       } />

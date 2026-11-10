@@ -173,7 +173,7 @@ function Navigator() {
           return (
             <motion.div
               key={entry.key}
-              className="layer"
+              className={sheet ? 'layer screen sheet-route' : 'layer screen'}
               custom={dir.current}
               initial={sheet ? { opacity: 0, y: '50%' } : sliding ? { opacity: 0, x: `${dir.current * 25}%` } : { opacity: 0, scale: 0.97 }}
               animate={isTop
@@ -246,7 +246,7 @@ function BottomBar({ route }: { route: Route }) {
   const selected = tabs.findIndex((t) => t.route === route)
   return (
     <div className="center nav-pad" style={{ position: 'relative' }}>
-      <div style={{ position: 'relative', width: '100%', padding: '12px 16px' }}>
+      <div className="bottombar" style={{ position: 'relative', width: '100%', padding: '12px 16px' }}>
         <div ref={rowRef} className="row" style={{
           position: 'relative', height: 80, borderRadius: 999, background: 'var(--surface)', padding: '0 10px',
           boxShadow: '0 12px 28px rgba(21,18,31,0.22), 0 2px 8px rgba(21,18,31,0.12)',

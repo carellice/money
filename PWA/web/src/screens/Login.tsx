@@ -47,7 +47,7 @@ export function LoginScreen({ onDone }: { onDone: (username: string) => void }) 
   return (
     <div style={{ position: 'relative', height: '100%', background: 'var(--bg)', overflow: 'hidden' }}>
       <BackdropBlobs colors={['var(--accent)', 'var(--income)', argb(Palette.ROSE)]} alpha={dark ? 0.1 : 0.22} />
-      <form className="col status-pad nav-pad" style={{ position: 'relative', height: '100%', padding: '0 24px', justifyContent: 'center' }}
+      <form className="col status-pad nav-pad desk-narrow" style={{ position: 'relative', height: '100%', padding: '0 24px', justifyContent: 'center' }}
         onSubmit={(e) => { e.preventDefault(); submit() }}>
         <BlobBox size={160} gradient={register ? ['var(--income)', 'var(--accent)'] : ['var(--accent)', argb(Palette.ROSE)]}
           seed={register ? 4 : 9} amplitude={0.1} style={{ alignSelf: 'center', flexShrink: 0 }}>

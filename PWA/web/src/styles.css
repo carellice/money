@@ -57,9 +57,22 @@ svg { display: block; }
   overflow: clip;
   background: var(--bg);
 }
-@media (min-width: 560px) {
+@media (min-width: 560px) and (max-width: 899.98px) {
   body { background: color-mix(in srgb, var(--bg) 82%, #000); }
   .app { box-shadow: 0 0 60px rgba(0, 0, 0, 0.18); }
+}
+/* Desktop: the app fills the window, content and top bars stay in a readable centred column, the tab bar floats like a dock. */
+@media (min-width: 900px) {
+  .app { max-width: none; }
+  .screen .scroll > *, .screen .status-pad > * { max-width: 880px; margin-inline: auto; }
+  /* Add and edit sheets: the whole form in one column, keypad included. */
+  .sheet-route > * { width: 100%; max-width: 620px; margin-inline: auto; }
+  .desk-column { width: 100%; max-width: 880px; margin-inline: auto; }
+  .desk-narrow { max-width: 520px; margin-inline: auto; }
+  .bottombar { max-width: 620px; margin: 0 auto; }
+  .snackbar { max-width: 560px; margin: 0 auto; }
+  .scroll { scrollbar-width: thin; }
+  .scroll::-webkit-scrollbar { display: initial; width: 8px; }
 }
 
 .layer { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); overflow: clip; }
