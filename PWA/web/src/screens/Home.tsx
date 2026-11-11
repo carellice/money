@@ -151,7 +151,11 @@ function HeroMetro({ r, onAdd }: { r: MonthReport; onAdd: (type: TxType) => void
               <span className="t-body" style={{ color: alpha(white, 0.85) }}>media {hide(Money.short(r.avgDailyExpense))} al giorno</span>
               {r.fixedExpense > 0 && <span className="t-body" style={{ color: alpha(white, 0.85) }}>fisse {hide(Money.short(r.fixedExpense))}</span>}
             </div>
-            <span className="t-label" style={{ color: white, fontWeight: 400 }}>questo mese</span>
+            {/* The month balance stays in sight on the back too: it is the figure that matters most. */}
+            <div className="row" style={{ alignItems: 'flex-end' }}>
+              <span className="t-label flex1" style={{ color: white, fontWeight: 400 }}>saldo del mese</span>
+              <span className="t-title" style={{ color: white, whiteSpace: 'nowrap' }}>{hide(Money.format(r.balance))}</span>
+            </div>
           </div>
         </motion.div>
       </Bouncy>

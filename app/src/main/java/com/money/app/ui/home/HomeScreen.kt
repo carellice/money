@@ -462,7 +462,11 @@ private fun HeroMetro(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifie
                         Text("media ${hideable(Money.short(r.avgDailyExpense))} al giorno", style = Ui.type.body, color = Color.White.copy(alpha = 0.85f))
                         if (r.fixedExpense > 0) Text("fisse ${hideable(Money.short(r.fixedExpense))}", style = Ui.type.body, color = Color.White.copy(alpha = 0.85f))
                     }
-                    Text("questo mese", style = Ui.type.label.copy(fontWeight = FontWeight.Normal), color = Color.White)
+                    // The month balance stays in sight on the back too: it is the figure that matters most.
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("saldo del mese", style = Ui.type.label.copy(fontWeight = FontWeight.Normal), color = Color.White, modifier = Modifier.weight(1f))
+                        Text(hideable(Money.format(r.balance)), style = Ui.type.title, color = Color.White, maxLines = 1)
+                    }
                 }
             }
         }
