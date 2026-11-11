@@ -1,6 +1,7 @@
 package com.money.app.ui.accounts
 
 import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.tile
 import com.money.app.ui.theme.linen
 import com.money.app.ui.theme.paper
 import com.money.app.ui.theme.well
@@ -23,8 +24,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.money.app.ui.theme.CircleShape
+import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -141,7 +142,7 @@ private fun newAccount(count: Int) =
 @Composable
 fun AccountBadge(account: AccountEntity, size: Dp = 40.dp) {
     Box(
-        Modifier.size(size).skin({ gel(Color(account.color), RoundedCornerShape(size * 0.26f)) }) { clip(RoundedCornerShape(size * 0.36f)).background(Color(account.color)) },
+        Modifier.size(size).skin({ gel(Color(account.color), RoundedCornerShape(size * 0.26f)) }) { clip(RoundedCornerShape(size * 0.36f)).background(Color(account.color).tile()) },
         contentAlignment = Alignment.Center,
     ) {
         Icon(AppIcons[account.icon], null, tint = Ink, modifier = Modifier.size(size * 0.5f))

@@ -1,6 +1,10 @@
 package com.money.app.ui
 
 import com.money.app.ui.theme.LocalSkeuo
+import com.money.app.ui.theme.LocalMetro
+import com.money.app.ui.theme.RoundShape
+import androidx.compose.foundation.border
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import com.money.app.ui.theme.BlobSpec
 import com.money.app.ui.theme.blob
 import androidx.compose.animation.AnimatedVisibility
@@ -56,7 +60,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import com.money.app.ui.theme.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Add
@@ -80,6 +84,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -121,7 +126,7 @@ import com.money.app.ui.theme.well
 import com.money.app.ui.components.knob
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shadow
 import com.money.app.ui.tour.LocalGuide
@@ -202,6 +207,7 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
         if (guide.active && nav.currentDestination?.route != Routes.HOME) switchTab(Routes.HOME)
     }
 
+    val metro = LocalMetro.current
     Box(Modifier.fillMaxSize().linen(c.isDark)) {
         CompositionLocalProvider(LocalMembers provides membersById, LocalPayments provides payments, LocalAccounts provides accounts) {
             NavHost(
@@ -210,19 +216,23 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
                 // Between tabs the page slides the way the bar's capsule goes.
                 enterTransition = {
                     val dir = tabDirection(initialState.destination.route, targetState.destination.route)
-                    if (dir != 0) tabEnter(dir) else fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 0.97f)
+                    if (metro) metroEnter(if (dir != 0) dir else 1)
+                    else if (dir != 0) tabEnter(dir) else fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 0.97f)
                 },
                 exitTransition = {
                     val dir = tabDirection(initialState.destination.route, targetState.destination.route)
-                    if (dir != 0) tabExit(dir) else fadeOut(tween(180))
+                    if (metro) metroExit(if (dir != 0) dir else 1)
+                    else if (dir != 0) tabExit(dir) else fadeOut(tween(180))
                 },
                 popEnterTransition = {
                     val dir = tabDirection(initialState.destination.route, targetState.destination.route)
-                    if (dir != 0) tabEnter(dir) else fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 1.03f)
+                    if (metro) metroEnter(if (dir != 0) dir else -1)
+                    else if (dir != 0) tabEnter(dir) else fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 1.03f)
                 },
                 popExitTransition = {
                     val dir = tabDirection(initialState.destination.route, targetState.destination.route)
-                    if (dir != 0) tabExit(dir) else fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.97f)
+                    if (metro) metroExit(if (dir != 0) dir else -1)
+                    else if (dir != 0) tabExit(dir) else fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.97f)
                 },
             ) {
                 composable(Routes.HOME) {
@@ -365,8 +375,16 @@ private fun tabEnter(dir: Int): EnterTransition =
 private fun tabExit(dir: Int): ExitTransition =
     slideOutHorizontally(spring(dampingRatio = 0.85f, stiffness = 380f)) { -dir * it / 4 } + fadeOut(tween(160))
 
+// Windows Phone pages: the old one leaves at once, the new one glides in fast and settles slowly.
+private fun metroEnter(dir: Int): EnterTransition =
+    slideInHorizontally(tween(420, delayMillis = 90, easing = LinearOutSlowInEasing)) { dir * it / 3 } + fadeIn(tween(220, delayMillis = 90))
+
+private fun metroExit(dir: Int): ExitTransition =
+    slideOutHorizontally(tween(140)) { -dir * it / 6 } + fadeOut(tween(110))
+
 @Composable
 private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> Unit) {
+    if (LocalMetro.current) return BottomBarMetro(route = route, onSelect = onSelect, onAdd = onAdd)
     if (LocalSkeuo.current) return BottomBarSkeuo(route = route, onSelect = onSelect, onAdd = onAdd)
     val c = Ui.colors
     val density = LocalDensity.current
@@ -450,6 +468,54 @@ private fun BottomBarSkeuo(route: String?, onSelect: (String) -> Unit, onAdd: ()
             }
         }
         AddButton(onAdd)
+    }
+}
+
+/** Windows Phone application bar: a flat strip with circled icons and tiny lowercase labels. */
+@Composable
+private fun BottomBarMetro(route: String?, onSelect: (String) -> Unit, onAdd: () -> Unit) {
+    val c = Ui.colors
+    val selected = tabs.indexOfFirst { it.route == route }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .tourTarget("tabs")
+            .background(if (c.isDark) Color(0xFF1F1F1F) else Color(0xFFDDDDDD))
+            .navigationBarsPadding()
+            .height(76.dp)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        tabs.forEachIndexed { i, tab ->
+            if (i == 2) MetroBarButton(Icons.Rounded.Add, "aggiungi", filled = true, Modifier.weight(1f).tourTarget("add"), onClick = onAdd)
+            MetroBarButton(tab.icon, tab.label.lowercase(), filled = false, Modifier.weight(1f), selected = i == selected) { onSelect(tab.route) }
+        }
+    }
+}
+
+@Composable
+private fun MetroBarButton(icon: ImageVector, label: String, filled: Boolean, modifier: Modifier, selected: Boolean = false, onClick: () -> Unit) {
+    val c = Ui.colors
+    val ring by animateColorAsState(if (selected) c.accent else c.ink, tween(200), label = "ring")
+    // Only the add button is a solid disc; the open tab lights its ring and icon in the accent.
+    val fill = if (filled) c.accent else Color.Transparent
+    Column(
+        modifier.fillMaxHeight().bouncyClick(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            Modifier
+                .size(42.dp)
+                .clip(RoundShape)
+                .background(fill)
+                .border(2.dp, if (filled) c.accent else ring, RoundShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, label, tint = if (filled) Color.White else ring, modifier = Modifier.size(if (filled) 26.dp else 21.dp))
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(label, style = Ui.type.caption.copy(fontSize = 11.sp), color = if (selected) c.accentText else c.inkSoft, maxLines = 1)
     }
 }
 

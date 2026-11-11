@@ -1,6 +1,8 @@
 package com.money.app.ui.components
 
 import androidx.compose.animation.core.Animatable
+import com.money.app.ui.theme.tile
+import com.money.app.ui.theme.solid
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -20,8 +22,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.money.app.ui.theme.CircleShape
+import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -66,6 +68,7 @@ fun DonutChart(
         sweep.animateTo(1f, tween(1100, easing = FastOutSlowInEasing))
     }
     val grow by animateFloatAsState(if (selected >= 0) 1f else 0f, spring(dampingRatio = 0.5f), label = "grow")
+    val metro = com.money.app.ui.theme.LocalMetro.current
     Box(modifier.aspectRatio(1f), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val stroke = thickness.toPx()
@@ -83,8 +86,8 @@ fun DonutChart(
                 if (visible > gap) {
                     val width = if (i == selected) stroke + extra * grow else stroke
                     drawArc(
-                        seg.color, start + gap / 2, visible - gap, false, Offset(inset, inset), arcSize,
-                        style = Stroke(width, cap = if (segments.size == 1) StrokeCap.Butt else StrokeCap.Round),
+                        if (metro) seg.color.solid() else seg.color, start + gap / 2, visible - gap, false, Offset(inset, inset), arcSize,
+                        style = Stroke(width, cap = if (segments.size == 1 || metro) StrokeCap.Butt else StrokeCap.Round),
                     )
                 }
                 start += angle
@@ -140,7 +143,7 @@ private fun Bar(fraction: Float, color: Color) {
             .width(12.dp)
             .fillMaxHeight(fraction.coerceIn(0.015f, 1f))
             .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 3.dp, bottomEnd = 3.dp))
-            .background(color)
+            .background(color.tile())
     )
 }
 
@@ -185,7 +188,7 @@ fun SpendingCalendar(
                                         .fillMaxSize(0.35f + 0.6f * intensity)
                                         .graphicsLayer { scaleX = anim.value; scaleY = anim.value }
                                         .clip(CircleShape)
-                                        .background(color.copy(alpha = 0.35f + 0.65f * intensity))
+                                        .background(color.tile().copy(alpha = 0.35f + 0.65f * intensity))
                                 )
                             } else if (date == today) {
                                 Box(Modifier.fillMaxSize(0.8f).clip(CircleShape).background(c.surfaceHigh))

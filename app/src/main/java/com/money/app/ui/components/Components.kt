@@ -1,6 +1,9 @@
 package com.money.app.ui.components
 
 import com.money.app.ui.theme.LocalSkeuo
+import com.money.app.ui.theme.LocalMetro
+import com.money.app.ui.theme.DarkInk
+import com.money.app.ui.theme.tile
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -37,8 +40,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.money.app.ui.theme.CircleShape
+import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronLeft
@@ -109,6 +112,7 @@ fun Modifier.bouncyClick(
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ): Modifier {
+    if (LocalMetro.current) return metroTilt(enabled, haptic, onLongClick, onClick)
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -167,6 +171,7 @@ fun RecurringLogo(
 ) {
     if (LocalSkeuo.current) return RecurringLogoSkeuo(brandKey = brandKey, imagePath = imagePath, icon = icon, color = color, modifier = modifier, size = size, animated = animated)
     val brand = Brands.find(brandKey)
+    val metro = LocalMetro.current
     when {
         imagePath != null -> AsyncImage(
             model = File(imagePath),
@@ -175,10 +180,11 @@ fun RecurringLogo(
             modifier = modifier.size(size).clip(BlobShape(imagePath.hashCode())),
         )
         brand != null -> Box(
-            modifier.size(size).blob(brand.color, seed = brand.key.hashCode(), amplitude = 0.08f, animated = animated),
+            // Modern UI tiles keep the brand's own colour instead of the solid accent mapping.
+            if (metro) modifier.size(size).background(brand.color) else modifier.size(size).blob(brand.color, seed = brand.key.hashCode(), amplitude = 0.08f, animated = animated),
             contentAlignment = Alignment.Center,
         ) {
-            val tint = if (brand.isLight) Ink else Color.White
+            val tint = if (brand.isLight) DarkInk else Color.White
             val vector = brand.vector
             if (vector != null) {
                 Icon(vector, contentDescription = brand.name, tint = tint, modifier = Modifier.size(size * 0.44f))
@@ -221,7 +227,7 @@ private fun RecurringLogoSkeuo(
             modifier.size(size).blob(brand.color, seed = brand.key.hashCode(), amplitude = 0.08f, animated = animated),
             contentAlignment = Alignment.Center,
         ) {
-            val tint = if (brand.isLight) Ink else Color.White
+            val tint = if (brand.isLight) DarkInk else Color.White
             val vector = brand.vector
             if (vector != null) {
                 Icon(vector, contentDescription = brand.name, tint = tint, modifier = Modifier.size(size * 0.44f))
@@ -367,6 +373,7 @@ fun Pill(
     icon: ImageVector? = null,
     leading: (@Composable () -> Unit)? = null,
 ) {
+    if (LocalMetro.current) return PillMetro(text, selected, onClick, modifier, color, icon, leading)
     if (LocalSkeuo.current) return PillSkeuo(text = text, selected = selected, onClick = onClick, modifier = modifier, color = color, icon = icon, leading = leading)
     val c = Ui.colors
     val bg by animateColorAsState(if (selected) color else c.surfaceHigh, label = "pillBg")
@@ -436,6 +443,7 @@ fun Segmented(
     modifier: Modifier = Modifier,
     colors: List<Color>? = null,
 ) {
+    if (LocalMetro.current) return SegmentedMetro(options, selected, onSelect, modifier, colors)
     if (LocalSkeuo.current) return SegmentedSkeuo(options = options, selected = selected, onSelect = onSelect, modifier = modifier, colors = colors)
     val c = Ui.colors
     BoxWithConstraints(
@@ -528,7 +536,7 @@ fun SoftCard(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(28.dp))
-            .background(color)
+            .background(if (color == Ui.colors.surface) color else color.tile())
             .padding(padding),
         content = content,
     )
@@ -558,6 +566,7 @@ fun SectionTitle(
     action: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
+    if (LocalMetro.current) return SectionTitleMetro(text, modifier, action, onAction)
     if (LocalSkeuo.current) return SectionTitleSkeuo(text = text, modifier = modifier, action = action, onAction = onAction)
     Row(modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text, style = Ui.type.titleSmall, color = Ui.colors.ink, modifier = Modifier.weight(1f))
@@ -608,6 +617,7 @@ fun RoundIconButton(
     size: Dp = 44.dp,
     contentDescription: String? = null,
 ) {
+    if (LocalMetro.current) return RoundIconButtonMetro(icon, onClick, modifier, background, tint, size, contentDescription)
     if (LocalSkeuo.current) return RoundIconButtonSkeuo(icon = icon, onClick = onClick, modifier = modifier, background = background, tint = tint, size = size, contentDescription = contentDescription)
     Box(
         modifier
@@ -663,6 +673,7 @@ fun TopBar(
     modifier: Modifier = Modifier,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
+    if (LocalMetro.current) return TopBarMetro(title, onBack, modifier, actions)
     if (LocalSkeuo.current) return TopBarSkeuo(title = title, onBack = onBack, modifier = modifier, actions = actions)
     Row(
         modifier
@@ -725,6 +736,7 @@ fun PrimaryButton(
     color: Color = Ui.colors.accent,
     icon: ImageVector? = null,
 ) {
+    if (LocalMetro.current) return PrimaryButtonMetro(text, onClick, modifier, enabled, color, icon)
     if (LocalSkeuo.current) return PrimaryButtonSkeuo(text = text, onClick = onClick, modifier = modifier, enabled = enabled, color = color, icon = icon)
     val bg by animateColorAsState(if (enabled) color else Ui.colors.surfaceHigh, label = "btnBg")
     val fg by animateColorAsState(if (enabled) Ink else Ui.colors.inkFaint, label = "btnFg")
@@ -794,7 +806,7 @@ fun MonthSwitcher(
             label = "month",
             modifier = Modifier.width(150.dp),
         ) {
-            Text(Dates.monthYear(it), style = style, color = Ui.colors.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(if (LocalMetro.current) Dates.monthYear(it).lowercase() else Dates.monthYear(it), style = style, color = Ui.colors.ink, textAlign = TextAlign.Center, maxLines = 1, softWrap = false, modifier = Modifier.fillMaxWidth())
         }
         RoundIconButton(Icons.Rounded.ChevronRight, { onChange(month.plusMonths(1)) }, size = 36.dp, contentDescription = "Mese successivo")
     }
@@ -855,7 +867,7 @@ fun SoftProgress(
         anim.animateTo(progress.coerceIn(0f, 1f), spring(dampingRatio = 0.75f, stiffness = 60f))
     }
     Box(modifier.fillMaxWidth().height(height).clip(CircleShape).background(track)) {
-        Box(Modifier.fillMaxWidth(anim.value.coerceIn(0f, 1f)).fillMaxHeight().clip(CircleShape).background(color))
+        Box(Modifier.fillMaxWidth(anim.value.coerceIn(0f, 1f)).fillMaxHeight().clip(CircleShape).background(color.tile()))
     }
 }
 

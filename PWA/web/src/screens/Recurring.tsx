@@ -10,8 +10,7 @@ import { updateSettings, usePaymentMethods, useStore } from '../lib/store.ts'
 import { alpha, Ink } from '../lib/theme.ts'
 import { BlobLayer } from '../components/Blob.tsx'
 import {
-  AnimatedAmount, AppIcon, Bouncy, EmptyState, Icon, Pill, RecurringLogo, RoundIconButton, Staggered,
-} from '../components/ui.tsx'
+  AnimatedAmount, AppIcon, Bouncy, EmptyState, Icon, Pill, RecurringLogo, RoundIconButton, Staggered, PageTitle } from '../components/ui.tsx'
 
 export function RecurringScreen() {
   const data = useStore((s) => s.data)
@@ -44,7 +43,7 @@ export function RecurringScreen() {
       <div className="col" style={{ padding: '0 20px 156px', gap: 12 }}>
         <div className="row status-pad">
           <div className="row" style={{ paddingTop: 12, width: '100%' }}>
-            <span className="t-display flex1" style={{ color: 'var(--ink)' }}>Spese fisse</span>
+            <PageTitle text="Spese fisse" style={{ flex: 1, minWidth: 0 }} />
             <RoundIconButton icon="add" onClick={() => navigate('recurringEdit', kind == null ? {} : { kind })} background="var(--accent)" tint={Ink} label="Aggiungi" />
           </div>
         </div>

@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -81,7 +82,11 @@ val IconShape = RoundedCornerShape(26)
 
 /** [BlobShape] or, in the skeuomorphic style, [IconShape]. */
 @Composable
-fun blobShape(seed: Int): Shape = if (LocalSkeuo.current) IconShape else remember(seed) { BlobShape(seed) }
+fun blobShape(seed: Int): Shape = when {
+    LocalMetro.current -> RectangleShape
+    LocalSkeuo.current -> IconShape
+    else -> remember(seed) { BlobShape(seed) }
+}
 
 /** Draws a living blob behind the content, filled or, with [stroke], only its outline. Only the draw phase reads the clock. */
 @Composable
@@ -93,6 +98,14 @@ fun Modifier.blob(
     speed: Float = 1f,
     stroke: Dp? = null,
 ): Modifier {
+    // Modern UI: a flat, solid square tile, or a square outline with [stroke].
+    if (LocalMetro.current) {
+        val solid = color.solid()
+        return drawBehind {
+            if (stroke == null) drawRect(solid)
+            else stroke.toPx().let { w -> drawRect(solid, topLeft = Offset(w / 2, w / 2), size = Size(size.width - w, size.height - w), style = Stroke(w)) }
+        }
+    }
     if (LocalSkeuo.current) return drawBehind {
         // Glossy gel "app icon", or an engraved rim with [stroke].
         val outline = IconShape.createOutline(size, layoutDirection, this)
@@ -119,6 +132,11 @@ fun Modifier.blob(
     amplitude: Float = 0.07f,
     speed: Float = 1f,
 ): Modifier {
+    // Modern UI has no gradients: every gradient blob here starts from the accent, so it turns into a flat accent tile.
+    if (LocalMetro.current) {
+        val accent = Ui.colors.accent
+        return drawBehind { drawRect(accent) }
+    }
     if (LocalSkeuo.current) return drawBehind {
         val outline = IconShape.createOutline(size, layoutDirection, this)
         translate(top = 2.dp.toPx()) { drawOutline(outline, Color.Black.copy(alpha = 0.3f)) }
@@ -140,7 +158,7 @@ fun Modifier.blob(
 @Composable
 fun Modifier.backdropBlobs(colors: List<Color>, alpha: Float = 0.16f): Modifier {
     // The skeuomorphic pages already sit on linen.
-    if (LocalSkeuo.current) return this
+    if (LocalSkeuo.current || LocalMetro.current) return this
     val time = LocalBlobTime.current
     val specs = remember(colors.size) { List(colors.size) { BlobSpec(100 + it * 7, amplitude = 0.12f) } }
     val path = remember { Path() }

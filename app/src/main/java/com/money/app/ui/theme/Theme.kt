@@ -32,10 +32,33 @@ import com.money.app.R
 import com.money.app.data.ThemeMode
 
 /** Dark ink used on top of every pastel fill, in both themes. */
-val Ink = Color(0xFF15121F)
+val DarkInk = Color(0xFF15121F)
 
 /** True when the user picked the skeuomorphic style in Impostazioni. */
 val LocalSkeuo = staticCompositionLocalOf { false }
+
+/** True when the user picked the Modern UI (Windows Phone) style in Impostazioni. */
+val LocalMetro = staticCompositionLocalOf { false }
+
+/** Ink on top of colour fills: dark on the pastels, white on the solid Modern UI tiles. */
+val Ink: Color @Composable get() = if (LocalMetro.current) Color.White else DarkInk
+
+/** Solid, saturated version of a pastel, for Modern UI tiles that carry white text. */
+fun Color.solid(): Color {
+    if (alpha == 0f) return this
+    val hsl = FloatArray(3)
+    ColorUtils.colorToHSL(toArgb(), hsl)
+    // Already a solid tile colour (the Windows Phone accents): keep it as it is.
+    if (hsl[1] >= 0.6f && hsl[2] in 0.25f..0.55f) return this
+    // Grey-ish pastels keep a hint of their hue instead of turning neon.
+    hsl[1] = if (hsl[1] < 0.15f) hsl[1] else maxOf(hsl[1], 0.72f).coerceAtMost(0.9f)
+    hsl[2] = 0.44f
+    return Color(ColorUtils.HSLToColor(hsl)).copy(alpha = alpha)
+}
+
+/** [solid] in the Modern UI style, unchanged otherwise. */
+@Composable
+fun Color.tile(): Color = if (LocalMetro.current) solid() else this
 
 @Immutable
 data class MoneyColors(
@@ -127,6 +150,45 @@ private val SkeuoLightColors = MoneyColors(
     accentText = Color(0xFF8A5A12),
 )
 
+// Modern UI palette: true black or white, flat greys, and the Windows Phone accents
+// (cyan, green, red) that carry white text.
+private val MetroDarkColors = MoneyColors(
+    isDark = true,
+    bg = Color(0xFF000000),
+    surface = Color(0xFF1F1F1F),
+    surfaceHigh = Color(0xFF333333),
+    ink = Color(0xFFFFFFFF),
+    inkSoft = Color(0xFFA6A6A6),
+    inkFaint = Color(0xFF707070),
+    line = Color(0x33FFFFFF),
+    income = Color(0xFF60A917),
+    expense = Color(0xFFE51400),
+    accent = Color(0xFF1BA1E2),
+    incomeText = Color(0xFF8CCB3A),
+    expenseText = Color(0xFFFF5A3C),
+    accentText = Color(0xFF1BA1E2),
+)
+
+private val MetroLightColors = MoneyColors(
+    isDark = false,
+    bg = Color(0xFFFFFFFF),
+    surface = Color(0xFFF0F0F0),
+    surfaceHigh = Color(0xFFDDDDDD),
+    ink = Color(0xFF000000),
+    inkSoft = Color(0xFF5E5E5E),
+    inkFaint = Color(0xFF999999),
+    line = Color(0x26000000),
+    income = Color(0xFF60A917),
+    expense = Color(0xFFE51400),
+    accent = Color(0xFF1BA1E2),
+    incomeText = Color(0xFF3F7A0B),
+    expenseText = Color(0xFFC21100),
+    accentText = Color(0xFF0A7FBF),
+)
+
+/** The default lilac stands in for Windows Phone cyan in the Modern UI style. */
+const val MetroCyan = 0xFF1BA1E2
+
 @OptIn(ExperimentalTextApi::class)
 private fun bricolage(weight: Int, opticalSize: Float) = Font(
     resId = R.font.bricolage,
@@ -148,9 +210,13 @@ private fun scaled(value: Float) = (value * TextScale).sp
 /** Bold serif for titles and figures of the skeuomorphic style, like a ledger printed on good paper. */
 val SerifFamily = FontFamily.Serif
 
+/** Clean grotesque in light weights, the closest system face to Segoe WP. */
+val MetroFamily = FontFamily.SansSerif
+
 @Immutable
-class MoneyType(dark: Boolean = false, skeuo: Boolean = false) {
+class MoneyType(dark: Boolean = false, skeuo: Boolean = false, metro: Boolean = false) {
     private val numbers = "tnum, lnum"
+    private val m = metro
     // Skeuomorphic letterpress: a light edge below on paper, a dark one above on felt.
     private val press = when {
         !skeuo -> null
@@ -160,15 +226,15 @@ class MoneyType(dark: Boolean = false, skeuo: Boolean = false) {
     private val head = if (skeuo) SerifFamily else DisplayFamily
     private val bold = if (skeuo) FontWeight.Bold else FontWeight.SemiBold
     // Hero sizes are always set per screen, so the global scale does not apply.
-    val hero = TextStyle(fontFamily = head, fontWeight = if (skeuo) FontWeight.Bold else FontWeight.ExtraBold, fontSize = 60.sp, lineHeight = 60.sp, letterSpacing = if (skeuo) (-0.02).em else (-0.04).em, fontFeatureSettings = numbers, shadow = press)
-    val display = TextStyle(fontFamily = head, fontWeight = FontWeight.Bold, fontSize = scaled(if (skeuo) 36f else 38f), lineHeight = scaled(40f), letterSpacing = if (skeuo) (-0.01).em else (-0.03).em, fontFeatureSettings = numbers, shadow = press)
-    val title = TextStyle(fontFamily = head, fontWeight = FontWeight.Bold, fontSize = scaled(if (skeuo) 23f else 24f), lineHeight = scaled(28f), letterSpacing = if (skeuo) 0.em else (-0.02).em, shadow = press)
-    val titleSmall = TextStyle(fontFamily = head, fontWeight = bold, fontSize = scaled(18f), lineHeight = scaled(22f), letterSpacing = if (skeuo) 0.em else (-0.01).em, shadow = press)
-    val body = TextStyle(fontFamily = BodyFamily, fontWeight = FontWeight.Normal, fontSize = scaled(15f), lineHeight = scaled(21f), shadow = press)
-    val bodyStrong = TextStyle(fontFamily = BodyFamily, fontWeight = FontWeight.SemiBold, fontSize = scaled(15f), lineHeight = scaled(21f), shadow = press)
-    val label = TextStyle(fontFamily = BodyFamily, fontWeight = FontWeight.SemiBold, fontSize = scaled(13f), lineHeight = scaled(17f), shadow = press)
-    val caption = TextStyle(fontFamily = BodyFamily, fontWeight = FontWeight.Medium, fontSize = scaled(12f), lineHeight = scaled(16f), shadow = press)
-    val amount = TextStyle(fontFamily = head, fontWeight = bold, fontSize = scaled(16f), lineHeight = scaled(20f), fontFeatureSettings = numbers, shadow = press)
+    val hero = if (m) TextStyle(fontFamily = MetroFamily, fontWeight = FontWeight.Light, fontSize = 60.sp, lineHeight = 64.sp, letterSpacing = (-0.02).em, fontFeatureSettings = numbers) else TextStyle(fontFamily = head, fontWeight = if (skeuo) FontWeight.Bold else FontWeight.ExtraBold, fontSize = 60.sp, lineHeight = 60.sp, letterSpacing = if (skeuo) (-0.02).em else (-0.04).em, fontFeatureSettings = numbers, shadow = press)
+    val display = if (m) TextStyle(fontFamily = MetroFamily, fontWeight = FontWeight.Light, fontSize = scaled(38f), lineHeight = scaled(42f), letterSpacing = (-0.01).em, fontFeatureSettings = numbers) else TextStyle(fontFamily = head, fontWeight = FontWeight.Bold, fontSize = scaled(if (skeuo) 36f else 38f), lineHeight = scaled(40f), letterSpacing = if (skeuo) (-0.01).em else (-0.03).em, fontFeatureSettings = numbers, shadow = press)
+    val title = if (m) TextStyle(fontFamily = MetroFamily, fontWeight = FontWeight.Light, fontSize = scaled(26f), lineHeight = scaled(30f)) else TextStyle(fontFamily = head, fontWeight = FontWeight.Bold, fontSize = scaled(if (skeuo) 23f else 24f), lineHeight = scaled(28f), letterSpacing = if (skeuo) 0.em else (-0.02).em, shadow = press)
+    val titleSmall = if (m) TextStyle(fontFamily = MetroFamily, fontWeight = FontWeight.Normal, fontSize = scaled(19f), lineHeight = scaled(23f)) else TextStyle(fontFamily = head, fontWeight = bold, fontSize = scaled(18f), lineHeight = scaled(22f), letterSpacing = if (skeuo) 0.em else (-0.01).em, shadow = press)
+    val body = TextStyle(fontFamily = if (m) MetroFamily else BodyFamily, fontWeight = FontWeight.Normal, fontSize = scaled(15f), lineHeight = scaled(21f), shadow = press)
+    val bodyStrong = TextStyle(fontFamily = if (m) MetroFamily else BodyFamily, fontWeight = FontWeight.SemiBold, fontSize = scaled(15f), lineHeight = scaled(21f), shadow = press)
+    val label = TextStyle(fontFamily = if (m) MetroFamily else BodyFamily, fontWeight = FontWeight.SemiBold, fontSize = scaled(13f), lineHeight = scaled(17f), shadow = press)
+    val caption = TextStyle(fontFamily = if (m) MetroFamily else BodyFamily, fontWeight = FontWeight.Medium, fontSize = scaled(12f), lineHeight = scaled(16f), shadow = press)
+    val amount = TextStyle(fontFamily = if (m) MetroFamily else head, fontWeight = if (m) FontWeight.Normal else bold, fontSize = scaled(16f), lineHeight = scaled(20f), fontFeatureSettings = numbers, shadow = press)
 }
 
 private val LocalColors = staticCompositionLocalOf { DarkColors }
@@ -202,20 +268,30 @@ private fun TextStyle.scaled(family: FontFamily) =
     copy(fontFamily = family, fontSize = fontSize * TextScale, lineHeight = lineHeight * TextScale)
 
 @Composable
-fun MoneyTheme(dark: Boolean, accent: Long = Palette.LILAC, skeuo: Boolean = false, content: @Composable () -> Unit) {
+fun MoneyTheme(dark: Boolean, accent: Long = Palette.LILAC, skeuo: Boolean = false, metro: Boolean = false, content: @Composable () -> Unit) {
     val base = when {
+        metro -> if (dark) MetroDarkColors else MetroLightColors
         skeuo -> if (dark) SkeuoDarkColors else SkeuoLightColors
         else -> if (dark) DarkColors else LightColors
     }
-    val colors = remember(dark, accent, skeuo) {
-        // The default lilac keeps its hand-tuned text shade.
-        if (accent == Palette.LILAC) base
-        else base.copy(accent = Color(accent), accentText = accentTextFor(Color(accent), dark))
+    val colors = remember(dark, accent, skeuo, metro) {
+        when {
+            // The default lilac keeps its hand-tuned text shade.
+            accent == Palette.LILAC -> base
+            // Modern UI accents are solid: the same colour fills tiles and colours text.
+            metro -> Color(accent).solid().let { base.copy(accent = it, accentText = if (dark) it.lighten(0.15f) else it.darken(0.1f)) }
+            else -> base.copy(accent = Color(accent), accentText = accentTextFor(Color(accent), dark))
+        }
     }
-    val type = remember(dark, skeuo) { MoneyType(dark, skeuo) }
+    val type = remember(dark, skeuo, metro) { MoneyType(dark, skeuo, metro) }
+    val headFamily = when {
+        metro -> MetroFamily
+        skeuo -> SerifFamily
+        else -> DisplayFamily
+    }
     val scheme = if (dark) {
         darkColorScheme(
-            primary = colors.accent, onPrimary = Ink, secondary = colors.income, onSecondary = Ink,
+            primary = colors.accent, onPrimary = if (metro) Color.White else DarkInk, secondary = colors.income, onSecondary = if (metro) Color.White else DarkInk,
             background = colors.bg, onBackground = colors.ink, surface = colors.surface, onSurface = colors.ink,
             surfaceVariant = colors.surfaceHigh, onSurfaceVariant = colors.inkSoft,
             surfaceContainerHigh = colors.surfaceHigh, surfaceContainer = colors.surface,
@@ -232,29 +308,33 @@ fun MoneyTheme(dark: Boolean, accent: Long = Palette.LILAC, skeuo: Boolean = fal
     }
     val baseType = Typography()
     val typography = Typography(
-        displayLarge = baseType.displayLarge.scaled(if (skeuo) SerifFamily else DisplayFamily),
-        headlineLarge = baseType.headlineLarge.scaled(if (skeuo) SerifFamily else DisplayFamily),
-        headlineMedium = baseType.headlineMedium.scaled(if (skeuo) SerifFamily else DisplayFamily),
-        headlineSmall = baseType.headlineSmall.scaled(if (skeuo) SerifFamily else DisplayFamily),
-        titleLarge = baseType.titleLarge.scaled(if (skeuo) SerifFamily else DisplayFamily),
-        titleMedium = baseType.titleMedium.scaled(BodyFamily),
-        titleSmall = baseType.titleSmall.scaled(BodyFamily),
-        bodyLarge = baseType.bodyLarge.scaled(BodyFamily),
-        bodyMedium = baseType.bodyMedium.scaled(BodyFamily),
-        bodySmall = baseType.bodySmall.scaled(BodyFamily),
-        labelLarge = baseType.labelLarge.scaled(BodyFamily),
-        labelMedium = baseType.labelMedium.scaled(BodyFamily),
-        labelSmall = baseType.labelSmall.scaled(BodyFamily),
+        displayLarge = baseType.displayLarge.scaled(headFamily),
+        headlineLarge = baseType.headlineLarge.scaled(headFamily),
+        headlineMedium = baseType.headlineMedium.scaled(headFamily),
+        headlineSmall = baseType.headlineSmall.scaled(headFamily),
+        titleLarge = baseType.titleLarge.scaled(headFamily),
+        titleMedium = baseType.titleMedium.scaled(if (metro) MetroFamily else BodyFamily),
+        titleSmall = baseType.titleSmall.scaled(if (metro) MetroFamily else BodyFamily),
+        bodyLarge = baseType.bodyLarge.scaled(if (metro) MetroFamily else BodyFamily),
+        bodyMedium = baseType.bodyMedium.scaled(if (metro) MetroFamily else BodyFamily),
+        bodySmall = baseType.bodySmall.scaled(if (metro) MetroFamily else BodyFamily),
+        labelLarge = baseType.labelLarge.scaled(if (metro) MetroFamily else BodyFamily),
+        labelMedium = baseType.labelMedium.scaled(if (metro) MetroFamily else BodyFamily),
+        labelSmall = baseType.labelSmall.scaled(if (metro) MetroFamily else BodyFamily),
     )
     val time = produceState(0f) {
         val start = withInfiniteAnimationFrameMillis { it }
         while (true) withInfiniteAnimationFrameMillis { value = (it - start) / 1000f }
     }
-    CompositionLocalProvider(LocalColors provides colors, LocalType provides type, LocalBlobTime provides time, LocalSkeuo provides skeuo) {
+    CompositionLocalProvider(LocalColors provides colors, LocalType provides type, LocalBlobTime provides time, LocalSkeuo provides skeuo, LocalMetro provides metro) {
         MaterialTheme(colorScheme = scheme, typography = typography, content = content)
     }
 }
 
 /** How a stored accent is painted: the default lilac turns brass in the skeuomorphic style. */
 @Composable
-fun accentShown(): (Long) -> Long = if (LocalSkeuo.current) { c -> if (c == Palette.LILAC) 0xFFE0B055 else c } else { c -> c }
+fun accentShown(): (Long) -> Long = when {
+    LocalMetro.current -> { c -> if (c == Palette.LILAC) MetroCyan else Color(c).solid().toArgb().toLong() and 0xFFFFFFFFL }
+    LocalSkeuo.current -> { c -> if (c == Palette.LILAC) 0xFFE0B055 else c }
+    else -> { c -> c }
+}

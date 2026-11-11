@@ -1,6 +1,7 @@
 package com.money.app.ui.transactions
 
 import com.money.app.ui.theme.skin
+import com.money.app.ui.components.PageTitle
 import com.money.app.ui.theme.linen
 import com.money.app.ui.theme.paper
 import com.money.app.ui.theme.well
@@ -21,7 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
@@ -152,7 +153,7 @@ fun TransactionsScreen(onOpen: (Long) -> Unit) {
             item {
                 Column(Modifier.statusBarsPadding().padding(top = 12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Movimenti", style = Ui.type.display, color = c.ink, modifier = Modifier.weight(1f))
+                        PageTitle("Movimenti", Modifier.weight(1f))
                         HideAmountsButton()
                     }
                     Spacer(Modifier.height(8.dp))

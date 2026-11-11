@@ -49,6 +49,15 @@ fun Modifier.staggered(index: Int, step: Long = 55L): Modifier {
             played = true
         }
     }
+    // Modern UI: items swing in like a turnstile, hinged on their left edge.
+    if (com.money.app.ui.theme.LocalMetro.current) return graphicsLayer {
+        val t = anim.value.coerceIn(0f, 1.05f)
+        alpha = t.coerceAtMost(1f)
+        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+        rotationY = (1f - t) * 60f
+        translationX = (1f - t) * 40.dp.toPx()
+        cameraDistance = 12f * density
+    }
     return graphicsLayer {
         alpha = anim.value.coerceIn(0f, 1f)
         translationY = (1f - anim.value) * 48.dp.toPx()

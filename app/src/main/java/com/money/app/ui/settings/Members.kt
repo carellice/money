@@ -1,6 +1,7 @@
 package com.money.app.ui.settings
 
 import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.tile
 import com.money.app.ui.theme.linen
 import com.money.app.ui.theme.paper
 import com.money.app.ui.theme.well
@@ -19,8 +20,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.money.app.ui.theme.CircleShape
+import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -57,7 +58,7 @@ import com.money.app.ui.theme.Ui
 @Composable
 fun MemberAvatar(member: MemberEntity, size: Dp = 40.dp) {
     Box(
-        Modifier.size(size).skin({ gel(Color(member.color), CircleShape) }) { clip(CircleShape).background(Color(member.color)) },
+        Modifier.size(size).skin({ gel(Color(member.color), CircleShape) }) { clip(CircleShape).background(Color(member.color).tile()) },
         contentAlignment = Alignment.Center,
     ) {
         Text(member.name.take(1).uppercase(), style = Ui.type.bodyStrong, color = Ink)

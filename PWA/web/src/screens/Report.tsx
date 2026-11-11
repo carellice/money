@@ -15,8 +15,7 @@ import { BlobBox } from '../components/Blob.tsx'
 import { DonutChart, SpendingCalendar, TrendBars } from '../components/Charts.tsx'
 import {
   AnimatedAmount, AppIcon, Bouncy, CategoryBadge, EmptyState, Icon, Legend, MonthSwitcher, Pill, SectionTitle, SoftCard, SoftProgress, Staggered,
-  useHideable,
-} from '../components/ui.tsx'
+  useHideable, PageTitle } from '../components/ui.tsx'
 import { TransactionRow } from '../components/TransactionRow.tsx'
 import { toast } from '../components/overlays.tsx'
 import { AiText, ThinkingDots } from './Chat.tsx'
@@ -70,7 +69,7 @@ export function ReportScreen() {
       <div className="col" style={{ padding: '0 20px 156px', gap: 14 }}>
         <div className="col status-pad">
           <div style={{ paddingTop: 12 }}>
-            <div className="t-display" style={{ color: 'var(--ink)' }}>Report</div>
+            <PageTitle text="Report" />
             <MonthSwitcher month={month} onChange={setMonth} style={{ marginTop: 8 }} />
           </div>
         </div>

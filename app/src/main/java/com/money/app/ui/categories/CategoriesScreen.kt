@@ -1,6 +1,7 @@
 package com.money.app.ui.categories
 
 import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.tile
 import com.money.app.ui.theme.linen
 import com.money.app.ui.theme.paper
 import com.money.app.ui.theme.well
@@ -25,7 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -159,7 +160,7 @@ fun CategoriesScreen(onBack: () -> Unit) {
                             "${hideable(Money.short(it))}/mese",
                             style = Ui.type.caption,
                             color = Ink,
-                            modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(cat.color)).padding(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(cat.color).tile()).padding(horizontal = 10.dp, vertical = 4.dp),
                         )
                     }
                 }

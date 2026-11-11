@@ -86,7 +86,7 @@ class MainActivity : FragmentActivity() {
                 else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
-            MoneyTheme(dark, settings.accent, settings.skeuo) {
+            MoneyTheme(dark, settings.accent, settings.skeuo && !settings.metro, settings.metro) {
                 Box(Modifier.fillMaxSize()) {
                     CompositionLocalProvider(LocalHideAmounts provides settings.hideAmounts, LocalHideBalances provides settings.hideBalances, LocalGuide provides guide) {
                         MoneyRoot(deepLink, onDeepLinkHandled = { deepLink = null })

@@ -1,6 +1,7 @@
 package com.money.app.ui.onboarding
 
 import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.tile
 import com.money.app.ui.theme.linen
 import com.money.app.ui.theme.paper
 import com.money.app.ui.theme.well
@@ -38,8 +39,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.money.app.ui.theme.CircleShape
+import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Autorenew
@@ -275,7 +276,7 @@ private fun FeaturePage(page: Page, index: Int) {
                         color = Ink,
                         maxLines = 1,
                         modifier = Modifier
-                            .skin({ gel(color, CircleShape) }) { clip(CircleShape).background(color) }
+                            .skin({ gel(color, CircleShape) }) { clip(CircleShape).background(color.tile()) }
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                     )
                 }

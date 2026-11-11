@@ -28,7 +28,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -99,7 +99,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setLock(enabled: Boolean) = viewModelScope.launch { container.settings.setLock(enabled) }
     fun setReminders(enabled: Boolean) = viewModelScope.launch { container.settings.setReminders(enabled) }
     fun setAccent(color: Long) = viewModelScope.launch { container.settings.setAccent(color) }
-    fun setSkeuo(enabled: Boolean) = viewModelScope.launch { container.settings.setSkeuo(enabled) }
+    fun setStyle(style: Int) = viewModelScope.launch { container.settings.setStyle(style) }
 
     val members: StateFlow<List<MemberEntity>> =
         container.repository.members.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -174,9 +174,13 @@ fun SettingsScreen(
 
             FormLabel("Stile")
             Segmented(
-                listOf("Classico", "Skeuomorfico"),
-                if (settings.skeuo) 1 else 0,
-                { vm.setSkeuo(it == 1) },
+                listOf("Classico", "Skeuomorfico", "Modern UI"),
+                when {
+                    settings.metro -> 2
+                    settings.skeuo -> 1
+                    else -> 0
+                },
+                vm::setStyle,
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {

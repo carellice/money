@@ -1,6 +1,7 @@
 package com.money.app.ui.settings
 
 import com.money.app.ui.theme.skin
+import com.money.app.ui.theme.tile
 import com.money.app.ui.theme.linen
 import com.money.app.ui.theme.paper
 import com.money.app.ui.theme.well
@@ -21,7 +22,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -75,7 +76,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun PaymentBadge(method: CustomPaymentEntity, size: Dp = 40.dp) {
     Box(
-        Modifier.size(size).skin({ gel(Color(method.color), RoundedCornerShape(size * 0.26f)) }) { clip(RoundedCornerShape(size * 0.36f)).background(Color(method.color)) },
+        Modifier.size(size).skin({ gel(Color(method.color), RoundedCornerShape(size * 0.26f)) }) { clip(RoundedCornerShape(size * 0.36f)).background(Color(method.color).tile()) },
         contentAlignment = Alignment.Center,
     ) {
         Icon(AppIcons[method.icon], null, tint = Ink, modifier = Modifier.size(size * 0.5f))
@@ -93,7 +94,7 @@ private fun ChoiceBadge(choice: PaymentChoice, color: Color, size: Dp = 40.dp) {
     val payments = LocalPayments.current
     val own = choice.customId?.let { payments.custom[it] }
     Box(
-        Modifier.size(size).skin({ gel(own?.let { Color(it.color) } ?: color, RoundedCornerShape(size * 0.26f)) }) { clip(RoundedCornerShape(size * 0.36f)).background(own?.let { Color(it.color) } ?: color) },
+        Modifier.size(size).skin({ gel(own?.let { Color(it.color) } ?: color, RoundedCornerShape(size * 0.26f)) }) { clip(RoundedCornerShape(size * 0.36f)).background((own?.let { Color(it.color) } ?: color).tile()) },
         contentAlignment = Alignment.Center,
     ) {
         Icon(AppIcons[payments.icon(choice)], null, tint = Ink, modifier = Modifier.size(size * 0.5f))

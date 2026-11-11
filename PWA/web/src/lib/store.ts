@@ -25,6 +25,8 @@ export type Settings = {
   hideAmounts: boolean
   /** Only the account balances (Disponibile) shown as dots. */
   hideBalances: boolean
+  /** Modern UI look (Windows Phone: flat tiles, big lowercase titles) instead of the classic one. */
+  metro: boolean
 }
 
 // Every account keeps its own settings and data cache, so a shared tablet can switch between them.
@@ -47,7 +49,7 @@ let currentUser = read(LAST_USER_KEY) ?? ''
 
 function loadSettings(user: string): Settings {
   const defaults: Settings = {
-    theme: 'SYSTEM', lockCredential: null, remindersEnabled: false, accent: Palette.LILAC, onboarded: false, recurringSort: 'NEXT', hideAmounts: false, hideBalances: false,
+    theme: 'SYSTEM', lockCredential: null, remindersEnabled: false, accent: Palette.LILAC, onboarded: false, recurringSort: 'NEXT', hideAmounts: false, hideBalances: false, metro: false,
   }
   try {
     return { ...defaults, ...JSON.parse(read(settingsKey(user)) ?? '{}') }
@@ -245,3 +247,6 @@ if (typeof window !== 'undefined') {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh() })
   setInterval(() => { if (document.visibilityState === 'visible') refresh() }, 30_000)
 }
+
+/** True when the Modern UI (Windows Phone) style is on; re-renders the caller when it changes. */
+export const useMetro = () => useStore((st) => st.settings.metro)

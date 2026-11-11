@@ -1,6 +1,8 @@
 package com.money.app.ui.report
 
 import android.widget.Toast
+import com.money.app.ui.components.PageTitle
+import com.money.app.ui.theme.tile
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -28,7 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import com.money.app.ui.theme.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
@@ -180,7 +182,7 @@ fun ReportScreen(onOpenTransaction: (Long) -> Unit, onOpenChat: () -> Unit, onOp
     ) {
         item {
             Column(Modifier.statusBarsPadding().padding(top = 12.dp)) {
-                Text("Report", style = Ui.type.display, color = c.ink)
+                PageTitle("Report")
                 Spacer(Modifier.height(8.dp))
                 MonthSwitcher(month, vm::setMonth)
             }
@@ -614,7 +616,7 @@ private fun SplitBar(share: Float, left: Color, right: Color) {
 @Composable
 private fun Legend(text: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(10.dp).clip(CircleShape).background(color))
+        Box(Modifier.size(10.dp).clip(CircleShape).background(color.tile()))
         Spacer(Modifier.width(6.dp))
         Text(text, style = Ui.type.caption, color = Ui.colors.inkSoft)
     }

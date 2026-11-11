@@ -1,6 +1,8 @@
 package com.money.app.ui.components
 
 import com.money.app.ui.theme.LocalSkeuo
+import com.money.app.ui.theme.LocalMetro
+import com.money.app.ui.theme.tile
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -16,8 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.money.app.ui.theme.CircleShape
+import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -60,6 +62,7 @@ fun SwitchRow(
     onChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (LocalMetro.current) return SwitchRowMetro(title, subtitle, checked, onChange, modifier)
     if (LocalSkeuo.current) return SwitchRowSkeuo(title = title, subtitle = subtitle, checked = checked, onChange = onChange, modifier = modifier)
     val c = Ui.colors
     Row(
@@ -228,7 +231,7 @@ fun ColorSwatches(colors: List<Long>, selected: Long, shown: (Long) -> Long = { 
                     .size(40.dp)
                     .graphicsLayer { scaleX = scale; scaleY = scale }
                     .bouncyClick { onSelect(value) }
-                    .skin({ gel(Color(shown(value)), CircleShape) }) { clip(CircleShape).background(Color(value)) }
+                    .skin({ gel(Color(shown(value)), CircleShape) }) { clip(CircleShape).background(Color(shown(value))) }
                     .then(if (isSelected) Modifier.border(3.dp, Ui.colors.ink, CircleShape) else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
@@ -251,7 +254,7 @@ fun IconPicker(selected: String, color: Color, onSelect: (String) -> Unit) {
                     .skin({
                         if (isSelected) gel(color, RoundedCornerShape(12.dp))
                         else paper(c.surface, RoundedCornerShape(12.dp), elevation = 2.dp, dark = c.isDark)
-                    }) { clip(RoundedCornerShape(16.dp)).background(if (isSelected) color else c.surface) },
+                    }) { clip(RoundedCornerShape(16.dp)).background(if (isSelected) color.tile() else c.surface) },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(AppIcons[key], null, tint = if (isSelected) Ink else c.inkSoft, modifier = Modifier.size(22.dp))

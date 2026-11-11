@@ -27,6 +27,8 @@ data class Settings(
     val hideBalances: Boolean = false,
     /** Skeuomorphic look (leather, paper, glossy buttons) instead of the classic one. */
     val skeuo: Boolean = false,
+    /** Modern UI look (Windows Phone: flat tiles, big lowercase titles), wins over [skeuo]. */
+    val metro: Boolean = false,
 )
 
 private val Context.dataStore by preferencesDataStore("settings")
@@ -42,6 +44,7 @@ class SettingsStore(private val context: Context) {
         val hideAmounts = booleanPreferencesKey("hide_amounts")
         val hideBalances = booleanPreferencesKey("hide_balances")
         val skeuo = booleanPreferencesKey("skeuo")
+        val metro = booleanPreferencesKey("metro")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
@@ -56,7 +59,11 @@ class SettingsStore(private val context: Context) {
     suspend fun setRecurringSort(sort: RecurringSort) = context.dataStore.edit { it[Keys.recurringSort] = sort.name }
     suspend fun setHideAmounts(hidden: Boolean) = context.dataStore.edit { it[Keys.hideAmounts] = hidden }
     suspend fun setHideBalances(hidden: Boolean) = context.dataStore.edit { it[Keys.hideBalances] = hidden }
-    suspend fun setSkeuo(enabled: Boolean) = context.dataStore.edit { it[Keys.skeuo] = enabled }
+    /** 0 classic, 1 skeuomorphic, 2 Modern UI. */
+    suspend fun setStyle(style: Int) = context.dataStore.edit {
+        it[Keys.skeuo] = style == 1
+        it[Keys.metro] = style == 2
+    }
 
     private fun Preferences.toSettings() = Settings(
         theme = this[Keys.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
@@ -68,5 +75,6 @@ class SettingsStore(private val context: Context) {
         hideAmounts = this[Keys.hideAmounts] ?: false,
         hideBalances = this[Keys.hideBalances] ?: false,
         skeuo = this[Keys.skeuo] ?: false,
+        metro = this[Keys.metro] ?: false,
     )
 }

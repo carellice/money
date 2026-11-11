@@ -145,3 +145,24 @@ textarea.field { resize: none; }
 
 #overlays { position: absolute; inset: 0; pointer-events: none; z-index: 40; }
 #overlays > * { pointer-events: auto; }
+
+/* --- Modern UI (Windows Phone) style: html.metro, set by applyTheme -------------------------- */
+html.metro body, html.metro input, html.metro textarea, html.metro button {
+  font-family: 'Segoe UI', 'Segoe WP', 'Selawik', Roboto, 'Helvetica Neue', system-ui, sans-serif;
+  font-variation-settings: normal;
+}
+/* Square corners everywhere, inline styles included; only the app bar buttons stay round. */
+html.metro *, html.metro *::before, html.metro *::after { border-radius: 0 !important; }
+html.metro .round { border-radius: 50% !important; }
+html.metro .t-hero { font-weight: 300; letter-spacing: -0.02em; line-height: 64px; }
+html.metro .t-display { font-weight: 300; letter-spacing: -0.01em; font-size: 41.8px; line-height: 46px; }
+html.metro .t-title { font-weight: 300; letter-spacing: 0; font-size: 28.6px; line-height: 33px; }
+html.metro .t-titleSmall { font-weight: 400; letter-spacing: 0; font-size: 20.9px; line-height: 25px; }
+html.metro .t-bodyStrong { font-weight: 600; }
+html.metro .t-label { font-weight: 600; }
+html.metro .t-amount { font-weight: 400; }
+html.metro .bottombar { padding: 0 !important; max-width: none; }
+html.metro .dialog { background: var(--surfaceHigh); border-top: 0; width: calc(100% - 24px); }
+html.metro .dialog h2 { font-weight: 300; text-transform: lowercase; }
+html.metro .text-button { border: 2px solid var(--ink); color: var(--ink); text-transform: lowercase; padding: 8px 18px; font-weight: 400; }
+html.metro .toast { background: var(--accent); }

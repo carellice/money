@@ -1,6 +1,7 @@
 package com.money.app.ui.recurring
 
 import com.money.app.ui.theme.skin
+import com.money.app.ui.components.PageTitle
 import com.money.app.ui.theme.linen
 import com.money.app.ui.theme.paper
 import com.money.app.ui.theme.well
@@ -46,8 +47,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.money.app.ui.theme.CircleShape
+import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Autorenew
@@ -135,7 +136,7 @@ fun RecurringScreen(onOpen: (Long) -> Unit, onRegister: (Long) -> Unit, onAdd: (
     ) {
         item {
             Row(Modifier.statusBarsPadding().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Spese fisse", style = Ui.type.display, color = c.ink, modifier = Modifier.weight(1f))
+                PageTitle("Spese fisse", Modifier.weight(1f))
                 RoundIconButton(Icons.Rounded.Add, { onAdd(tabKind) }, background = c.accent, tint = Ink, contentDescription = "Aggiungi")
             }
         }

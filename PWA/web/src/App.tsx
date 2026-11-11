@@ -4,8 +4,8 @@ import { parseMonthKey } from '../../shared/date.ts'
 import { api, authEvents } from './lib/api.ts'
 import { BlobSpec, blobTime, onFrame } from './lib/blob.ts'
 import { navigate, openDeepLink, sheetRoutes, switchTab, topLevel, useNav, type Entry, type Route } from './lib/nav.ts'
-import { getStore, loggedUser, refresh, setMonth, setUser, updateSettings, useStore } from './lib/store.ts'
-import { applyTheme, Ink, themeColors } from './lib/theme.ts'
+import { getStore, loggedUser, refresh, setMonth, setUser, updateSettings, useMetro, useStore } from './lib/store.ts'
+import { applyTheme, Ink, setMetro, themeColors } from './lib/theme.ts'
 import { BlobLayer } from './components/Blob.tsx'
 import { MessagesHost } from './components/overlays.tsx'
 import { Bouncy, Icon } from './components/ui.tsx'
@@ -51,7 +51,8 @@ export function App() {
   const onboarding = !settings.onboarded
   const hiddenAt = useRef(0)
 
-  useEffect(() => applyTheme(themeColors(dark, settings.accent)), [dark, settings.accent])
+  setMetro(settings.metro)
+  useEffect(() => applyTheme(themeColors(dark, settings.accent, settings.metro)), [dark, settings.accent, settings.metro])
 
   useEffect(() => {
     const check = () => api<{ loggedIn: boolean; username: string | null }>('/api/session')
@@ -162,7 +163,13 @@ function Navigator() {
     dir.current = tabDirection(previous.current.route, topEntry.route)
     previous.current = topEntry
   }
-  const sliding = dir.current !== 0
+  const metro = useMetro()
+  // Modern UI pages always glide in sideways: fast start, long settle, like Windows Phone.
+  const sliding = dir.current !== 0 || metro
+  const d0 = dir.current || 1
+  const slide = metro
+    ? { x: { ...tween(420, [0.1, 0.9, 0.2, 1]), delay: 0.08 }, opacity: { ...tween(200), delay: 0.08 } }
+    : { x: spring(0.85, 380), opacity: tween(200) }
   return (
     <>
       <AnimatePresence initial={false} custom={dir.current}>
@@ -175,11 +182,11 @@ function Navigator() {
               key={entry.key}
               className={sheet ? 'layer screen sheet-route' : 'layer screen'}
               custom={dir.current}
-              initial={sheet ? { opacity: 0, y: '50%' } : sliding ? { opacity: 0, x: `${dir.current * 25}%` } : { opacity: 0, scale: 0.97 }}
+              initial={sheet ? { opacity: 0, y: '50%' } : sliding ? { opacity: 0, x: `${d0 * (metro ? 30 : 25)}%` } : { opacity: 0, scale: 0.97 }}
               animate={isTop
                 ? {
                     opacity: 1, scale: 1, y: 0, x: 0,
-                    transition: sheet ? { y: spring(0.85, 320), opacity: tween(240) } : sliding ? { x: spring(0.85, 380), opacity: tween(200) } : tween(240),
+                    transition: sheet ? { y: spring(0.85, 320), opacity: tween(240) } : sliding ? slide : tween(240),
                   }
                 : sliding && under !== 0
                   ? { opacity: 0, scale: 1, x: `${-under * 25}%`, transition: { x: spring(0.85, 380), opacity: tween(160) } }
@@ -244,6 +251,7 @@ function BottomBar({ route }: { route: Route }) {
   // Stable refs: a new callback each render would detach the tabs right when the capsule measures them.
   const slotRefs = useMemo(() => tabs.map((_, i) => (el: HTMLDivElement | null) => { slots.current[i] = el }), [])
   const selected = tabs.findIndex((t) => t.route === route)
+  if (useMetro()) return <MetroBar route={route} />
   return (
     <div className="center nav-pad" style={{ position: 'relative' }}>
       <div className="bottombar" style={{ position: 'relative', width: '100%', padding: '12px 16px' }}>
@@ -262,6 +270,30 @@ function BottomBar({ route }: { route: Route }) {
         <div className="center" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
           <AddButton />
         </div>
+      </div>
+    </div>
+  )
+}
+
+/** Windows Phone application bar: a flat strip with circled icons and tiny lowercase labels. */
+function MetroBar({ route }: { route: Route }) {
+  const items = [...tabs.slice(0, 2).map((t) => ({ ...t, add: false })), { route: 'add' as Route, label: 'aggiungi', icon: 'add' as UiIcon, add: true }, ...tabs.slice(2).map((t) => ({ ...t, add: false }))]
+  return (
+    <div className="nav-pad" style={{ background: 'var(--metroBar)' }}>
+      <div className="row bottombar" style={{ height: 76, padding: '0 8px' }}>
+        {items.map((t) => {
+          const selected = t.route === route
+          const ring = t.add || selected ? 'var(--accent)' : 'var(--ink)'
+          return (
+            <Bouncy key={t.route} onClick={() => (t.add ? navigate('add') : switchTab(t.route))} aria-label={t.label}
+              className="col flex1" style={{ height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="center round" style={{ width: 42, height: 42, border: `2px solid ${ring}`, background: t.add ? 'var(--accent)' : 'transparent', transition: 'border-color 0.2s' }}>
+                <Icon name={t.icon} size={t.add ? 26 : 21} color={t.add ? '#FFFFFF' : ring} />
+              </div>
+              <span className="t-caption" style={{ marginTop: 4, fontSize: 11.5, whiteSpace: 'nowrap', textTransform: 'lowercase', color: selected ? 'var(--accentText)' : 'var(--inkSoft)' }}>{t.label}</span>
+            </Bouncy>
+          )
+        })}
       </div>
     </div>
   )

@@ -2,6 +2,14 @@ package com.money.app.ui.home
 
 import com.money.app.ui.theme.blob
 import com.money.app.ui.theme.LocalSkeuo
+import com.money.app.ui.theme.LocalMetro
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.delay
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -38,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -89,7 +98,7 @@ import com.money.app.ui.theme.Thread
 import com.money.app.ui.theme.gel
 import com.money.app.ui.theme.leather
 import com.money.app.ui.components.onGel
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shadow
@@ -283,6 +292,7 @@ fun HomeScreen(
 
 @Composable
 private fun Hero(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifier = Modifier) {
+    if (LocalMetro.current) return HeroMetro(r = r, onAdd = onAdd, modifier = modifier)
     if (LocalSkeuo.current) return HeroSkeuo(r = r, onAdd = onAdd, modifier = modifier)
     val c = Ui.colors
     val float = rememberInfiniteTransition(label = "float")
@@ -391,6 +401,94 @@ private fun HeroSkeuo(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifie
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             HeroButton("entrate", r.income, c.income, Modifier.weight(1f)) { onAdd(TxType.INCOME) }
             HeroButton("uscite", r.expense, c.expense, Modifier.weight(1f)) { onAdd(TxType.EXPENSE) }
+        }
+    }
+}
+
+/** Live tiles: a wide accent tile that flips now and then to show its back, and two square ones to add money in or out. */
+@Composable
+private fun HeroMetro(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifier = Modifier) {
+    val c = Ui.colors
+    val toggleHidden = rememberHideAmountsToggle()
+    val flip = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        // Like a live tile: rests a while, then turns over on its horizontal axis.
+        while (true) {
+            delay(6000)
+            flip.animateTo(if (flip.value < 90f) 180f else 0f, tween(700, easing = LinearOutSlowInEasing))
+        }
+    }
+    Column(modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(176.dp)
+                .bouncyClick(onClick = toggleHidden)
+                .graphicsLayer {
+                    rotationX = flip.value
+                    cameraDistance = 14f * density
+                }
+                .background(c.accent),
+        ) {
+            val back = flip.value > 90f
+            // The back face is drawn mirrored back so its text reads the right way.
+            Column(
+                Modifier.fillMaxSize().graphicsLayer { if (back) rotationX = 180f }.padding(14.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                if (!back) {
+                    AnimatedAmount(r.balance, Ui.type.hero.copy(fontSize = 54.sp, lineHeight = 58.sp), color = Color.White, decimalsScale = 0.45f)
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("saldo del mese", style = Ui.type.label.copy(fontWeight = FontWeight.Normal), color = Color.White, modifier = Modifier.weight(1f))
+                        val hidden = LocalHideAmounts.current
+                        Icon(
+                            if (hidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                            contentDescription = if (hidden) "Mostra importi" else "Nascondi importi",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                } else {
+                    Column {
+                        Text(
+                            when {
+                                r.savingsRate == null -> "nessuna entrata"
+                                r.balance >= 0 -> "risparmi ${percent(r.savingsRate)}"
+                                else -> "in rosso"
+                            },
+                            style = Ui.type.title.copy(fontSize = 34.sp, lineHeight = 38.sp),
+                            color = Color.White,
+                        )
+                        Text("media ${hideable(Money.short(r.avgDailyExpense))} al giorno", style = Ui.type.body, color = Color.White.copy(alpha = 0.85f))
+                        if (r.fixedExpense > 0) Text("fisse ${hideable(Money.short(r.fixedExpense))}", style = Ui.type.body, color = Color.White.copy(alpha = 0.85f))
+                    }
+                    Text("questo mese", style = Ui.type.label.copy(fontWeight = FontWeight.Normal), color = Color.White)
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetroTile("entrate", r.income, c.income, Icons.Rounded.Add, Modifier.weight(1f)) { onAdd(TxType.INCOME) }
+            MetroTile("uscite", r.expense, c.expense, Icons.Rounded.Remove, Modifier.weight(1f)) { onAdd(TxType.EXPENSE) }
+        }
+    }
+}
+
+@Composable
+private fun MetroTile(label: String, cents: Long, color: Color, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier
+            .aspectRatio(1f)
+            .bouncyClick(onClick = onClick)
+            .background(color)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Icon(icon, contentDescription = "Aggiungi $label", tint = Color.White, modifier = Modifier.size(34.dp))
+        Column {
+            Masked(Ui.type.title, Color.White) {
+                Text(Money.format(cents), style = Ui.type.title, color = Color.White, maxLines = 1)
+            }
+            Text(label, style = Ui.type.label.copy(fontWeight = FontWeight.Normal), color = Color.White)
         }
     }
 }

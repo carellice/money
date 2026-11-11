@@ -4,7 +4,7 @@ import { Dates, Money } from '../../../shared/format.ts'
 import { paymentChoice, paymentLabel, type Transaction } from '../../../shared/model.ts'
 import { navigate } from '../lib/nav.ts'
 import { actions, setMonth, useStore } from '../lib/store.ts'
-import { EmptyState, HideAmountsButton, Icon, Masked, MonthSwitcher, Segmented, Staggered } from '../components/ui.tsx'
+import { EmptyState, HideAmountsButton, Icon, Masked, MonthSwitcher, Segmented, Staggered, PageTitle } from '../components/ui.tsx'
 import { SwipeRow, TransactionRow } from '../components/TransactionRow.tsx'
 import { showSnackbar, toast } from '../components/overlays.tsx'
 
@@ -54,7 +54,7 @@ export function TransactionsScreen() {
         <div className="col status-pad">
           <div style={{ paddingTop: 12 }}>
             <div className="row">
-              <div className="t-display flex1" style={{ color: 'var(--ink)' }}>Movimenti</div>
+              <PageTitle text="Movimenti" style={{ flex: 1, minWidth: 0 }} />
               <HideAmountsButton />
             </div>
             <MonthSwitcher month={month} onChange={setMonth} style={{ marginTop: 8 }} />

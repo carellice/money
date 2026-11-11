@@ -1,11 +1,15 @@
 import { Palette, argb } from '../../../shared/model.ts'
 
-/** Dark ink used on top of every pastel fill, in both themes. */
-export const Ink = '#15121F'
+/** Dark ink used on top of every pastel fill, in both themes (brand logos keep it in every style). */
+export const DarkInk = '#15121F'
 export const INK = 0xff15121f
+
+/** Ink on top of colour fills: dark on the pastels, white on the solid Modern UI tiles (--Ink, set by applyTheme). */
+export const Ink = 'var(--Ink)'
 
 export type MoneyColors = {
   isDark: boolean
+  metro?: boolean
   bg: string
   surface: string
   surfaceHigh: string
@@ -54,6 +58,45 @@ const Light: MoneyColors = {
   expenseText: '#B8382A',
   accentText: '#5538CC',
 }
+
+// Modern UI palette: true black or white, flat greys, and the Windows Phone accents
+// (cyan, green, red) that carry white text.
+const MetroDark: MoneyColors = {
+  isDark: true,
+  bg: '#000000',
+  surface: '#1F1F1F',
+  surfaceHigh: '#333333',
+  ink: '#FFFFFF',
+  inkSoft: '#A6A6A6',
+  inkFaint: '#707070',
+  line: 'rgba(255,255,255,0.2)',
+  income: '#60A917',
+  expense: '#E51400',
+  accent: '#1BA1E2',
+  incomeText: '#8CCB3A',
+  expenseText: '#FF5A3C',
+  accentText: '#1BA1E2',
+}
+
+const MetroLight: MoneyColors = {
+  isDark: false,
+  bg: '#FFFFFF',
+  surface: '#F0F0F0',
+  surfaceHigh: '#DDDDDD',
+  ink: '#000000',
+  inkSoft: '#5E5E5E',
+  inkFaint: '#999999',
+  line: 'rgba(0,0,0,0.15)',
+  income: '#60A917',
+  expense: '#E51400',
+  accent: '#1BA1E2',
+  incomeText: '#3F7A0B',
+  expenseText: '#C21100',
+  accentText: '#0A7FBF',
+}
+
+/** The default lilac stands in for Windows Phone cyan in the Modern UI style. */
+export const METRO_CYAN = 0xff1ba1e2
 
 // AndroidX ColorUtils.colorToHSL / HSLToColor, so custom accents get the same text shade as on Android.
 function colorToHsl(color: number): [number, number, number] {
@@ -106,22 +149,65 @@ function accentTextFor(accent: number, dark: boolean): string {
   return argb(hslToColor(h, Math.max(s, 0.6), dark ? 0.8 : 0.36))
 }
 
-export function themeColors(dark: boolean, accent: number): MoneyColors {
-  const base = dark ? Dark : Light
+/** Solid, saturated version of a pastel (ARGB), for Modern UI tiles that carry white text. Same as Color.solid() on Android. */
+export function solidArgb(color: number): number {
+  const [h, s, l] = colorToHsl(color)
+  // Already a solid tile colour (the Windows Phone accents): keep it as it is.
+  if (s >= 0.6 && l >= 0.25 && l <= 0.55) return color
+  // Grey-ish pastels keep a hint of their hue instead of turning neon.
+  return hslToColor(h, s < 0.15 ? s : Math.min(0.9, Math.max(s, 0.72)), 0.44)
+}
+
+let metroOn = false
+
+/** True while the Modern UI style is on. */
+export const isMetro = () => metroOn
+
+/** Called by App while rendering, so every child renders in the new style already. */
+export function setMetro(on: boolean) { metroOn = on }
+
+/** [solidArgb] for a "#RRGGBB" colour in the Modern UI style, unchanged otherwise (CSS variables pass through). */
+export function tile(color: string): string {
+  if (!metroOn) return color
+  if (color.startsWith('#') && color.length === 7) return argb(solidArgb((0xff000000 | parseInt(color.slice(1), 16)) >>> 0))
+  // argb() output: "rgb(r,g,b)" or "rgba(r,g,b,a)", the alpha is kept.
+  const m = /^rgba?\((\d+),(\d+),(\d+)(?:,([\d.]+))?\)$/.exec(color.replace(/\s/g, ''))
+  if (!m) return color
+  const solid = solidArgb((0xff000000 | (+m[1] << 16) | (+m[2] << 8) | +m[3]) >>> 0)
+  return m[4] == null ? argb(solid) : argb(solid, +m[4])
+}
+
+/** How a stored accent is painted in the swatches. */
+export function accentShown(c: number): number {
+  if (!metroOn) return c
+  return c === Palette.LILAC ? METRO_CYAN : solidArgb(c)
+}
+
+export function themeColors(dark: boolean, accent: number, metro = false): MoneyColors {
+  const base = metro ? (dark ? MetroDark : MetroLight) : dark ? Dark : Light
   // The default lilac keeps its hand-tuned text shade.
-  if (accent === Palette.LILAC) return base
+  if (accent === Palette.LILAC) return { ...base, metro } as MoneyColors
+  if (metro) {
+    const solid = solidArgb(accent)
+    const [h, s, l] = colorToHsl(solid)
+    return { ...base, metro, accent: argb(solid), accentText: argb(hslToColor(h, s, dark ? Math.min(0.62, l + 0.12) : Math.max(0.3, l - 0.06))) } as MoneyColors
+  }
   return { ...base, accent: argb(accent), accentText: accentTextFor(accent, dark) }
 }
 
 /** Writes the palette as CSS variables, used by every stylesheet rule. */
 export function applyTheme(colors: MoneyColors) {
+  metroOn = !!colors.metro
+  document.documentElement.classList.toggle('metro', metroOn)
   const root = document.documentElement.style
+  root.setProperty('--Ink', metroOn ? '#FFFFFF' : DarkInk)
+  root.setProperty('--metroBar', colors.isDark ? '#1F1F1F' : '#DDDDDD')
   for (const [key, value] of Object.entries(colors)) {
     if (typeof value === 'string') root.setProperty(`--${key}`, value)
   }
   // Material colors derived like the Compose color scheme (primary is the deep accent in light mode).
   root.setProperty('--pickerPrimary', colors.isDark ? colors.accent : colors.accentText)
-  root.setProperty('--pickerOnPrimary', colors.isDark ? Ink : '#FFFFFF')
+  root.setProperty('--pickerOnPrimary', colors.isDark && !metroOn ? DarkInk : '#FFFFFF')
   root.setProperty('--snackAction', colors.isDark ? '#6750A4' : '#D0BCFF')
   document.documentElement.style.colorScheme = colors.isDark ? 'dark' : 'light'
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', colors.bg))
@@ -129,6 +215,7 @@ export function applyTheme(colors: MoneyColors) {
 
 /** Color with alpha, from a "#RRGGBB" or "rgb(...)" string. */
 export function alpha(color: string, a: number): string {
+  if (color.startsWith('var(')) return `color-mix(in srgb, ${color} ${Math.round(a * 100)}%, transparent)`
   if (color.startsWith('#')) {
     const n = parseInt(color.slice(1), 16)
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`

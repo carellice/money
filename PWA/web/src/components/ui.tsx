@@ -6,8 +6,8 @@ import type { Month } from '../../../shared/date.ts'
 import { appIcons, uiIcons, type UiIcon } from '../lib/icons.gen.ts'
 import { findBrand, isLightBrand } from '../lib/brands.ts'
 import { hashCode } from '../lib/blob.ts'
-import { getStore, updateSettings, useStore } from '../lib/store.ts'
-import { Ink } from '../lib/theme.ts'
+import { getStore, updateSettings, useMetro, useStore } from '../lib/store.ts'
+import { accentShown, DarkInk, Ink, tile } from '../lib/theme.ts'
 import { BlobBox, useBlobClip } from './Blob.tsx'
 import { fastOutSlowIn, haptic, spring, tween } from './motion.ts'
 
@@ -21,7 +21,7 @@ export function Icon({ name, size = 24, color = 'currentColor', style, label }: 
   label?: string
 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={{ flexShrink: 0, ...style }}
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={{ flexShrink: 0, fill: color, ...style }}
       role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}
       dangerouslySetInnerHTML={{ __html: uiIcons[name] }} />
   )
@@ -30,7 +30,7 @@ export function Icon({ name, size = 24, color = 'currentColor', style, label }: 
 /** Icon keys stored in the database (AppIcons). */
 export function AppIcon({ name, size = 24, color = 'currentColor', style }: { name: string | null | undefined; size?: number; color?: string; style?: CSSProperties }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={{ flexShrink: 0, ...style }} aria-hidden
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={{ flexShrink: 0, fill: color, ...style }} aria-hidden
       dangerouslySetInnerHTML={{ __html: appIcons[name ?? ''] ?? appIcons.more }} />
   )
 }
@@ -49,6 +49,8 @@ type BouncyProps = Omit<HTMLMotionProps<'div'>, 'onClick'> & {
 export function Bouncy({ onClick, onLongClick, pressedScale = 0.92, haptics = true, disabled, style, children, ...rest }: BouncyProps) {
   const timer = useRef<number | null>(null)
   const longFired = useRef(false)
+  const metro = useMetro()
+  const [tilt, setTilt] = useState({ x: 0, y: 0 })
   const clear = () => {
     if (timer.current != null) window.clearTimeout(timer.current)
     timer.current = null
@@ -59,10 +61,16 @@ export function Bouncy({ onClick, onLongClick, pressedScale = 0.92, haptics = tr
       role="button"
       tabIndex={disabled ? -1 : 0}
       aria-disabled={disabled}
-      style={{ cursor: disabled ? 'default' : 'pointer', ...style }}
-      whileTap={disabled ? undefined : { scale: pressedScale }}
-      transition={spring(0.45, 500)}
-      onPointerDown={() => {
+      style={{ cursor: disabled ? 'default' : 'pointer', ...(metro ? { transformPerspective: 600 } : null), ...style }}
+      whileTap={disabled ? undefined : metro ? { scale: 0.96, rotateX: tilt.x, rotateY: tilt.y } : { scale: pressedScale }}
+      transition={metro ? tween(150) : spring(0.45, 500)}
+      onPointerDown={(e) => {
+        if (metro) {
+          // Windows Phone tilt: leans toward the finger, big tiles less than small buttons.
+          const r = e.currentTarget.getBoundingClientRect()
+          const k = Math.min(1, Math.max(0.15, 60 / Math.max(r.width, r.height))) * 14
+          setTilt({ x: -((e.clientY - r.top) / r.height - 0.5) * 2 * k, y: ((e.clientX - r.left) / r.width - 0.5) * 2 * k })
+        }
         longFired.current = false
         if (onLongClick && !disabled) {
           timer.current = window.setTimeout(() => {
@@ -121,13 +129,14 @@ export function RecurringLogo({ brandKey, imagePath, icon, color, size = 48, ani
 }) {
   const brand = findBrand(brandKey)
   const clip = useBlobClip(hashCode(imagePath ?? ''), size)
+  const metro = useMetro()
   if (imagePath) {
-    return <img src={imagePath} alt="" draggable={false} style={{ width: size, height: size, objectFit: 'cover', clipPath: clip, flexShrink: 0 }} />
+    return <img src={imagePath} alt="" draggable={false} style={{ width: size, height: size, objectFit: 'cover', clipPath: metro ? undefined : clip, flexShrink: 0 }} />
   }
   if (brand) {
-    const tint = isLightBrand(brand) ? Ink : '#FFFFFF'
+    const tint = isLightBrand(brand) ? DarkInk : '#FFFFFF'
     return (
-      <BlobBox size={size} color={argb(brand.hex)} seed={hashCode(brand.key)} amplitude={0.08} animated={animated}>
+      <BlobBox size={size} color={argb(brand.hex)} seed={hashCode(brand.key)} amplitude={0.08} animated={animated} keepColor>
         {brand.path ? (
           <svg width={size * 0.44} height={size * 0.44} viewBox="0 0 24 24" aria-label={brand.name}><path d={brand.path} fill={tint} /></svg>
         ) : (
@@ -232,7 +241,22 @@ export function Pill({ text, selected, onClick, color = 'var(--accent)', icon, a
   leading?: ReactNode
   style?: CSSProperties
 }) {
+  const metro = useMetro()
   const fg = selected ? Ink : 'var(--ink)'
+  if (metro) {
+    return (
+      <Bouncy onClick={onClick} className="row" style={{
+        background: selected ? tile(color) : 'transparent', padding: '7px 14px',
+        border: `2px solid ${selected ? 'transparent' : 'color-mix(in srgb, var(--ink) 35%, transparent)'}`,
+        transition: 'background-color 0.2s', color: fg, flexShrink: 0, ...style,
+      }}>
+        {leading && <span style={{ marginRight: 8, display: 'flex' }}>{leading}</span>}
+        {icon && <Icon name={icon} size={16} style={{ marginRight: 6 }} />}
+        {appIcon && <AppIcon name={appIcon} size={16} style={{ marginRight: 6 }} />}
+        <span className="t-label" style={{ whiteSpace: 'nowrap', fontWeight: 400, textTransform: 'lowercase' }}>{text}</span>
+      </Bouncy>
+    )
+  }
   return (
     <Bouncy onClick={onClick} className="row" style={{
       borderRadius: 999, background: selected ? color : 'var(--surfaceHigh)', padding: '9px 14px',
@@ -254,6 +278,28 @@ export function Segmented({ options, selected, onSelect, colors, style }: {
   colors?: string[]
   style?: CSSProperties
 }) {
+  const metro = useMetro()
+  if (metro) {
+    // Square cells in a thin frame; the accent block glides under the chosen one.
+    return (
+      <div style={{ border: '2px solid color-mix(in srgb, var(--ink) 30%, transparent)', padding: 2, ...style }}>
+        <div style={{ position: 'relative', height: 42 }}>
+          <motion.div initial={false}
+            animate={{ x: `${selected * 100}%`, backgroundColor: tile(colors?.[selected] ?? 'var(--accent)') }}
+            transition={{ x: tween(260, [0, 0, 0.2, 1]), backgroundColor: tween(200) }}
+            style={{ position: 'absolute', top: 0, left: 0, height: 42, width: `${100 / options.length}%` }} />
+          <div className="row" style={{ position: 'relative', height: 42 }}>
+            {options.map((label, i) => (
+              <div key={label} className="center flex1 t-label" role="button" onClick={() => onSelect(i)}
+                style={{ height: '100%', cursor: 'pointer', fontWeight: 400, textTransform: 'lowercase', color: i === selected ? '#FFFFFF' : 'var(--inkSoft)', transition: 'color 0.25s', whiteSpace: 'nowrap' }}>
+                {label}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div style={{ borderRadius: 999, background: 'var(--surfaceHigh)', padding: 4, ...style }}>
       <div style={{ position: 'relative', height: 40 }}>
@@ -283,10 +329,22 @@ export function SoftCard({ children, color = 'var(--surface)', padding = 20, sty
   style?: CSSProperties
   className?: string
 }) {
-  return <div className={'col ' + (className ?? '')} style={{ borderRadius: 28, background: color, padding, ...style }}>{children}</div>
+  useMetro()
+  return <div className={'col ' + (className ?? '')} style={{ borderRadius: 28, background: tile(color), padding, ...style }}>{children}</div>
 }
 
 export function SectionTitle({ text, action, onAction, style }: { text: string; action?: string; onAction?: () => void; style?: CSSProperties }) {
+  const metro = useMetro()
+  if (metro) {
+    return (
+      <div className="row" style={{ paddingTop: 10, paddingBottom: 10, alignItems: 'flex-end', ...style }}>
+        <span className="t-title flex1" style={{ color: 'var(--ink)', textTransform: 'lowercase' }}>{text}</span>
+        {action && onAction && (
+          <button className="t-label" onClick={onAction} style={{ color: 'var(--accentText)', padding: '6px 4px', fontWeight: 400, textTransform: 'lowercase' }}>{action}</button>
+        )}
+      </div>
+    )
+  }
   return (
     <div className="row" style={{ paddingTop: 8, paddingBottom: 12, ...style }}>
       <span className="t-titleSmall flex1" style={{ color: 'var(--ink)' }}>{text}</span>
@@ -306,6 +364,17 @@ export function RoundIconButton({ icon, onClick, background = 'var(--surfaceHigh
   label?: string
   style?: CSSProperties
 }) {
+  const metro = useMetro()
+  if (metro) {
+    // Application bar button: an icon in a thin circle, or a solid disc with a custom background.
+    const custom = background !== 'var(--surfaceHigh)'
+    return (
+      <Bouncy onClick={onClick} className="center round" aria-label={label}
+        style={{ width: size, height: size, background: custom ? tile(background) : 'transparent', border: custom ? 0 : '2px solid var(--ink)', flexShrink: 0, ...style }}>
+        <Icon name={icon} size={size * 0.46} color={custom ? '#FFFFFF' : 'var(--ink)'} />
+      </Bouncy>
+    )
+  }
   return (
     <Bouncy onClick={onClick} className="center" aria-label={label}
       style={{ width: size, height: size, borderRadius: '50%', background, flexShrink: 0, ...style }}>
@@ -315,6 +384,22 @@ export function RoundIconButton({ icon, onClick, background = 'var(--surfaceHigh
 }
 
 export function TopBar({ title, onBack, actions }: { title: string; onBack?: () => void; actions?: ReactNode }) {
+  const metro = useMetro()
+  if (metro) {
+    // Windows Phone page header: the app name in small capitals, then the title, big and lowercase.
+    return (
+      <div className="col status-pad" style={{ flexShrink: 0 }}>
+        <div className="col" style={{ width: '100%', padding: '8px 16px 6px 20px' }}>
+          <div className="row" style={{ gap: 12 }}>
+            {onBack && <RoundIconButton icon="arrow_back" onClick={onBack} size={36} label="Indietro" />}
+            <span className="t-label flex1" style={{ color: 'var(--ink)', letterSpacing: '0.08em' }}>MONEY</span>
+            {actions}
+          </div>
+          <span className="t-hero" style={{ color: 'var(--ink)', fontSize: 50, lineHeight: '58px', textTransform: 'lowercase', whiteSpace: 'nowrap', overflow: 'hidden', marginTop: 2 }}>{title}</span>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="row status-pad" style={{ flexShrink: 0 }}>
       <div className="row" style={{ width: '100%', padding: '10px 16px', gap: 12 }}>
@@ -322,6 +407,18 @@ export function TopBar({ title, onBack, actions }: { title: string; onBack?: () 
         <span className="t-title flex1 ellipsis" style={{ color: 'var(--ink)' }}>{title}</span>
         {actions}
       </div>
+    </div>
+  )
+}
+
+/** Title of a tab page: in Modern UI the app name in small capitals over a big lowercase title, like a pivot. */
+export function PageTitle({ text, style }: { text: string; style?: CSSProperties }) {
+  const metro = useMetro()
+  if (!metro) return <span className="t-display" style={{ color: 'var(--ink)', ...style }}>{text}</span>
+  return (
+    <div className="col" style={style}>
+      <span className="t-label" style={{ color: 'var(--ink)', letterSpacing: '0.08em' }}>MONEY</span>
+      <span className="t-hero" style={{ color: 'var(--ink)', fontSize: 50, lineHeight: '56px', textTransform: 'lowercase', whiteSpace: 'nowrap' }}>{text}</span>
     </div>
   )
 }
@@ -335,6 +432,16 @@ export function PrimaryButton({ text, onClick, enabled = true, color = 'var(--ac
   style?: CSSProperties
 }) {
   const fg = enabled ? Ink : 'var(--inkFaint)'
+  const metro = useMetro()
+  if (metro) {
+    return (
+      <Bouncy onClick={onClick} disabled={!enabled} className="center"
+        style={{ width: '100%', height: 56, background: enabled ? tile(color) : 'transparent', border: enabled ? 0 : '2px solid var(--inkFaint)', color: fg, transition: 'background-color 0.25s', flexShrink: 0, ...style }}>
+        {icon && <Icon name={icon} size={20} style={{ marginRight: 8 }} />}
+        <span className="t-titleSmall" style={{ textTransform: 'lowercase' }}>{text}</span>
+      </Bouncy>
+    )
+  }
   return (
     <Bouncy onClick={onClick} disabled={!enabled} pressedScale={0.96} className="center"
       style={{ width: '100%', height: 58, borderRadius: 999, background: enabled ? color : 'var(--surfaceHigh)', color: fg, transition: 'background-color 0.25s, color 0.25s', flexShrink: 0, ...style }}>
@@ -350,13 +457,14 @@ export function MonthSwitcher({ month, onChange, className = 't-titleSmall', sty
   className?: string
   style?: CSSProperties
 }) {
+  const metro = useMetro()
   const previous = useRef(month)
   const dir = month >= previous.current ? 1 : -1
   useEffect(() => { previous.current = month }, [month])
   return (
     <div className="row" style={style}>
       <RoundIconButton icon="chevron_left" onClick={() => onChange(month - 1)} size={36} label="Mese precedente" />
-      <div style={{ width: 150, position: 'relative', height: 26, overflow: 'hidden' }}>
+      <div style={{ width: metro ? 172 : 150, position: 'relative', height: metro ? 30 : 26, overflow: 'hidden' }}>
         <AnimatePresence initial={false} custom={dir}>
           <motion.div
             key={month}
@@ -373,7 +481,7 @@ export function MonthSwitcher({ month, onChange, className = 't-titleSmall', sty
             className={className}
             style={{ position: 'absolute', inset: 0, textAlign: 'center', color: 'var(--ink)', whiteSpace: 'nowrap' }}
           >
-            {Dates.monthYear(month)}
+            {metro ? Dates.monthYear(month).toLowerCase() : Dates.monthYear(month)}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -401,10 +509,11 @@ export function SoftProgress({ progress, color, height = 10, track = 'var(--surf
   style?: CSSProperties
 }) {
   const value = Math.min(1, Math.max(0, progress))
+  useMetro()
   return (
     <div style={{ width: '100%', height, borderRadius: 999, background: track, overflow: 'hidden', ...style }}>
       <motion.div initial={{ width: '0%' }} animate={{ width: `${value * 100}%` }} transition={spring(0.75, 60)}
-        style={{ height: '100%', borderRadius: 999, background: color }} />
+        style={{ height: '100%', borderRadius: 999, background: tile(color) }} />
     </div>
   )
 }
@@ -417,6 +526,18 @@ export function Staggered({ index, step = 55, children, style, className }: {
   style?: CSSProperties
   className?: string
 }) {
+  const metro = useMetro()
+  if (metro) {
+    // Items swing in like a turnstile, hinged on their left edge.
+    return (
+      <motion.div className={className} style={{ transformOrigin: '0% 50%', transformPerspective: 900, ...style }}
+        initial={{ opacity: 0, rotateY: 60, x: 40 }}
+        animate={{ opacity: 1, rotateY: 0, x: 0 }}
+        transition={{ duration: 0.45, ease: [0.1, 0.9, 0.2, 1], delay: (Math.min(index, 12) * step) / 1000 }}>
+        {children}
+      </motion.div>
+    )
+  }
   return (
     <motion.div className={className} style={style}
       initial={{ opacity: 0, y: 48 }}
@@ -435,6 +556,21 @@ export function FormLabel({ text, style }: { text: string; style?: CSSProperties
 
 /** Material 3 switch with the app colors. */
 export function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  const metro = useMetro()
+  if (metro) {
+    // Windows Phone toggle: a framed track that fills with the accent, and a solid square thumb.
+    return (
+      <div className="col" style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+        <div role="switch" aria-checked={checked} onClick={(e) => { e.stopPropagation(); onChange(!checked) }}
+          style={{ width: 62, height: 28, border: '2px solid var(--ink)', padding: 4, position: 'relative', cursor: 'pointer' }}>
+          <motion.div initial={false} animate={{ width: checked ? '100%' : '0%' }} transition={tween(180)} style={{ height: '100%', background: 'var(--accent)' }} />
+          <motion.div initial={false} animate={{ x: checked ? 44 : 0 }} transition={tween(180)}
+            style={{ position: 'absolute', top: -2, left: -2, width: 14, height: 28, background: 'var(--ink)' }} />
+        </div>
+        <span className="t-caption" style={{ color: 'var(--inkSoft)', marginTop: 4 }}>{checked ? 'attivo' : 'disattivo'}</span>
+      </div>
+    )
+  }
   return (
     <div role="switch" aria-checked={checked} onClick={(e) => { e.stopPropagation(); onChange(!checked) }}
       style={{
@@ -457,11 +593,12 @@ export function SwitchRow({ title, subtitle, checked, onChange, style }: {
   onChange: (v: boolean) => void
   style?: CSSProperties
 }) {
+  const metro = useMetro()
   return (
     <Bouncy pressedScale={0.98} onClick={() => onChange(!checked)} className="row"
-      style={{ borderRadius: 22, background: 'var(--surface)', padding: '14px 18px', ...style }}>
+      style={metro ? { padding: '10px 0', ...style } : { borderRadius: 22, background: 'var(--surface)', padding: '14px 18px', ...style }}>
       <div className="col flex1">
-        <span className="t-bodyStrong" style={{ color: 'var(--ink)' }}>{title}</span>
+        <span className={metro ? 't-titleSmall' : 't-bodyStrong'} style={{ color: 'var(--ink)' }}>{title}</span>
         {subtitle && <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>{subtitle}</span>}
       </div>
       <div style={{ width: 12 }} />
@@ -532,6 +669,7 @@ export function TextField({ value, onChange, placeholder, secret = false, autoCo
 }
 
 export function ColorSwatches({ colors, selected, onSelect }: { colors: number[]; selected: number; onSelect: (c: number) => void }) {
+  useMetro()
   return (
     // Padding leaves room for the enlarged selected swatch.
     <div className="hscroll" style={{ gap: 10, padding: 6, margin: '0 -6px' }}>
@@ -540,7 +678,7 @@ export function ColorSwatches({ colors, selected, onSelect }: { colors: number[]
         return (
           <motion.div key={value} animate={{ scale: isSelected ? 1.15 : 1 }} transition={spring(0.4, 1500)} style={{ flexShrink: 0 }}>
             <Bouncy onClick={() => onSelect(value)} className="center"
-              style={{ width: 40, height: 40, borderRadius: '50%', background: argb(value), boxShadow: isSelected ? 'inset 0 0 0 3px var(--ink)' : 'none' }}>
+              style={{ width: 40, height: 40, borderRadius: '50%', background: argb(accentShown(value)), boxShadow: isSelected ? 'inset 0 0 0 3px var(--ink)' : 'none' }}>
               {isSelected && <Icon name="check" size={18} color={Ink} />}
             </Bouncy>
           </motion.div>
@@ -551,13 +689,14 @@ export function ColorSwatches({ colors, selected, onSelect }: { colors: number[]
 }
 
 export function IconPicker({ selected, color, onSelect }: { selected: string; color: string; onSelect: (k: string) => void }) {
+  useMetro()
   return (
     <div className="hscroll" style={{ gap: 8 }}>
       {Object.keys(appIcons).map((key) => {
         const isSelected = key === selected
         return (
           <Bouncy key={key} onClick={() => onSelect(key)} className="center"
-            style={{ width: 48, height: 48, borderRadius: 16, flexShrink: 0, background: isSelected ? color : 'var(--surface)' }}>
+            style={{ width: 48, height: 48, borderRadius: 16, flexShrink: 0, background: isSelected ? tile(color) : 'var(--surface)' }}>
             <AppIcon name={key} size={22} color={isSelected ? Ink : 'var(--inkSoft)'} />
           </Bouncy>
         )
@@ -569,7 +708,7 @@ export function IconPicker({ selected, color, onSelect }: { selected: string; co
 export function Legend({ text, color }: { text: string; color: string }) {
   return (
     <div className="row">
-      <div style={{ width: 10, height: 10, borderRadius: '50%', background: color }} />
+      <div style={{ width: 10, height: 10, borderRadius: '50%', background: tile(color) }} />
       <span className="t-caption" style={{ marginLeft: 6, color: 'var(--inkSoft)' }}>{text}</span>
     </div>
   )

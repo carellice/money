@@ -104,6 +104,10 @@ export function SettingsScreen() {
           <Segmented options={themeModes.map((m) => m.label)} selected={themeModes.findIndex((m) => m.id === settings.theme)}
             onSelect={(i) => updateSettings({ theme: themeModes[i].id })} />
 
+          <FormLabel text="Stile" />
+          <Segmented options={['Classico', 'Modern UI']} selected={settings.metro ? 1 : 0}
+            onSelect={(i) => updateSettings({ metro: i === 1 })} />
+
           <div className="row">
             <FormLabel text="Colore principale" style={{ flex: 1 }} />
             {settings.accent !== Palette.LILAC && (

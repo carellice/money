@@ -5,7 +5,7 @@ import { Dates, Money, percent } from '../../../shared/format.ts'
 import { argb, Palette, type Recurring, type TxType } from '../../../shared/model.ts'
 import { buildReport, type MonthReport } from '../../../shared/report.ts'
 import { homeReselect, navigate, switchTab } from '../lib/nav.ts'
-import { setMonth, useStore } from '../lib/store.ts'
+import { setMonth, useMetro, useStore } from '../lib/store.ts'
 import { alpha, Ink } from '../lib/theme.ts'
 import { BackdropBlobs, BlobBox, BlobLayer } from '../components/Blob.tsx'
 import {
@@ -120,7 +120,70 @@ function HomeContent({ report: r, upcoming }: { report: MonthReport; upcoming: R
   )
 }
 
+/** Live tiles: a wide accent tile that flips now and then to show its back, and two square ones to add money in or out. */
+function HeroMetro({ r, onAdd }: { r: MonthReport; onAdd: (type: TxType) => void }) {
+  const hidden = useStore((s) => s.settings.hideAmounts)
+  const hide = useHideable()
+  const [back, setBack] = useState(false)
+  useEffect(() => {
+    // Like a live tile: rests a while, then turns over on its horizontal axis.
+    const id = window.setInterval(() => setBack((b) => !b), 6000)
+    return () => window.clearInterval(id)
+  }, [])
+  const white = '#FFFFFF'
+  return (
+    <div className="col" style={{ gap: 8, paddingTop: 4 }}>
+      <Bouncy onClick={toggleHideAmounts} style={{ height: 176, perspective: 900 }}>
+        <motion.div initial={false} animate={{ rotateX: back ? 180 : 0 }} transition={{ duration: 0.7, ease: [0.1, 0.9, 0.2, 1] }}
+          style={{ position: 'relative', height: '100%', transformStyle: 'preserve-3d' }}>
+          <div className="col" style={{ position: 'absolute', inset: 0, background: 'var(--accent)', padding: 14, justifyContent: 'space-between', backfaceVisibility: 'hidden' }}>
+            <AnimatedAmount cents={r.balance} className="t-hero" color={white} decimalsScale={0.45} style={{ fontSize: 54, lineHeight: '58px' }} />
+            <div className="row">
+              <span className="t-label flex1" style={{ color: white, fontWeight: 400 }}>saldo del mese</span>
+              <Icon name={hidden ? 'visibility_off' : 'visibility'} size={20} color={white} label={hidden ? 'Mostra importi' : 'Nascondi importi'} />
+            </div>
+          </div>
+          <div className="col" style={{ position: 'absolute', inset: 0, background: 'var(--accent)', padding: 14, justifyContent: 'space-between', backfaceVisibility: 'hidden', transform: 'rotateX(180deg)' }}>
+            <div className="col">
+              <span className="t-title" style={{ color: white, fontSize: 34, lineHeight: '38px' }}>
+                {r.savingsRate == null ? 'nessuna entrata' : r.balance >= 0 ? `risparmi ${percent(r.savingsRate)}` : 'in rosso'}
+              </span>
+              <span className="t-body" style={{ color: alpha(white, 0.85) }}>media {hide(Money.short(r.avgDailyExpense))} al giorno</span>
+              {r.fixedExpense > 0 && <span className="t-body" style={{ color: alpha(white, 0.85) }}>fisse {hide(Money.short(r.fixedExpense))}</span>}
+            </div>
+            <span className="t-label" style={{ color: white, fontWeight: 400 }}>questo mese</span>
+          </div>
+        </motion.div>
+      </Bouncy>
+      <div className="row" style={{ gap: 8 }}>
+        <MetroTile label="entrate" cents={r.income} color="var(--income)" icon="add" onClick={() => onAdd('INCOME')} />
+        <MetroTile label="uscite" cents={r.expense} color="var(--expense)" icon="remove" onClick={() => onAdd('EXPENSE')} />
+      </div>
+    </div>
+  )
+}
+
+function MetroTile({ label, cents, color, icon, onClick }: { label: string; cents: number; color: string; icon: 'add' | 'remove'; onClick: () => void }) {
+  return (
+    <Bouncy onClick={onClick} aria-label={`Aggiungi ${label}`} className="col flex1"
+      style={{ aspectRatio: '1', background: color, padding: 12, justifyContent: 'space-between' }}>
+      <Icon name={icon} size={34} color="#FFFFFF" />
+      <div className="col">
+        <Masked className="t-title" color="#FFFFFF">
+          <span className="t-title" style={{ color: '#FFFFFF', whiteSpace: 'nowrap' }}>{Money.format(cents)}</span>
+        </Masked>
+        <span className="t-label" style={{ color: '#FFFFFF', fontWeight: 400 }}>{label}</span>
+      </div>
+    </Bouncy>
+  )
+}
+
 function Hero({ r, onAdd }: { r: MonthReport; onAdd: (type: TxType) => void }) {
+  if (useMetro()) return <HeroMetro r={r} onAdd={onAdd} />
+  return <HeroBlob r={r} onAdd={onAdd} />
+}
+
+function HeroBlob({ r, onAdd }: { r: MonthReport; onAdd: (type: TxType) => void }) {
   const hidden = useStore((s) => s.settings.hideAmounts)
   const bob = {
     animate: { y: [-6, 6] },

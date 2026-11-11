@@ -1,5 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { BlobSpec, blobTime, onFrame } from '../lib/blob.ts'
+import { useMetro } from '../lib/store.ts'
+import { tile } from '../lib/theme.ts'
 
 type Fill = { color: string } | { gradient: string[] }
 
@@ -10,6 +12,8 @@ type BlobProps = Fill & {
   speed?: number
   /** Width of the outline: drawn instead of filling the blob. */
   stroke?: number
+  /** Modern UI: paint the colour as it is (brand logos) instead of its solid tile version. */
+  keepColor?: boolean
 }
 
 function useSize(ref: React.RefObject<Element | null>) {
@@ -32,6 +36,22 @@ function useSize(ref: React.RefObject<Element | null>) {
 
 /** Draws a living blob filling its parent (Modifier.blob). Only the path changes each frame. */
 export function BlobLayer(props: BlobProps) {
+  if (useMetro()) return <MetroTile {...props} />
+  return <LivingBlob {...props} />
+}
+
+/** Modern UI: a flat, solid square tile, or a square outline; gradients turn into the flat accent. */
+function MetroTile(props: BlobProps) {
+  const fill = 'gradient' in props ? 'var(--accent)' : props.keepColor ? props.color : tile(props.color)
+  return (
+    <div aria-hidden style={{
+      position: 'absolute', inset: 0, pointerEvents: 'none',
+      ...(props.stroke ? { border: `${props.stroke}px solid ${fill}` } : { background: fill }),
+    }} />
+  )
+}
+
+function LivingBlob(props: BlobProps) {
   const { seed = 1, amplitude = 0.07, animated = true, speed = 1, stroke } = props
   const svg = useRef<SVGSVGElement>(null)
   const path = useRef<SVGPathElement>(null)
@@ -112,7 +132,11 @@ export function useBlobClip(seed: number, size: number, amplitude = 0.07): strin
 export const PX = 1 / 2.75
 
 /** Soft floating blobs used as page backdrop. */
-export function BackdropBlobs({ colors, alpha }: { colors: string[]; alpha: number }) {
+export function BackdropBlobs(props: { colors: string[]; alpha: number }) {
+  return useMetro() ? null : <LivingBackdrop {...props} />
+}
+
+function LivingBackdrop({ colors, alpha }: { colors: string[]; alpha: number }) {
   const ref = useRef<SVGSVGElement>(null)
   const paths = useRef<(SVGPathElement | null)[]>([])
   const size = useSize(ref)
