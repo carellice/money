@@ -285,13 +285,12 @@ fun MetroToggle(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifie
         modifier
             .size(width = 62.dp, height = 28.dp)
             .border(2.dp, c.ink, RectangleShape)
-            .clickable { onChange(!checked) }
-            .padding(4.dp),
+            .clickable { onChange(!checked) },
     ) {
-        Box(Modifier.fillMaxHeight().fillMaxWidth(t).background(c.accent))
+        // Only the fill is inset: inside the padding the thumb would be squeezed to 20dp and sit crooked.
+        Box(Modifier.padding(4.dp).fillMaxHeight().fillMaxWidth(t).background(c.accent))
         Box(
             Modifier
-                .offset(x = (-4).dp, y = (-4).dp)
                 .size(width = 14.dp, height = 28.dp)
                 .graphicsLayer { translationX = t * (62 - 14).dp.toPx() }
                 .background(c.ink),
