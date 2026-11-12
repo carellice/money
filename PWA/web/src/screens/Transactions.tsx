@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { monthOf } from '../../../shared/date.ts'
 import { Dates, Money } from '../../../shared/format.ts'
-import { paymentChoice, paymentLabel, type Transaction } from '../../../shared/model.ts'
+import { methodKey, paymentChoice, paymentLabel, sameChoice, type PaymentChoice, type Transaction } from '../../../shared/model.ts'
 import { navigate } from '../lib/nav.ts'
 import { actions, setMonth, useStore } from '../lib/store.ts'
-import { EmptyState, HideAmountsButton, Icon, Masked, MonthSwitcher, Segmented, Staggered, PageTitle } from '../components/ui.tsx'
+import { EmptyState, HideAmountsButton, Icon, Masked, MonthSwitcher, Pill, Segmented, Staggered, PageTitle } from '../components/ui.tsx'
+import { allChoices } from '../components/Payments.tsx'
 import { SwipeRow, TransactionRow } from '../components/TransactionRow.tsx'
 import { showSnackbar, toast } from '../components/overlays.tsx'
 
@@ -13,18 +14,29 @@ export function TransactionsScreen() {
   const data = useStore((s) => s.data)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState(0) // 0 all, 1 expenses, 2 incomes
+  const [method, setMethod] = useState<PaymentChoice | null>(null) // null: every method
 
   const state = useMemo(() => {
     if (!data) return null
     const byId = new Map(data.categories.map((c) => [c.id, c]))
     const memberNames = new Map(data.members.map((m) => [m.id, m.name]))
     const needle = query.trim().toLowerCase()
+    const custom = data.paymentMethods ?? []
+    // Payment methods used this month, in the usual order: the choices of the method filter.
+    const order = allChoices(custom).map(methodKey)
+    const rank = (c: PaymentChoice) => { const i = order.indexOf(methodKey(c)); return i < 0 ? order.length : i }
+    const methods: PaymentChoice[] = []
+    for (const c of [...data.transactions.filter((tx) => monthOf(tx.date) === month).map(paymentChoice), ...(method ? [method] : [])]) {
+      if (!methods.some((m) => sameChoice(m, c))) methods.push(c)
+    }
+    methods.sort((a, b) => rank(a) - rank(b))
     const visible = data.transactions.filter((tx) =>
       monthOf(tx.date) === month &&
       (filter === 0 || (filter === 1 && tx.type === 'EXPENSE') || (filter === 2 && tx.type === 'INCOME')) &&
+      (!method || sameChoice(paymentChoice(tx), method)) &&
       (!needle || [
         tx.note, byId.get(tx.categoryId)?.name, tx.subcategoryId != null ? byId.get(tx.subcategoryId)?.name : undefined,
-        paymentLabel(paymentChoice(tx), data.paymentMethods ?? []).label, tx.memberId != null ? memberNames.get(tx.memberId) : undefined,
+        paymentLabel(paymentChoice(tx), custom).label, tx.memberId != null ? memberNames.get(tx.memberId) : undefined,
       ].some((s) => s?.toLowerCase().includes(needle))))
     const groups: { date: number; items: Transaction[]; net: number }[] = []
     for (const tx of visible) {
@@ -36,10 +48,12 @@ export function TransactionsScreen() {
     return {
       groups,
       categories: byId,
+      methods,
+      custom,
       income: visible.filter((t) => t.type === 'INCOME').reduce((a, t) => a + t.amountCents, 0),
       expense: visible.filter((t) => t.type === 'EXPENSE').reduce((a, t) => a + t.amountCents, 0),
     }
-  }, [data, month, query, filter])
+  }, [data, month, query, filter, method])
 
   const remove = async (tx: Transaction) => {
     const deleting = actions.deleteTransaction(tx)
@@ -65,6 +79,16 @@ export function TransactionsScreen() {
             </label>
             <Segmented options={['Tutti', 'Spese', 'Entrate']} selected={filter} onSelect={setFilter}
               colors={['var(--accent)', 'var(--expense)', 'var(--income)']} style={{ marginTop: 12 }} />
+            {state && (state.methods.length > 1 || method) && (
+              <div className="hscroll" style={{ gap: 8, marginTop: 10 }}>
+                <Pill text="Tutti i metodi" selected={!method} onClick={() => setMethod(null)} />
+                {state.methods.map((c) => {
+                  const selected = method != null && sameChoice(c, method)
+                  const { label, icon } = paymentLabel(c, state.custom)
+                  return <Pill key={methodKey(c)} text={label} appIcon={icon} selected={selected} onClick={() => setMethod(selected ? null : c)} />
+                })}
+              </div>
+            )}
             {state && (
               <div className="row" style={{ marginTop: 14 }}>
                 <span className="t-label" style={{ color: 'var(--inkSoft)' }}>Entrate&nbsp;</span>
@@ -83,9 +107,9 @@ export function TransactionsScreen() {
         </div>
         {state && state.groups.length === 0 && (
           <EmptyState
-            title={query.trim() ? 'Nessun risultato' : 'Nessun movimento'}
-            text={query.trim() ? "Prova con un'altra parola." : 'Questo mese è ancora vuoto.'}
-            icon={query.trim() ? 'more' : 'wallet'}
+            title={query.trim() || method ? 'Nessun risultato' : 'Nessun movimento'}
+            text={query.trim() ? "Prova con un'altra parola." : method ? 'Prova con un altro metodo.' : 'Questo mese è ancora vuoto.'}
+            icon={query.trim() || method ? 'more' : 'wallet'}
           />
         )}
         {state?.groups.map((group, gi) => (

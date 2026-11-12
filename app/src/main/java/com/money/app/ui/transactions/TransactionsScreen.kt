@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -53,7 +54,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.money.app.AppContainer
 import com.money.app.data.CategoryEntity
+import com.money.app.data.PaymentChoice
 import com.money.app.data.Payments
+import com.money.app.data.methodKey
+import com.money.app.data.paymentChoice
 import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
 import com.money.app.domain.Dates
@@ -61,7 +65,10 @@ import com.money.app.domain.Money
 import com.money.app.ui.appViewModel
 import com.money.app.ui.components.EmptyState
 import com.money.app.ui.components.HideAmountsButton
+import com.money.app.ui.components.AppIcons
 import com.money.app.ui.components.Masked
+import com.money.app.ui.components.Pill
+import com.money.app.ui.settings.allChoices
 import com.money.app.ui.components.MonthSwitcher
 import com.money.app.ui.components.Segmented
 import com.money.app.ui.components.TransactionRow
@@ -91,6 +98,9 @@ data class TransactionsState(
     val categories: Map<Long, CategoryEntity>,
     val income: Long,
     val expense: Long,
+    /** Payment methods used this month, in the usual order: the choices of the method filter. */
+    val methods: List<PaymentChoice>,
+    val payments: Payments,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -99,16 +109,22 @@ class TransactionsViewModel(private val container: AppContainer) : ViewModel() {
     val month: StateFlow<YearMonth> = container.month
     val query = MutableStateFlow("")
     val filter = MutableStateFlow(0) // 0 all, 1 expenses, 2 incomes
+    val method = MutableStateFlow<PaymentChoice?>(null) // null: every method
 
     val state: StateFlow<TransactionsState?> = container.month.flatMapLatest { m ->
         val names = combine(repo.members, repo.customPayments) { members, custom -> members to custom }
-        combine(repo.transactionsIn(m), repo.categories, names, query, filter) { txs, cats, (members, custom), q, f ->
+        val filters = combine(query, filter, method) { q, f, pm -> Triple(q, f, pm) }
+        combine(repo.transactionsIn(m), repo.categories, names, filters) { txs, cats, (members, custom), (q, f, pm) ->
             val byId = cats.associateBy { it.id }
             val memberNames = members.associate { it.id to it.name }
             val payments = Payments(custom)
             val needle = q.trim().lowercase()
+            val order = allChoices(payments)
+            val methods = (txs.map { it.paymentChoice } + listOfNotNull(pm)).distinct()
+                .sortedBy { order.indexOf(it).let { i -> if (i < 0) Int.MAX_VALUE else i } }
             val visible = txs.filter { tx ->
                 (f == 0 || (f == 1 && tx.type == TxType.EXPENSE) || (f == 2 && tx.type == TxType.INCOME)) &&
+                    (pm == null || tx.paymentChoice == pm) &&
                     (needle.isEmpty() || listOfNotNull(
                         tx.note, byId[tx.categoryId]?.name, tx.subcategoryId?.let { byId[it]?.name }, payments.label(tx),
                         tx.memberId?.let { memberNames[it] },
@@ -119,6 +135,8 @@ class TransactionsViewModel(private val container: AppContainer) : ViewModel() {
                 categories = byId,
                 income = visible.filter { it.type == TxType.INCOME }.sumOf { it.amountCents },
                 expense = visible.filter { it.type == TxType.EXPENSE }.sumOf { it.amountCents },
+                methods = methods,
+                payments = payments,
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -141,6 +159,7 @@ fun TransactionsScreen(onOpen: (Long) -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val query by vm.query.collectAsStateWithLifecycle()
     val filter by vm.filter.collectAsStateWithLifecycle()
+    val method by vm.method.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val c = Ui.colors
@@ -165,6 +184,19 @@ fun TransactionsScreen(onOpen: (Long) -> Unit) {
                         listOf("Tutti", "Spese", "Entrate"), filter, { vm.filter.value = it },
                         colors = listOf(c.accent, c.expense, c.income),
                     )
+                    state?.takeIf { it.methods.size > 1 || method != null }?.let { s ->
+                        Spacer(Modifier.height(10.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            item { Pill("Tutti i metodi", method == null, { vm.method.value = null }) }
+                            items(s.methods, key = { it.methodKey }) { choice ->
+                                Pill(
+                                    s.payments.label(choice), choice == method,
+                                    { vm.method.value = if (choice == method) null else choice },
+                                    icon = AppIcons[s.payments.icon(choice)],
+                                )
+                            }
+                        }
+                    }
                     state?.let { s ->
                         Spacer(Modifier.height(14.dp))
                         Row {
@@ -186,9 +218,9 @@ fun TransactionsScreen(onOpen: (Long) -> Unit) {
             if (s.groups.isEmpty()) {
                 item {
                     EmptyState(
-                        if (query.isBlank()) "Nessun movimento" else "Nessun risultato",
-                        if (query.isBlank()) "Questo mese è ancora vuoto." else "Prova con un'altra parola.",
-                        icon = if (query.isBlank()) "wallet" else "more",
+                        if (query.isBlank() && method == null) "Nessun movimento" else "Nessun risultato",
+                        if (query.isBlank() && method == null) "Questo mese è ancora vuoto." else if (query.isBlank()) "Prova con un altro metodo." else "Prova con un'altra parola.",
+                        icon = if (query.isBlank() && method == null) "wallet" else "more",
                     )
                 }
             }
