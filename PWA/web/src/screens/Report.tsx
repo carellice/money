@@ -341,10 +341,11 @@ function CategoryBreakdown({ slices, total, title, r }: { slices: Slice[]; total
               </div>
             </div>
             <Expand visible={expanded === s.category.id}>
-              <div className="col" style={{ padding: '8px 0 0 46px' }}>
+              {/* Only subcategories sit under the label; movements use the full width like everywhere else. */}
+              <div className="col" style={{ paddingTop: 8 }}>
                 {/* A lone "Generico" says nothing more than the total. */}
                 {(s.subs.length > 1 || s.subs[0]?.name !== 'Generico') && s.subs.map((sub) => (
-                  <div key={sub.name} className="row" style={{ padding: '3px 0' }}>
+                  <div key={sub.name} className="row" style={{ padding: '3px 0 3px 46px' }}>
                     <span className="t-caption flex1" style={{ color: 'var(--inkSoft)' }}>{sub.name}</span>
                     <span className="t-caption" style={{ color: 'var(--ink)' }}>{hide(Money.format(sub.cents))}</span>
                   </div>

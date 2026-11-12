@@ -572,10 +572,11 @@ private fun CategoryBreakdown(
                         }
                     }
                     AnimatedVisibility(expanded == s.category.id, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                        Column(Modifier.padding(start = 46.dp, top = 8.dp)) {
+                        // Only subcategories sit under the label; movements use the full width like everywhere else.
+                        Column(Modifier.padding(top = 8.dp)) {
                             // A lone "Generico" says nothing more than the total.
                             if (s.subs.size > 1 || s.subs.firstOrNull()?.name != "Generico") s.subs.forEach { sub ->
-                                Row(Modifier.padding(vertical = 3.dp)) {
+                                Row(Modifier.padding(start = 46.dp, top = 3.dp, bottom = 3.dp)) {
                                     Text(sub.name, style = Ui.type.caption, color = c.inkSoft, modifier = Modifier.weight(1f))
                                     Text(hideable(Money.format(sub.cents)), style = Ui.type.caption, color = c.ink)
                                 }
