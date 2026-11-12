@@ -91,6 +91,8 @@ import com.money.app.ui.components.AmountField
 import com.money.app.ui.components.AppIcons
 import com.money.app.ui.components.ColorSwatches
 import com.money.app.ui.components.FormLabel
+import com.money.app.ui.components.TransactionRow
+import com.money.app.ui.components.hideable
 import com.money.app.ui.components.IconPicker
 import com.money.app.ui.components.Pill
 import com.money.app.ui.components.PrimaryButton
@@ -108,9 +110,10 @@ import java.time.ZoneOffset
 private val reminderOptions = listOf(-1 to "No", 0 to "Il giorno stesso", 1 to "1 giorno prima", 2 to "2 giorni prima", 3 to "3 giorni prima", 7 to "1 settimana prima")
 
 @Composable
-fun RecurringEditScreen(onClose: () -> Unit) {
+fun RecurringEditScreen(onClose: () -> Unit, onOpenTransaction: (Long) -> Unit) {
     val vm = appViewModel { c, h -> RecurringEditViewModel(c, h) }
     val categories by vm.categories.collectAsStateWithLifecycle()
+    val history by vm.history.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val c = Ui.colors
     var showBrands by remember { mutableStateOf(false) }
@@ -319,6 +322,18 @@ fun RecurringEditScreen(onClose: () -> Unit) {
             Spacer(Modifier.height(24.dp))
             PrimaryButton("Salva", { save() }, enabled = vm.amountCents > 0 && vm.categoryId != null, icon = Icons.Rounded.Check)
             Spacer(Modifier.height(24.dp))
+
+            if (history.isNotEmpty()) {
+                val byId = categories.associateBy { it.id }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FormLabel("Movimenti registrati", Modifier.weight(1f))
+                    Text("${history.size} · ${hideable(Money.format(history.sumOf { it.amountCents }))}", style = Ui.type.caption, color = c.inkSoft, modifier = Modifier.padding(top = 14.dp, bottom = 8.dp))
+                }
+                history.forEach { tx ->
+                    TransactionRow(tx, byId, { onOpenTransaction(tx.id) }, showDate = Dates.short(LocalDate.ofEpochDay(tx.date)))
+                }
+                Spacer(Modifier.height(24.dp))
+            }
         }
     }
 

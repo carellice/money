@@ -110,7 +110,7 @@ export function ReportScreen() {
               </Staggered>
             )}
             {r.expenseSlices.length > 0 && (
-              <Staggered key={`d${month}`} index={3}><CategoryBreakdown slices={r.expenseSlices} total={r.expense} title="Spese per categoria" /></Staggered>
+              <Staggered key={`d${month}`} index={3}><CategoryBreakdown slices={r.expenseSlices} total={r.expense} title="Spese per categoria" r={r} /></Staggered>
             )}
             <Staggered index={4}>
               <SectionTitle text="Calendario delle spese" />
@@ -178,7 +178,7 @@ export function ReportScreen() {
               </Staggered>
             )}
             {r.incomeSlices.length > 0 && (
-              <Staggered key={`i${month}`} index={10}><CategoryBreakdown slices={r.incomeSlices} total={r.income} title="Entrate per fonte" /></Staggered>
+              <Staggered key={`i${month}`} index={10}><CategoryBreakdown slices={r.incomeSlices} total={r.income} title="Entrate per fonte" r={r} /></Staggered>
             )}
             {r.top.length > 0 && (
               <Staggered index={11}>
@@ -305,7 +305,7 @@ function StatTile({ label, cents, previous, color, higherIsGood }: { label: stri
   )
 }
 
-function CategoryBreakdown({ slices, total, title }: { slices: Slice[]; total: number; title: string }) {
+function CategoryBreakdown({ slices, total, title, r }: { slices: Slice[]; total: number; title: string; r: MonthReport }) {
   const hide = useHideable()
   const [selected, setSelected] = useState(-1)
   const [expanded, setExpanded] = useState<number | null>(null)
@@ -340,14 +340,24 @@ function CategoryBreakdown({ slices, total, title }: { slices: Slice[]; total: n
                 <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>{percent(s.share)}</span>
               </div>
             </div>
-            <Expand visible={expanded === s.category.id && s.subs.length > 0}>
+            <Expand visible={expanded === s.category.id}>
               <div className="col" style={{ padding: '8px 0 0 46px' }}>
-                {s.subs.map((sub) => (
+                {/* A lone "Generico" says nothing more than the total. */}
+                {(s.subs.length > 1 || s.subs[0]?.name !== 'Generico') && s.subs.map((sub) => (
                   <div key={sub.name} className="row" style={{ padding: '3px 0' }}>
                     <span className="t-caption flex1" style={{ color: 'var(--inkSoft)' }}>{sub.name}</span>
                     <span className="t-caption" style={{ color: 'var(--ink)' }}>{hide(Money.format(sub.cents))}</span>
                   </div>
                 ))}
+                {/* The tap on a movement opens it, without closing the category. */}
+                <div onClick={(e) => e.stopPropagation()}>
+                  {r.transactions
+                    .filter((t) => t.categoryId === s.category.id && t.type === s.category.type)
+                    .sort((a, b) => b.date - a.date)
+                    .map((tx) => (
+                      <TransactionRow key={tx.id} tx={tx} categories={r.categories} onClick={() => navigate('add', { id: tx.id })} showDate={Dates.short(tx.date)} />
+                    ))}
+                </div>
               </div>
             </Expand>
           </Bouncy>

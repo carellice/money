@@ -285,7 +285,10 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
                     enterTransition = { slideInVertically(spring(dampingRatio = 0.85f, stiffness = 320f)) { it / 2 } + fadeIn() },
                     popExitTransition = { slideOutVertically(tween(260)) { it / 2 } + fadeOut(tween(200)) },
                 ) {
-                    RecurringEditScreen(onClose = { nav.closeScreen(Routes.RECURRING_EDIT_PATTERN) })
+                    RecurringEditScreen(
+                        onClose = { nav.closeScreen(Routes.RECURRING_EDIT_PATTERN) },
+                        onOpenTransaction = { nav.navigate(Routes.add(id = it)) },
+                    )
                 }
                 composable(
                     Routes.RECURRING_REGISTER_PATTERN,

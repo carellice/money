@@ -255,7 +255,7 @@ fun ReportScreen(onOpenTransaction: (Long) -> Unit, onOpenChat: () -> Unit, onOp
             }
         }
         if (r.expenseSlices.isNotEmpty()) {
-            item(key = "donut_${r.month}") { CategoryBreakdown(r.expenseSlices, r.expense, "Spese per categoria", Modifier.staggered(3)) }
+            item(key = "donut_${r.month}") { CategoryBreakdown(r.expenseSlices, r.expense, "Spese per categoria", r, onOpenTransaction, Modifier.staggered(3)) }
         }
         item {
             Column(Modifier.staggered(4)) {
@@ -356,7 +356,7 @@ fun ReportScreen(onOpenTransaction: (Long) -> Unit, onOpenChat: () -> Unit, onOp
             }
         }
         if (r.incomeSlices.isNotEmpty()) {
-            item(key = "income_${r.month}") { CategoryBreakdown(r.incomeSlices, r.income, "Entrate per fonte", Modifier.staggered(10)) }
+            item(key = "income_${r.month}") { CategoryBreakdown(r.incomeSlices, r.income, "Entrate per fonte", r, onOpenTransaction, Modifier.staggered(10)) }
         }
         if (r.top.isNotEmpty()) {
             item { SectionTitle("Le spese più grandi", Modifier.staggered(11)) }
@@ -520,7 +520,14 @@ private fun StatTile(label: String, cents: Long, previous: Long, color: Color, h
 }
 
 @Composable
-private fun CategoryBreakdown(slices: List<Slice>, total: Long, title: String, modifier: Modifier = Modifier) {
+private fun CategoryBreakdown(
+    slices: List<Slice>,
+    total: Long,
+    title: String,
+    r: MonthReport,
+    onOpenTransaction: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val c = Ui.colors
     var selected by remember { mutableIntStateOf(-1) }
     var expanded by remember { mutableStateOf<Long?>(null) }
@@ -564,14 +571,21 @@ private fun CategoryBreakdown(slices: List<Slice>, total: Long, title: String, m
                             Text(percent(s.share), style = Ui.type.caption, color = c.inkSoft)
                         }
                     }
-                    AnimatedVisibility(expanded == s.category.id && s.subs.isNotEmpty(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    AnimatedVisibility(expanded == s.category.id, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                         Column(Modifier.padding(start = 46.dp, top = 8.dp)) {
-                            s.subs.forEach { sub ->
+                            // A lone "Generico" says nothing more than the total.
+                            if (s.subs.size > 1 || s.subs.firstOrNull()?.name != "Generico") s.subs.forEach { sub ->
                                 Row(Modifier.padding(vertical = 3.dp)) {
                                     Text(sub.name, style = Ui.type.caption, color = c.inkSoft, modifier = Modifier.weight(1f))
                                     Text(hideable(Money.format(sub.cents)), style = Ui.type.caption, color = c.ink)
                                 }
                             }
+                            r.transactions
+                                .filter { it.categoryId == s.category.id && it.type == s.category.type }
+                                .sortedByDescending { it.date }
+                                .forEach { tx ->
+                                    TransactionRow(tx, r.categories, { onOpenTransaction(tx.id) }, showDate = Dates.short(LocalDate.ofEpochDay(tx.date)))
+                                }
                         }
                     }
                 }

@@ -20,6 +20,7 @@ import com.money.app.data.PaymentChoice
 import com.money.app.data.PaymentMethod
 import com.money.app.data.RecurringEntity
 import com.money.app.data.RecurringKind
+import com.money.app.data.TransactionEntity
 import com.money.app.data.TxType
 import com.money.app.domain.Money
 import com.money.app.ui.ImageStore
@@ -68,6 +69,10 @@ class RecurringEditViewModel(private val container: AppContainer, handle: SavedS
 
     val categories: StateFlow<List<CategoryEntity>> =
         repo.categories.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** What it has registered so far; empty for a new one. */
+    val history: StateFlow<List<TransactionEntity>> =
+        repo.transactionsOf(editId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val amountCents: Long get() = Money.parse(amountText) ?: 0L
 

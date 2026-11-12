@@ -8,15 +8,16 @@ import {
 import { occurrence } from '../../../shared/recurrence.ts'
 import { brandGroups, findBrand, groupOf, searchBrands, type Brand } from '../lib/brands.ts'
 import { pickImage, shrinkToJpeg } from '../lib/images.ts'
-import { close } from '../lib/nav.ts'
+import { close, navigate } from '../lib/nav.ts'
 import { enablePush, pushSupported } from '../lib/push.ts'
 import { actions, getStore, useStore } from '../lib/store.ts'
 import {
-  AmountField, Bouncy, ColorSwatches, FormLabel, IconPicker, NoteField, Pill, PrimaryButton, RecurringLogo, RoundIconButton, Segmented, SwitchRow, TopBar,
+  AmountField, Bouncy, ColorSwatches, FormLabel, IconPicker, NoteField, Pill, PrimaryButton, RecurringLogo, RoundIconButton, Segmented, SwitchRow, TopBar, useHideable,
 } from '../components/ui.tsx'
 import { AlertDialog, DatePickerDialog, FullPage, toast } from '../components/overlays.tsx'
 import { spring } from '../components/motion.ts'
 import { PaymentPicker } from '../components/Payments.tsx'
+import { TransactionRow } from '../components/TransactionRow.tsx'
 
 const reminderOptions: [number, string][] = [[-1, 'No'], [0, 'Il giorno stesso'], [1, '1 giorno prima'], [2, '2 giorni prima'], [3, '3 giorni prima'], [7, '1 settimana prima']]
 
@@ -38,6 +39,13 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
   const categories = useStore((s) => s.data?.categories ?? [])
   const original = useMemo(() => (id ? getStore().data?.recurring.find((r) => r.id === id) ?? null : null), [id])
   const isEdit = id !== 0
+  const allTransactions = useStore((s) => s.data?.transactions)
+  const history = useMemo(
+    () => (id ? (allTransactions ?? []).filter((t) => t.recurringId === id).sort((a, b) => b.date - a.date || b.createdAt - a.createdAt) : []),
+    [allTransactions, id],
+  )
+  const byId = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+  const hide = useHideable()
 
   const [kind, setKind] = useState<RecurringKind>(original?.kind ?? initialKind)
   const [name, setName] = useState(original?.name ?? '')
@@ -321,6 +329,21 @@ export function RecurringEditScreen({ id, kind: initialKind }: { id: number; kin
           <div style={{ height: 24 }} />
           <PrimaryButton text="Salva" onClick={save} enabled={amountCents > 0 && categoryId != null} icon="check" />
           <div style={{ height: 24 }} />
+
+          {history.length > 0 && (
+            <>
+              <div className="row">
+                <FormLabel text="Movimenti registrati" style={{ flex: 1 }} />
+                <span className="t-caption" style={{ color: 'var(--inkSoft)', paddingTop: 14, paddingBottom: 8 }}>
+                  {history.length} · {hide(Money.format(history.reduce((sum, t) => sum + t.amountCents, 0)))}
+                </span>
+              </div>
+              {history.map((tx) => (
+                <TransactionRow key={tx.id} tx={tx} categories={byId} onClick={() => navigate('add', { id: tx.id })} showDate={Dates.short(tx.date)} />
+              ))}
+              <div style={{ height: 24 }} />
+            </>
+          )}
         </div>
       </div>
 

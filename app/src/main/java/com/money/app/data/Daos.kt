@@ -43,6 +43,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE date BETWEEN :from AND :to ORDER BY date DESC, createdAt DESC")
     fun observeRange(from: Long, to: Long): Flow<List<TransactionEntity>>
 
+    @Query("SELECT * FROM transactions WHERE recurringId = :recurringId ORDER BY date DESC, createdAt DESC")
+    fun observeByRecurring(recurringId: Long): Flow<List<TransactionEntity>>
+
     @Query("SELECT * FROM transactions ORDER BY date DESC, createdAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<TransactionEntity>>
 

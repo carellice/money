@@ -85,6 +85,9 @@ class MoneyRepository(
 
     fun recentTransactions(limit: Int): Flow<List<TransactionEntity>> = txDao.observeRecent(limit)
 
+    /** The movements a fixed expense, subscription or financing has registered, newest first. */
+    fun transactionsOf(recurringId: Long): Flow<List<TransactionEntity>> = txDao.observeByRecurring(recurringId)
+
     suspend fun transactionsBetweenOnce(from: LocalDate, to: LocalDate): List<TransactionEntity> =
         txDao.range(from.toEpochDay(), to.toEpochDay())
 
