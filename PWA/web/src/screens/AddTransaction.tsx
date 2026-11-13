@@ -218,10 +218,7 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
                     selectCategory(cid)
                     if (!categories.some((c) => c.parentId === cid)) setTimeout(() => setStep(2), 260)
                   }}
-                  onSub={(sid) => {
-                    setSubcategoryId(sid)
-                    if (sid != null) setTimeout(() => setStep(2), 220)
-                  }}
+                  onSub={setSubcategoryId}
                   onNext={() => setStep(2)} />
               )}
               {step === 2 && (

@@ -431,13 +431,7 @@ private fun CategoryStep(vm: AddViewModel, categories: List<CategoryEntity>) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Pill("Generico", vm.subcategoryId == null, { vm.subcategoryId = null }, color = color)
                     subs.forEach { sub ->
-                        Pill(sub.name, vm.subcategoryId == sub.id, {
-                            vm.subcategoryId = sub.id
-                            scope.launch {
-                                delay(220)
-                                vm.step = 2
-                            }
-                        }, color = color)
+                        Pill(sub.name, vm.subcategoryId == sub.id, { vm.subcategoryId = sub.id }, color = color)
                     }
                 }
                 Spacer(Modifier.height(16.dp))
