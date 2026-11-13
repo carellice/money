@@ -29,6 +29,8 @@ export type Settings = {
   metro: boolean
   /** Nothing look (monochrome, dot-matrix, Space Mono labels), wins over [metro]. */
   nothing: boolean
+  /** Dueffe look (near-black, warm surfaces, gold accent, dark only), wins over every other style. */
+  dueffe: boolean
 }
 
 // Every account keeps its own settings and data cache, so a shared tablet can switch between them.
@@ -51,7 +53,7 @@ let currentUser = read(LAST_USER_KEY) ?? ''
 
 function loadSettings(user: string): Settings {
   const defaults: Settings = {
-    theme: 'SYSTEM', lockCredential: null, remindersEnabled: false, accent: Palette.LILAC, onboarded: false, recurringSort: 'NEXT', hideAmounts: false, hideBalances: false, metro: false, nothing: false,
+    theme: 'SYSTEM', lockCredential: null, remindersEnabled: false, accent: Palette.LILAC, onboarded: false, recurringSort: 'NEXT', hideAmounts: false, hideBalances: false, metro: false, nothing: false, dueffe: false,
   }
   try {
     return { ...defaults, ...JSON.parse(read(settingsKey(user)) ?? '{}') }
@@ -251,7 +253,10 @@ if (typeof window !== 'undefined') {
 }
 
 /** True when the Modern UI (Windows Phone) style is on; re-renders the caller when it changes. */
-export const useMetro = () => useStore((st) => st.settings.metro && !st.settings.nothing)
+export const useMetro = () => useStore((st) => st.settings.metro && !st.settings.nothing && !st.settings.dueffe)
 
 /** True when the Nothing style is on; re-renders the caller when it changes. */
-export const useNothing = () => useStore((st) => st.settings.nothing)
+export const useNothing = () => useStore((st) => st.settings.nothing && !st.settings.dueffe)
+
+/** True when the Dueffe style is on; re-renders the caller when it changes. */
+export const useDueffe = () => useStore((st) => st.settings.dueffe)

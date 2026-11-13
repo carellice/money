@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { BlobSpec, blobTime, onFrame } from '../lib/blob.ts'
-import { useMetro, useNothing } from '../lib/store.ts'
+import { useDueffe, useMetro, useNothing } from '../lib/store.ts'
 import { tile } from '../lib/theme.ts'
 
 type Fill = { color: string } | { gradient: string[] }
@@ -38,9 +38,25 @@ function useSize(ref: React.RefObject<Element | null>) {
 export function BlobLayer(props: BlobProps) {
   const nothing = useNothing()
   const metro = useMetro()
+  if (useDueffe()) return <DueffeSquircle {...props} />
   if (nothing) return <NothingDisc {...props} />
   if (metro) return <MetroTile {...props} />
   return <LivingBlob {...props} />
+}
+
+/** Dueffe: a squircle (27%) or a 22px gold banner with a slow sheen on wide boxes; gradients turn gold. */
+function DueffeSquircle(props: BlobProps) {
+  const gold = 'gradient' in props
+  const fill = gold ? 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 30%, #FFB800))' : props.color
+  const ref = useRef<HTMLDivElement>(null)
+  const size = useSize(ref)
+  const wide = size.w > 0 && Math.abs(size.w - size.h) >= 4
+  return (
+    <div ref={ref} aria-hidden className={gold ? 'df-sheen' : undefined} style={{
+      position: 'absolute', inset: 0, pointerEvents: 'none', borderRadius: wide ? 22 : '27%', overflow: 'hidden',
+      ...(props.stroke ? { border: `${props.stroke}px solid ${fill}` } : { background: fill }),
+    }} />
+  )
 }
 
 /** Nothing: a flat circle, or a thin ring; gradients turn into display ink. */
@@ -153,6 +169,8 @@ export const PX = 1 / 2.75
 export function BackdropBlobs(props: { colors: string[]; alpha: number }) {
   const nothing = useNothing()
   const metro = useMetro()
+  // Dueffe: three gold and amber nebulae drifting on the near-black page.
+  if (useDueffe()) return <div aria-hidden className="df-aurora" />
   // Nothing: a faint dot-matrix grid instead of the floating blobs.
   if (nothing) return <div aria-hidden className="dot-grid" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.9 }} />
   return metro ? null : <LivingBackdrop {...props} />

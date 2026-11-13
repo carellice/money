@@ -174,8 +174,9 @@ fun SettingsScreen(
 
             FormLabel("Stile")
             Segmented(
-                listOf("Classico", "Skeuo", "Modern UI", "Nothing"),
+                listOf("Classico", "Skeuo", "Modern UI", "Nothing", "Dueffe"),
                 when {
+                    settings.dueffe -> 4
                     settings.nothing -> 3
                     settings.metro -> 2
                     settings.skeuo -> 1

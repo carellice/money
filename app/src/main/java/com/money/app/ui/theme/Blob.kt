@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import com.money.app.ui.components.dotGrid
+import com.money.app.ui.components.aurora
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -81,11 +82,15 @@ class BlobShape(seed: Int, private val time: Float = 0f, amplitude: Float = 0.07
 /** Rounded "app icon" square that stands in for the organic outline in the skeuomorphic style. */
 val IconShape = RoundedCornerShape(26)
 
+/** Dueffe app-icon squircle: corners at 27% of the side. */
+val DueffeIconShape = RoundedCornerShape(27)
+
 /** [BlobShape] or, in the skeuomorphic style, [IconShape]. */
 @Composable
 fun blobShape(seed: Int): Shape = when {
     LocalMetro.current -> RectangleShape
     LocalNothing.current -> androidx.compose.foundation.shape.CircleShape
+    LocalDueffe.current -> DueffeIconShape
     LocalSkeuo.current -> IconShape
     else -> remember(seed) { BlobShape(seed) }
 }
@@ -112,6 +117,13 @@ fun Modifier.blob(
         val r = size.minDimension / 2
         if (stroke == null) drawCircle(color, r)
         else stroke.toPx().let { w -> drawCircle(color, r - w / 2, style = Stroke(w)) }
+    }
+    // Dueffe: a squircle (27%) on wide or square boxes alike, filled or outlined.
+    if (LocalDueffe.current) return drawBehind {
+        val wide = kotlin.math.abs(size.width - size.height) > 4.dp.toPx()
+        val cr = androidx.compose.ui.geometry.CornerRadius(if (wide) 22.dp.toPx() else size.minDimension * 0.27f)
+        if (stroke == null) drawRoundRect(color, cornerRadius = cr)
+        else stroke.toPx().let { w -> drawRoundRect(color, Offset(w / 2, w / 2), Size(size.width - w, size.height - w), cr, style = Stroke(w)) }
     }
     // Modern UI: a flat, solid square tile, or a square outline with [stroke].
     if (LocalMetro.current) {
@@ -152,6 +164,17 @@ fun Modifier.blob(
         val accent = Ui.colors.accent
         return drawBehind { drawRoundRect(accent, cornerRadius = androidx.compose.ui.geometry.CornerRadius(16.dp.toPx())) }
     }
+    // Dueffe: the hero shapes become a gold banner (radius 22) with a slow sheen.
+    if (LocalDueffe.current) {
+        val accent = Ui.colors.accent
+        val time = LocalBlobTime.current
+        return drawBehind {
+            val cr = androidx.compose.ui.geometry.CornerRadius(if (kotlin.math.abs(size.width - size.height) > 4.dp.toPx()) 22.dp.toPx() else size.minDimension * 0.27f)
+            drawRoundRect(com.money.app.ui.components.goldBrush(accent), cornerRadius = cr)
+            val x = ((time.value / 6f) % 1f) * size.width * 2f - size.width * 0.5f
+            drawRoundRect(Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.18f), Color.Transparent), Offset(x - size.width * 0.3f, 0f), Offset(x + size.width * 0.3f, size.height)), cornerRadius = cr)
+        }
+    }
     // Modern UI has no gradients: every gradient blob here starts from the accent, so it turns into a flat accent tile.
     if (LocalMetro.current) {
         val accent = Ui.colors.accent
@@ -179,6 +202,7 @@ fun Modifier.blob(
 fun Modifier.backdropBlobs(colors: List<Color>, alpha: Float = 0.16f): Modifier {
     // The skeuomorphic pages already sit on linen.
     // Nothing: a faint dot-matrix grid instead of the floating blobs.
+    if (LocalDueffe.current) return aurora()
     if (LocalNothing.current) return dotGrid(Ui.colors.line, step = 18.dp)
     if (LocalSkeuo.current || LocalMetro.current) return this
     val time = LocalBlobTime.current

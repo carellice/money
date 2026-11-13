@@ -6,7 +6,7 @@ import type { Month } from '../../../shared/date.ts'
 import { appIcons, uiIcons, type UiIcon } from '../lib/icons.gen.ts'
 import { findBrand, isLightBrand } from '../lib/brands.ts'
 import { hashCode } from '../lib/blob.ts'
-import { getStore, updateSettings, useMetro, useNothing, useStore } from '../lib/store.ts'
+import { getStore, updateSettings, useDueffe, useMetro, useNothing, useStore } from '../lib/store.ts'
 import { accentShown, DarkInk, Ink, tile } from '../lib/theme.ts'
 import { BlobBox, useBlobClip } from './Blob.tsx'
 import { fastOutSlowIn, haptic, spring, tween } from './motion.ts'
@@ -258,7 +258,23 @@ export function Pill({ text, selected, onClick, color = 'var(--accent)', icon, a
 }) {
   const metro = useMetro()
   const nothing = useNothing()
+  const dueffe = useDueffe()
   const fg = selected ? Ink : 'var(--ink)'
+  if (dueffe) {
+    // Dueffe chip: Surface pill with a line border, solid gold when selected.
+    return (
+      <Bouncy onClick={onClick} className="row" style={{
+        borderRadius: 999, background: selected ? color : 'var(--surface)', padding: '8px 14px',
+        border: `1px solid ${selected ? color : 'var(--line)'}`,
+        transition: 'background-color 0.26s, color 0.26s, border-color 0.26s', color: fg, flexShrink: 0, ...style,
+      }}>
+        {leading && <span style={{ marginRight: 8, display: 'flex' }}>{leading}</span>}
+        {icon && <Icon name={icon} size={16} style={{ marginRight: 6 }} />}
+        {appIcon && <AppIcon name={appIcon} size={16} style={{ marginRight: 6 }} />}
+        <span className="t-label" style={{ whiteSpace: 'nowrap' }}>{text}</span>
+      </Bouncy>
+    )
+  }
   if (nothing) {
     return (
       <Bouncy onClick={onClick} className="row" style={{
@@ -379,6 +395,17 @@ export function SoftCard({ children, color = 'var(--surface)', padding = 20, sty
   className?: string
 }) {
   useMetro()
+  if (useDueffe()) {
+    // Dueffe card: gradient Surface High to Surface, 1px gold line, radius 26; a colour keeps a solid fill for its dark Ink.
+    const plain = color === 'var(--surface)'
+    const background = plain ? 'linear-gradient(180deg, var(--surfaceHigh), var(--surface))'
+      : `linear-gradient(180deg, ${color}, color-mix(in srgb, ${color} 88%, #000))`
+    return (
+      <div className={'col ' + (className ?? '')} style={{ borderRadius: 26, background, border: `1px solid ${plain ? 'var(--line)' : 'transparent'}`, padding, ...style } as CSSProperties}>
+        {children}
+      </div>
+    )
+  }
   if (useNothing()) {
     // Colour is an event, not a fill: a coloured card stays a flat surface with a signal dot, and its Ink text turns to ink.
     const plain = color === 'var(--surface)'
@@ -435,6 +462,15 @@ export function RoundIconButton({ icon, onClick, background = 'var(--surfaceHigh
   style?: CSSProperties
 }) {
   const metro = useMetro()
+  if (useDueffe()) {
+    const custom = background !== 'var(--surfaceHigh)'
+    return (
+      <Bouncy onClick={onClick} className="center" aria-label={label}
+        style={{ width: size, height: size, borderRadius: '50%', background: custom ? background : 'var(--surface)', border: custom ? 0 : '1px solid var(--line)', flexShrink: 0, ...style }}>
+        <Icon name={icon} size={size * 0.5} color={tint} />
+      </Bouncy>
+    )
+  }
   if (useNothing()) {
     const custom = background !== 'var(--surfaceHigh)'
     return (
@@ -521,6 +557,16 @@ export function PrimaryButton({ text, onClick, enabled = true, color = 'var(--ac
 }) {
   const fg = enabled ? Ink : 'var(--inkFaint)'
   const metro = useMetro()
+  if (useDueffe()) {
+    // Dueffe main button: gold gradient at 135°, radius 18; disabled is a Surface key with a strong line.
+    return (
+      <Bouncy onClick={onClick} disabled={!enabled} pressedScale={0.95} className="center"
+        style={{ width: '100%', height: 56, borderRadius: 18, background: enabled ? `linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 30%, #FFB800))` : 'var(--surface)', border: enabled ? 0 : '1px solid #FFD84D57', color: fg, flexShrink: 0, ...style }}>
+        {icon && <Icon name={icon} size={20} style={{ marginRight: 8 }} />}
+        <span className="t-label" style={{ fontSize: 16 }}>{text}</span>
+      </Bouncy>
+    )
+  }
   if (useNothing()) {
     // Pill in display ink, Space Mono caps; a coloured [color] (expense, income) keeps its signal.
     const neutral = color === 'var(--accent)'

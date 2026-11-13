@@ -80,13 +80,14 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             val settings by container.settings.settings.collectAsStateWithLifecycle(initial)
-            val dark = isDarkTheme(settings.theme)
+            // Dueffe is dark only.
+            val dark = settings.dueffe || isDarkTheme(settings.theme)
             LaunchedEffect(dark) {
                 val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT)
                 else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
-            MoneyTheme(dark, settings.accent, settings.skeuo && !settings.metro && !settings.nothing, settings.metro && !settings.nothing, settings.nothing) {
+            MoneyTheme(dark, settings.accent, settings.skeuo && !settings.metro && !settings.nothing, settings.metro && !settings.nothing, settings.nothing && !settings.dueffe, settings.dueffe) {
                 Box(Modifier.fillMaxSize()) {
                     CompositionLocalProvider(LocalHideAmounts provides settings.hideAmounts, LocalHideBalances provides settings.hideBalances, LocalGuide provides guide) {
                         MoneyRoot(deepLink, onDeepLinkHandled = { deepLink = null })

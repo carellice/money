@@ -410,9 +410,11 @@ private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> U
                 .fillMaxWidth()
                 .height(80.dp)
                 .tourTarget("tabs")
-                .shadow(24.dp, CircleShape, ambientColor = Ink, spotColor = Ink)
-                .clip(CircleShape)
-                .background(c.surface),
+                .then(
+                    // Dueffe: floating bar, radius 28, Nav colour with a gold hairline instead of a shadow.
+                    if (com.money.app.ui.theme.LocalDueffe.current) Modifier.clip(RoundedCornerShape(28.dp)).background(com.money.app.ui.theme.DueffeNav).border(1.dp, c.line, RoundedCornerShape(28.dp))
+                    else Modifier.shadow(24.dp, CircleShape, ambientColor = Ink, spotColor = Ink).clip(CircleShape).background(c.surface),
+                ),
         ) {
             // Tabs share what the side padding and the room for the add button leave.
             val slot = (maxWidth - 20.dp - 80.dp) / 4
@@ -683,6 +685,8 @@ private fun LiquidCapsule(index: Int, centers: List<Float>, capsuleWidth: Dp, la
     val spec = remember(index) { BlobSpec(11 + max(index, 0), amplitude = 0.06f) }
     val blobPath = remember { Path() }
     val time = LocalBlobTime.current
+    // Dueffe keeps the stretching capsule and never turns it into a blob.
+    val capsuleOnly = com.money.app.ui.theme.LocalDueffe.current
     LaunchedEffect(index, centers, half) {
         if (index < 0) return@LaunchedEffect
         val center = centers[index]
@@ -716,14 +720,14 @@ private fun LiquidCapsule(index: Int, centers: List<Float>, capsuleWidth: Dp, la
             // Stretched it gets a little thinner, squeezed a little taller, like a drop of liquid.
             val height = (restHeight * (restWidth / width).pow(0.25f)).coerceIn(restHeight * 0.82f, restHeight * 1.08f)
             val center = (left.value + right.value) / 2
-            val o = organic.value
+            val o = if (capsuleOnly) 0f else organic.value
             // The capsule shrinks inside the blob while the blob grows over it, both following the
             // capsule as it is right now: the shape changes without jumping anywhere.
             if (o < 0.99f) {
                 val k = 1f - 0.4f * o
                 val w = width * k
                 val h = height * k
-                drawRoundRect(color, Offset(center - w / 2, size.height / 2 - h / 2), Size(w, h), CornerRadius(min(w, h) / 2))
+                drawRoundRect(color, Offset(center - w / 2, size.height / 2 - h / 2), Size(w, h), CornerRadius(if (capsuleOnly) 22.dp.toPx() else min(w, h) / 2))
             }
             if (o > 0.01f) {
                 // Bigger than the capsule: a blob is round, and the label must stay inside it.

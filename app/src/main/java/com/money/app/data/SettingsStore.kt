@@ -31,6 +31,8 @@ data class Settings(
     val metro: Boolean = false,
     /** Nothing look (monochrome, dot-matrix, Space Mono labels), wins over [metro] and [skeuo]. */
     val nothing: Boolean = false,
+    /** Dueffe look (near-black, warm surfaces, gold accent, dark only), wins over every other style. */
+    val dueffe: Boolean = false,
 )
 
 private val Context.dataStore by preferencesDataStore("settings")
@@ -48,6 +50,7 @@ class SettingsStore(private val context: Context) {
         val skeuo = booleanPreferencesKey("skeuo")
         val metro = booleanPreferencesKey("metro")
         val nothing = booleanPreferencesKey("nothing")
+        val dueffe = booleanPreferencesKey("dueffe")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
@@ -62,11 +65,12 @@ class SettingsStore(private val context: Context) {
     suspend fun setRecurringSort(sort: RecurringSort) = context.dataStore.edit { it[Keys.recurringSort] = sort.name }
     suspend fun setHideAmounts(hidden: Boolean) = context.dataStore.edit { it[Keys.hideAmounts] = hidden }
     suspend fun setHideBalances(hidden: Boolean) = context.dataStore.edit { it[Keys.hideBalances] = hidden }
-    /** 0 classic, 1 skeuomorphic, 2 Modern UI, 3 Nothing. */
+    /** 0 classic, 1 skeuomorphic, 2 Modern UI, 3 Nothing, 4 Dueffe. */
     suspend fun setStyle(style: Int) = context.dataStore.edit {
         it[Keys.skeuo] = style == 1
         it[Keys.metro] = style == 2
         it[Keys.nothing] = style == 3
+        it[Keys.dueffe] = style == 4
     }
 
     private fun Preferences.toSettings() = Settings(
@@ -81,5 +85,6 @@ class SettingsStore(private val context: Context) {
         skeuo = this[Keys.skeuo] ?: false,
         metro = this[Keys.metro] ?: false,
         nothing = this[Keys.nothing] ?: false,
+        dueffe = this[Keys.dueffe] ?: false,
     )
 }

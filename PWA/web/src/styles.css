@@ -1,6 +1,7 @@
 @font-face { font-family: 'Space Grotesk'; src: url('/space_grotesk.ttf') format('truetype'); font-weight: 300 700; font-display: swap; }
 @font-face { font-family: 'Space Mono'; src: url('/space_mono.ttf') format('truetype'); font-weight: 400; font-display: swap; }
 @font-face { font-family: 'Space Mono'; src: url('/space_mono_bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Inter'; src: url('/inter.ttf') format('truetype'); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: 'Doto'; src: url('/doto.ttf') format('truetype'); font-weight: 100 900; font-display: swap; }
 
 @font-face {
@@ -193,3 +194,23 @@ html.nothing .text-button { font-family: 'Space Mono', monospace; font-weight: 4
 html.nothing .toast { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; font-family: 'Space Mono', monospace; text-transform: uppercase; font-size: 12.5px; letter-spacing: 0.06em; }
 html.nothing .snackbar { border-radius: 8px; box-shadow: none; }
 html.nothing *, html.nothing *::before, html.nothing *::after { box-shadow: none !important; }
+
+/* --- Dueffe style: html.dueffe, set by applyTheme ------------------------------------------- */
+html.dueffe body, html.dueffe input, html.dueffe textarea, html.dueffe button { font-family: Inter, system-ui, sans-serif; font-variation-settings: normal; }
+html.dueffe .t-hero, html.dueffe .t-display, html.dueffe .t-title, html.dueffe .t-titleSmall, html.dueffe .t-amount { font-family: 'Bricolage', Inter, system-ui, sans-serif; }
+html.dueffe .t-display { font-weight: 700; letter-spacing: -0.02em; }
+html.dueffe .t-label { font-weight: 600; }
+html.dueffe .t-caption { font-weight: 500; letter-spacing: 0.04em; }
+html.dueffe .navrow { border-radius: 28px !important; background: #080705F5 !important; border: 1px solid var(--line); box-shadow: none !important; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+html.dueffe .dialog { background: #0B0A08; border: 1px solid var(--line); border-radius: 26px; }
+html.dueffe .toast { background: #242016; color: var(--ink); border: 1px solid #FFD84D57; border-radius: 18px; }
+html.dueffe .text-button { color: var(--accent); }
+html.dueffe *, html.dueffe *::before, html.dueffe *::after { box-shadow: none !important; }
+.df-aurora { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.df-aurora::before, .df-aurora::after { content: ''; position: absolute; border-radius: 50%; filter: blur(10px); animation: df-drift 32s ease-in-out infinite alternate; }
+.df-aurora::before { width: 90vw; height: 90vw; left: -30vw; top: -25vw; background: radial-gradient(circle, #FFD84D2E, transparent 70%); }
+.df-aurora::after { width: 80vw; height: 80vw; right: -30vw; top: 30vh; background: radial-gradient(circle, #FFB8001F, transparent 70%); animation-delay: -16s; }
+@keyframes df-drift { from { transform: translate(0, 0) scale(1); } to { transform: translate(8vw, 6vh) scale(1.12); } }
+.df-sheen::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, #FFFFFF2E 50%, transparent 65%); background-size: 250% 100%; animation: df-sheen 6s linear infinite; }
+@keyframes df-sheen { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .df-aurora::before, .df-aurora::after, .df-sheen::after { animation: none; } }

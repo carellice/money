@@ -386,6 +386,7 @@ fun Pill(
     icon: ImageVector? = null,
     leading: (@Composable () -> Unit)? = null,
 ) {
+    if (com.money.app.ui.theme.LocalDueffe.current) return PillDueffe(text, selected, onClick, modifier, color, icon, leading)
     if (com.money.app.ui.theme.LocalNothing.current) return PillNothing(text, selected, onClick, modifier, icon, leading)
     if (LocalMetro.current) return PillMetro(text, selected, onClick, modifier, color, icon, leading)
     if (LocalSkeuo.current) return PillSkeuo(text = text, selected = selected, onClick = onClick, modifier = modifier, color = color, icon = icon, leading = leading)
@@ -546,6 +547,7 @@ fun SoftCard(
     padding: Dp = 20.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    if (com.money.app.ui.theme.LocalDueffe.current) return SoftCardDueffe(modifier, color, padding, content)
     if (com.money.app.ui.theme.LocalNothing.current) return SoftCardNothing(modifier, color, padding, content)
     if (LocalSkeuo.current) return SoftCardSkeuo(modifier = modifier, color = color, padding = padding, content = content)
     Column(
@@ -634,6 +636,7 @@ fun RoundIconButton(
     size: Dp = 44.dp,
     contentDescription: String? = null,
 ) {
+    if (com.money.app.ui.theme.LocalDueffe.current) return RoundIconButtonDueffe(icon, onClick, modifier, background, tint, size, contentDescription)
     if (com.money.app.ui.theme.LocalNothing.current) return RoundIconButtonNothing(icon, onClick, modifier, background, tint, size, contentDescription)
     if (LocalMetro.current) return RoundIconButtonMetro(icon, onClick, modifier, background, tint, size, contentDescription)
     if (LocalSkeuo.current) return RoundIconButtonSkeuo(icon = icon, onClick = onClick, modifier = modifier, background = background, tint = tint, size = size, contentDescription = contentDescription)
@@ -755,6 +758,7 @@ fun PrimaryButton(
     color: Color = Ui.colors.accent,
     icon: ImageVector? = null,
 ) {
+    if (com.money.app.ui.theme.LocalDueffe.current) return PrimaryButtonDueffe(text, onClick, modifier, enabled, color, icon)
     if (com.money.app.ui.theme.LocalNothing.current) return PrimaryButtonNothing(text, onClick, modifier, enabled, color, icon)
     if (LocalMetro.current) return PrimaryButtonMetro(text, onClick, modifier, enabled, color, icon)
     if (LocalSkeuo.current) return PrimaryButtonSkeuo(text = text, onClick = onClick, modifier = modifier, enabled = enabled, color = color, icon = icon)

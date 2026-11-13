@@ -51,8 +51,8 @@ export function App() {
   const onboarding = !settings.onboarded
   const hiddenAt = useRef(0)
 
-  setMetro(settings.metro && !settings.nothing)
-  useEffect(() => applyTheme(themeColors(dark, settings.accent, settings.metro && !settings.nothing, settings.nothing)), [dark, settings.accent, settings.metro, settings.nothing])
+  setMetro(settings.metro && !settings.nothing && !settings.dueffe)
+  useEffect(() => applyTheme(themeColors(dark, settings.accent, settings.metro && !settings.nothing && !settings.dueffe, settings.nothing && !settings.dueffe, settings.dueffe)), [dark, settings.accent, settings.metro, settings.nothing, settings.dueffe])
 
   useEffect(() => {
     const check = () => api<{ loggedIn: boolean; username: string | null }>('/api/session')
@@ -260,10 +260,10 @@ function BottomBar({ route }: { route: Route }) {
   return (
     <div className="center nav-pad" style={{ position: 'relative' }}>
       <div className="bottombar" style={{ position: 'relative', width: '100%', padding: '12px 16px' }}>
-        <div ref={rowRef} className="row" style={{
+        <div ref={rowRef} style={{
           position: 'relative', height: 80, borderRadius: 999, background: 'var(--surface)', padding: '0 10px',
           boxShadow: '0 12px 28px rgba(21,18,31,0.22), 0 2px 8px rgba(21,18,31,0.12)',
-        }}>
+        }} className="row navrow">
           {tabs.map((t, i) => (
             <TabSlot key={t.route} gap={i === 2} slotRef={slotRefs[i]}>
               <TabItem tab={t} selected={route === t.route} />

@@ -11,6 +11,7 @@ export type MoneyColors = {
   isDark: boolean
   metro?: boolean
   nothing?: boolean
+  dueffe?: boolean
   bg: string
   surface: string
   surfaceHigh: string
@@ -132,6 +133,24 @@ const NothingLight: MoneyColors = {
   accentText: '#000000',
 }
 
+// Dueffe palette: dark only. Near-black page, warm surfaces, ivory text and one gold accent.
+const Dueffe: MoneyColors = {
+  isDark: true,
+  bg: '#050505',
+  surface: '#11100D',
+  surfaceHigh: '#1A1711',
+  ink: '#FFFAF0',
+  inkSoft: '#B8AA8D',
+  inkFaint: '#7D735F',
+  line: '#FFDC8029',
+  income: '#A8F0B0',
+  expense: '#FF9B85',
+  accent: '#FFD84D',
+  incomeText: '#A8F0B0',
+  expenseText: '#FF9B85',
+  accentText: '#FFD84D',
+}
+
 /** The default lilac stands in for Windows Phone cyan in the Modern UI style. */
 export const METRO_CYAN = 0xff1ba1e2
 
@@ -220,7 +239,9 @@ export function accentShown(c: number): number {
   return c === Palette.LILAC ? METRO_CYAN : solidArgb(c)
 }
 
-export function themeColors(dark: boolean, accent: number, metro = false, nothing = false): MoneyColors {
+export function themeColors(dark: boolean, accent: number, metro = false, nothing = false, dueffe = false): MoneyColors {
+  // Dueffe has one accent, gold, and is dark only.
+  if (dueffe) return { ...Dueffe, dueffe: true }
   // Nothing is monochrome: the chosen colour does not tint it.
   if (nothing) return { ...(dark ? NothingDark : NothingLight), nothing: true }
   const base = metro ? (dark ? MetroDark : MetroLight) : dark ? Dark : Light
@@ -239,10 +260,11 @@ export function applyTheme(colors: MoneyColors) {
   metroOn = !!colors.metro
   document.documentElement.classList.toggle('metro', metroOn)
   document.documentElement.classList.toggle('nothing', !!colors.nothing)
+  document.documentElement.classList.toggle('dueffe', !!colors.dueffe)
   const root = document.documentElement.style
   // Pastel category icons need more ink on the light paper.
   root.setProperty('--iconMix', colors.isDark ? '100%' : '65%')
-  root.setProperty('--Ink', colors.nothing ? colors.bg : metroOn ? '#FFFFFF' : DarkInk)
+  root.setProperty('--Ink', colors.dueffe ? '#161006' : colors.nothing ? colors.bg : metroOn ? '#FFFFFF' : DarkInk)
   root.setProperty('--metroBar', colors.isDark ? '#1F1F1F' : '#DDDDDD')
   for (const [key, value] of Object.entries(colors)) {
     if (typeof value === 'string') root.setProperty(`--${key}`, value)
