@@ -5,7 +5,7 @@ import { Dates, Money, percent } from '../../../shared/format.ts'
 import { argb, Palette, type Recurring, type TxType } from '../../../shared/model.ts'
 import { buildReport, type MonthReport } from '../../../shared/report.ts'
 import { homeReselect, navigate, switchTab } from '../lib/nav.ts'
-import { setMonth, useMetro, useStore } from '../lib/store.ts'
+import { setMonth, useMetro, useNothing, useStore } from '../lib/store.ts'
 import { alpha, Ink } from '../lib/theme.ts'
 import { BackdropBlobs, BlobBox, BlobLayer } from '../components/Blob.tsx'
 import {
@@ -182,8 +182,51 @@ function MetroTile({ label, cents, color, icon, onClick }: { label: string; cent
   )
 }
 
+/** Nothing hero: the month balance in big dot-matrix figures over a faint dot grid, then two stat cards to add money in or out. */
+function HeroNothing({ r, onAdd }: { r: MonthReport; onAdd: (type: TxType) => void }) {
+  const hidden = useStore((s) => s.settings.hideAmounts)
+  const negative = r.balance < 0
+  return (
+    <div className="col" style={{ gap: 8, paddingTop: 4 }}>
+      <Bouncy onClick={toggleHideAmounts} className="col dot-grid"
+        style={{ borderRadius: 16, backgroundColor: 'var(--surface)', backgroundSize: '14px 14px', padding: 20 }}>
+        <div className="row">
+          <span className="t-label flex1" style={{ color: 'var(--inkSoft)', letterSpacing: '0.1em' }}>SALDO DEL MESE</span>
+          <Icon name={hidden ? 'visibility_off' : 'visibility'} size={18} color="var(--inkSoft)" label={hidden ? 'Mostra importi' : 'Nascondi importi'} />
+        </div>
+        <AnimatedAmount cents={r.balance} className="t-hero" color={negative ? 'var(--expense)' : 'var(--ink)'} decimalsScale={0.45}
+          style={{ fontSize: 60, lineHeight: '64px', marginTop: 18 }} />
+        <span className="t-label" style={{ marginTop: 10, color: negative ? 'var(--expenseText)' : 'var(--inkSoft)' }}>
+          {r.savingsRate == null ? 'NESSUNA ENTRATA' : r.balance >= 0 ? `RISPARMI ${percent(r.savingsRate)}` : 'IN ROSSO'}
+        </span>
+      </Bouncy>
+      <div className="row" style={{ gap: 8 }}>
+        <NothingStat label="ENTRATE" cents={r.income} color="var(--incomeText)" onClick={() => onAdd('INCOME')} />
+        <NothingStat label="USCITE" cents={r.expense} color="var(--expenseText)" onClick={() => onAdd('EXPENSE')} />
+      </div>
+    </div>
+  )
+}
+
+function NothingStat({ label, cents, color, onClick }: { label: string; cents: number; color: string; onClick: () => void }) {
+  return (
+    <Bouncy onClick={onClick} className="col flex1" style={{ borderRadius: 16, background: 'var(--surface)', padding: 16 }}>
+      <div className="row">
+        <span className="t-caption flex1" style={{ color: 'var(--inkSoft)' }}>{label}</span>
+        <Icon name="add" size={18} color="var(--ink)" label={`Aggiungi ${label.toLowerCase()}`} />
+      </div>
+      <Masked className="t-amount" color={color}>
+        <span className="t-amount" style={{ color, fontSize: 19.8, marginTop: 10, whiteSpace: 'nowrap' }}>{Money.format(cents)}</span>
+      </Masked>
+    </Bouncy>
+  )
+}
+
 function Hero({ r, onAdd }: { r: MonthReport; onAdd: (type: TxType) => void }) {
-  if (useMetro()) return <HeroMetro r={r} onAdd={onAdd} />
+  const nothing = useNothing()
+  const metro = useMetro()
+  if (nothing) return <HeroNothing r={r} onAdd={onAdd} />
+  if (metro) return <HeroMetro r={r} onAdd={onAdd} />
   return <HeroBlob r={r} onAdd={onAdd} />
 }
 

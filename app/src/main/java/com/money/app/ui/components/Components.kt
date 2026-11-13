@@ -75,6 +75,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.em
 import coil.compose.AsyncImage
 import com.money.app.brand.Brands
 import com.money.app.domain.Dates
@@ -112,6 +113,7 @@ fun Modifier.bouncyClick(
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ): Modifier {
+    if (com.money.app.ui.theme.LocalNothing.current) return nothingPress(enabled, haptic, onLongClick, onClick)
     if (LocalMetro.current) return metroTilt(enabled, haptic, onLongClick, onClick)
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -148,6 +150,17 @@ fun CategoryBadge(
     seed: Int = icon.hashCode(),
     animated: Boolean = false,
 ) {
+    if (com.money.app.ui.theme.LocalNothing.current) return Box(
+        modifier.size(size).clip(com.money.app.ui.theme.RoundShape).background(Ui.colors.surfaceHigh),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(AppIcons[icon], contentDescription = null, tint = when {
+                color == Ui.colors.accent -> Ui.colors.ink
+                // Pastels need more ink on the light paper.
+                Ui.colors.isDark -> color
+                else -> androidx.compose.ui.graphics.lerp(color, Color.Black, 0.35f)
+            }, modifier = Modifier.size(size * 0.46f))
+    }
     Box(
         modifier
             .size(size)
@@ -373,6 +386,7 @@ fun Pill(
     icon: ImageVector? = null,
     leading: (@Composable () -> Unit)? = null,
 ) {
+    if (com.money.app.ui.theme.LocalNothing.current) return PillNothing(text, selected, onClick, modifier, icon, leading)
     if (LocalMetro.current) return PillMetro(text, selected, onClick, modifier, color, icon, leading)
     if (LocalSkeuo.current) return PillSkeuo(text = text, selected = selected, onClick = onClick, modifier = modifier, color = color, icon = icon, leading = leading)
     val c = Ui.colors
@@ -443,6 +457,7 @@ fun Segmented(
     modifier: Modifier = Modifier,
     colors: List<Color>? = null,
 ) {
+    if (com.money.app.ui.theme.LocalNothing.current) return SegmentedNothing(options, selected, onSelect, modifier)
     if (LocalMetro.current) return SegmentedMetro(options, selected, onSelect, modifier, colors)
     if (LocalSkeuo.current) return SegmentedSkeuo(options = options, selected = selected, onSelect = onSelect, modifier = modifier, colors = colors)
     val c = Ui.colors
@@ -531,6 +546,7 @@ fun SoftCard(
     padding: Dp = 20.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    if (com.money.app.ui.theme.LocalNothing.current) return SoftCardNothing(modifier, color, padding, content)
     if (LocalSkeuo.current) return SoftCardSkeuo(modifier = modifier, color = color, padding = padding, content = content)
     Column(
         modifier
@@ -566,6 +582,7 @@ fun SectionTitle(
     action: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
+    if (com.money.app.ui.theme.LocalNothing.current) return SectionTitleNothing(text, modifier, action, onAction)
     if (LocalMetro.current) return SectionTitleMetro(text, modifier, action, onAction)
     if (LocalSkeuo.current) return SectionTitleSkeuo(text = text, modifier = modifier, action = action, onAction = onAction)
     Row(modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -617,6 +634,7 @@ fun RoundIconButton(
     size: Dp = 44.dp,
     contentDescription: String? = null,
 ) {
+    if (com.money.app.ui.theme.LocalNothing.current) return RoundIconButtonNothing(icon, onClick, modifier, background, tint, size, contentDescription)
     if (LocalMetro.current) return RoundIconButtonMetro(icon, onClick, modifier, background, tint, size, contentDescription)
     if (LocalSkeuo.current) return RoundIconButtonSkeuo(icon = icon, onClick = onClick, modifier = modifier, background = background, tint = tint, size = size, contentDescription = contentDescription)
     Box(
@@ -673,6 +691,7 @@ fun TopBar(
     modifier: Modifier = Modifier,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
+    if (com.money.app.ui.theme.LocalNothing.current) return TopBarNothing(title, onBack, modifier, actions)
     if (LocalMetro.current) return TopBarMetro(title, onBack, modifier, actions)
     if (LocalSkeuo.current) return TopBarSkeuo(title = title, onBack = onBack, modifier = modifier, actions = actions)
     Row(
@@ -736,6 +755,7 @@ fun PrimaryButton(
     color: Color = Ui.colors.accent,
     icon: ImageVector? = null,
 ) {
+    if (com.money.app.ui.theme.LocalNothing.current) return PrimaryButtonNothing(text, onClick, modifier, enabled, color, icon)
     if (LocalMetro.current) return PrimaryButtonMetro(text, onClick, modifier, enabled, color, icon)
     if (LocalSkeuo.current) return PrimaryButtonSkeuo(text = text, onClick = onClick, modifier = modifier, enabled = enabled, color = color, icon = icon)
     val bg by animateColorAsState(if (enabled) color else Ui.colors.surfaceHigh, label = "btnBg")
@@ -806,7 +826,7 @@ fun MonthSwitcher(
             label = "month",
             modifier = Modifier.width(150.dp),
         ) {
-            Text(if (LocalMetro.current) Dates.monthYear(it).lowercase() else Dates.monthYear(it), style = style, color = Ui.colors.ink, textAlign = TextAlign.Center, maxLines = 1, softWrap = false, modifier = Modifier.fillMaxWidth())
+            Text(if (LocalMetro.current) Dates.monthYear(it).lowercase() else if (com.money.app.ui.theme.LocalNothing.current) Dates.monthYear(it).uppercase() else Dates.monthYear(it), style = if (com.money.app.ui.theme.LocalNothing.current) Ui.type.label.copy(fontSize = 14.sp, letterSpacing = 0.1.em) else style, color = Ui.colors.ink, textAlign = TextAlign.Center, maxLines = 1, softWrap = false, modifier = Modifier.fillMaxWidth())
         }
         RoundIconButton(Icons.Rounded.ChevronRight, { onChange(month.plusMonths(1)) }, size = 36.dp, contentDescription = "Mese successivo")
     }
@@ -843,6 +863,7 @@ fun EmptyState(
     icon: String = "savings",
     modifier: Modifier = Modifier,
 ) {
+    if (com.money.app.ui.theme.LocalNothing.current) return EmptyStateNothing(title, text, modifier)
     Column(modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         CategoryBadge(icon, Ui.colors.accent, size = 96.dp, animated = true)
         Spacer(Modifier.height(16.dp))
@@ -861,6 +882,7 @@ fun SoftProgress(
     height: Dp = 10.dp,
     track: Color = Ui.colors.surfaceHigh,
 ) {
+    if (com.money.app.ui.theme.LocalNothing.current) return SegmentedBarNothing(progress, color, modifier, height)
     if (LocalSkeuo.current) return SoftProgressSkeuo(progress = progress, color = color, modifier = modifier, height = height, track = track)
     val anim = remember { Animatable(0f) }
     LaunchedEffect(progress) {

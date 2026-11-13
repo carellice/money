@@ -208,6 +208,7 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
     }
 
     val metro = LocalMetro.current
+    val nothing = com.money.app.ui.theme.LocalNothing.current
     Box(Modifier.fillMaxSize().linen(c.isDark)) {
         CompositionLocalProvider(LocalMembers provides membersById, LocalPayments provides payments, LocalAccounts provides accounts) {
             NavHost(
@@ -216,22 +217,26 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
                 // Between tabs the page slides the way the bar's capsule goes.
                 enterTransition = {
                     val dir = tabDirection(initialState.destination.route, targetState.destination.route)
-                    if (metro) metroEnter(if (dir != 0) dir else 1)
+                    if (nothing) fadeIn(tween(250, easing = com.money.app.ui.components.NothingEase))
+                    else if (metro) metroEnter(if (dir != 0) dir else 1)
                     else if (dir != 0) tabEnter(dir) else fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 0.97f)
                 },
                 exitTransition = {
                     val dir = tabDirection(initialState.destination.route, targetState.destination.route)
-                    if (metro) metroExit(if (dir != 0) dir else 1)
+                    if (nothing) fadeOut(tween(150, easing = com.money.app.ui.components.NothingEase))
+                    else if (metro) metroExit(if (dir != 0) dir else 1)
                     else if (dir != 0) tabExit(dir) else fadeOut(tween(180))
                 },
                 popEnterTransition = {
                     val dir = tabDirection(initialState.destination.route, targetState.destination.route)
-                    if (metro) metroEnter(if (dir != 0) dir else -1)
+                    if (nothing) fadeIn(tween(250, easing = com.money.app.ui.components.NothingEase))
+                    else if (metro) metroEnter(if (dir != 0) dir else -1)
                     else if (dir != 0) tabEnter(dir) else fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 1.03f)
                 },
                 popExitTransition = {
                     val dir = tabDirection(initialState.destination.route, targetState.destination.route)
-                    if (metro) metroExit(if (dir != 0) dir else -1)
+                    if (nothing) fadeOut(tween(150, easing = com.money.app.ui.components.NothingEase))
+                    else if (metro) metroExit(if (dir != 0) dir else -1)
                     else if (dir != 0) tabExit(dir) else fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.97f)
                 },
             ) {
@@ -387,6 +392,7 @@ private fun metroExit(dir: Int): ExitTransition =
 
 @Composable
 private fun BottomBar(route: String?, onSelect: (String) -> Unit, onAdd: () -> Unit) {
+    if (com.money.app.ui.theme.LocalNothing.current) return BottomBarNothing(route = route, onSelect = onSelect, onAdd = onAdd)
     if (LocalMetro.current) return BottomBarMetro(route = route, onSelect = onSelect, onAdd = onAdd)
     if (LocalSkeuo.current) return BottomBarSkeuo(route = route, onSelect = onSelect, onAdd = onAdd)
     val c = Ui.colors
@@ -471,6 +477,46 @@ private fun BottomBarSkeuo(route: String?, onSelect: (String) -> Unit, onAdd: ()
             }
         }
         AddButton(onAdd)
+    }
+}
+
+/** Nothing bar: flat strip under a hairline, mono caps labels, a red dot on the open tab and a round ink add key. */
+@Composable
+private fun BottomBarNothing(route: String?, onSelect: (String) -> Unit, onAdd: () -> Unit) {
+    val c = Ui.colors
+    val selected = tabs.indexOfFirst { it.route == route }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .tourTarget("tabs")
+            .background(c.bg)
+            .drawBehind { drawLine(c.line, Offset.Zero, Offset(size.width, 0f), 1.dp.toPx()) }
+            .navigationBarsPadding()
+            .height(72.dp)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        tabs.forEachIndexed { i, tab ->
+            if (i == 2) Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.size(52.dp).tourTarget("add").bouncyClick(onClick = onAdd).clip(RoundShape).background(c.accent),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Rounded.Add, "Aggiungi", tint = Ink, modifier = Modifier.size(26.dp)) }
+            }
+            val on = i == selected
+            val fg by animateColorAsState(if (on) c.ink else c.inkFaint, tween(200), label = "tabFg")
+            Column(
+                Modifier.weight(1f).fillMaxHeight().bouncyClick { onSelect(tab.route) },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(tab.icon, tab.label, tint = fg, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.height(5.dp))
+                Text(tab.label.uppercase(), style = Ui.type.caption.copy(fontSize = 10.sp), color = fg, maxLines = 1)
+                Spacer(Modifier.height(4.dp))
+                Box(Modifier.size(4.dp).clip(RoundShape).background(if (on) c.expense else Color.Transparent))
+            }
+        }
     }
 }
 

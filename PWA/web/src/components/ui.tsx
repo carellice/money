@@ -6,10 +6,15 @@ import type { Month } from '../../../shared/date.ts'
 import { appIcons, uiIcons, type UiIcon } from '../lib/icons.gen.ts'
 import { findBrand, isLightBrand } from '../lib/brands.ts'
 import { hashCode } from '../lib/blob.ts'
-import { getStore, updateSettings, useMetro, useStore } from '../lib/store.ts'
+import { getStore, updateSettings, useMetro, useNothing, useStore } from '../lib/store.ts'
 import { accentShown, DarkInk, Ink, tile } from '../lib/theme.ts'
 import { BlobBox, useBlobClip } from './Blob.tsx'
 import { fastOutSlowIn, haptic, spring, tween } from './motion.ts'
+
+/** The one easing of the Nothing style: subtle ease-out, no spring. */
+export const NothingEase: [number, number, number, number] = [0.25, 0.1, 0.25, 1]
+
+const nothingBorder = '1px solid color-mix(in srgb, var(--inkFaint) 60%, transparent)'
 
 // --- icons -----------------------------------------------------------------------------------
 
@@ -50,6 +55,8 @@ export function Bouncy({ onClick, onLongClick, pressedScale = 0.92, haptics = tr
   const timer = useRef<number | null>(null)
   const longFired = useRef(false)
   const metro = useMetro()
+  // Nothing: the control dims for a moment, like a mechanical key; no bounce.
+  const nothing = useNothing()
   const [tilt, setTilt] = useState({ x: 0, y: 0 })
   const clear = () => {
     if (timer.current != null) window.clearTimeout(timer.current)
@@ -62,8 +69,8 @@ export function Bouncy({ onClick, onLongClick, pressedScale = 0.92, haptics = tr
       tabIndex={disabled ? -1 : 0}
       aria-disabled={disabled}
       style={{ cursor: disabled ? 'default' : 'pointer', ...(metro ? { transformPerspective: 600 } : null), ...style }}
-      whileTap={disabled ? undefined : metro ? { scale: 0.96, rotateX: tilt.x, rotateY: tilt.y } : { scale: pressedScale }}
-      transition={metro ? tween(150) : spring(0.45, 500)}
+      whileTap={disabled ? undefined : nothing ? { opacity: 0.55 } : metro ? { scale: 0.96, rotateX: tilt.x, rotateY: tilt.y } : { scale: pressedScale }}
+      transition={nothing ? tween(120, NothingEase) : metro ? tween(150) : spring(0.45, 500)}
       onPointerDown={(e) => {
         if (metro) {
           // Windows Phone tilt: leans toward the finger, big tiles less than small buttons.
@@ -111,6 +118,14 @@ export function CategoryBadge({ icon, color, size = 44, seed, animated = false, 
   animated?: boolean
   style?: CSSProperties
 }) {
+  if (useNothing()) {
+    // Flat circle on the surface; the icon keeps the category colour, the one hint of colour in the list.
+    return (
+      <div className="center" style={{ width: size, height: size, borderRadius: '50%', background: 'var(--surfaceHigh)', flexShrink: 0, ...style }}>
+        <AppIcon name={icon} size={size * 0.46} color={color === 'var(--accent)' ? 'var(--ink)' : `color-mix(in srgb, ${color} var(--iconMix), black)`} />
+      </div>
+    )
+  }
   return (
     <BlobBox size={size} color={color} seed={seed ?? hashCode(icon)} amplitude={0.09} animated={animated} style={style}>
       <AppIcon name={icon} size={size * 0.46} color={Ink} />
@@ -242,7 +257,22 @@ export function Pill({ text, selected, onClick, color = 'var(--accent)', icon, a
   style?: CSSProperties
 }) {
   const metro = useMetro()
+  const nothing = useNothing()
   const fg = selected ? Ink : 'var(--ink)'
+  if (nothing) {
+    return (
+      <Bouncy onClick={onClick} className="row" style={{
+        borderRadius: 999, background: selected ? 'var(--accent)' : 'transparent', padding: '7px 14px',
+        border: selected ? '1px solid var(--accent)' : nothingBorder,
+        transition: 'background-color 0.2s, color 0.2s', color: fg, flexShrink: 0, ...style,
+      }}>
+        {leading && <span style={{ marginRight: 8, display: 'flex' }}>{leading}</span>}
+        {icon && <Icon name={icon} size={15} style={{ marginRight: 6 }} />}
+        {appIcon && <AppIcon name={appIcon} size={15} style={{ marginRight: 6 }} />}
+        <span className="t-label" style={{ whiteSpace: 'nowrap', textTransform: 'uppercase' }}>{text}</span>
+      </Bouncy>
+    )
+  }
   if (metro) {
     return (
       <Bouncy onClick={onClick} className="row" style={{
@@ -279,6 +309,25 @@ export function Segmented({ options, selected, onSelect, colors, style }: {
   style?: CSSProperties
 }) {
   const metro = useMetro()
+  if (useNothing()) {
+    // Framed pill; the chosen segment is inverted (display ink behind paper-coloured text).
+    return (
+      <div style={{ borderRadius: 999, border: nothingBorder, padding: 3, ...style }}>
+        <div style={{ position: 'relative', height: 38 }}>
+          <motion.div initial={false} animate={{ x: `${selected * 100}%` }} transition={tween(220, NothingEase)}
+            style={{ position: 'absolute', top: 0, left: 0, height: 38, width: `${100 / options.length}%`, borderRadius: 999, background: 'var(--accent)' }} />
+          <div className="row" style={{ position: 'relative', height: 38 }}>
+            {options.map((label, i) => (
+              <div key={label} className="center flex1 t-caption" role="button" onClick={() => onSelect(i)}
+                style={{ height: '100%', cursor: 'pointer', textTransform: 'uppercase', color: i === selected ? Ink : 'var(--inkSoft)', transition: 'color 0.2s', whiteSpace: 'nowrap' }}>
+                {label}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
   if (metro) {
     // Square cells in a thin frame; the accent block glides under the chosen one.
     return (
@@ -330,11 +379,32 @@ export function SoftCard({ children, color = 'var(--surface)', padding = 20, sty
   className?: string
 }) {
   useMetro()
+  if (useNothing()) {
+    // Colour is an event, not a fill: a coloured card stays a flat surface with a signal dot, and its Ink text turns to ink.
+    const plain = color === 'var(--surface)'
+    return (
+      <div className={'col ' + (className ?? '')} style={{ borderRadius: 16, background: 'var(--surface)', border: '1px solid var(--line)', padding, position: 'relative', ...(plain ? null : { '--Ink': 'var(--ink)' }), ...style } as CSSProperties}>
+        {!plain && <span aria-hidden style={{ position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: '50%', background: color }} />}
+        {children}
+      </div>
+    )
+  }
   return <div className={'col ' + (className ?? '')} style={{ borderRadius: 28, background: tile(color), padding, ...style }}>{children}</div>
 }
 
 export function SectionTitle({ text, action, onAction, style }: { text: string; action?: string; onAction?: () => void; style?: CSSProperties }) {
   const metro = useMetro()
+  if (useNothing()) {
+    // Instrument-panel label: Space Mono, ALL CAPS, secondary grey; the action in brackets.
+    return (
+      <div className="row" style={{ paddingTop: 18, paddingBottom: 10, ...style }}>
+        <span className="t-label flex1" style={{ color: 'var(--inkSoft)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{text}</span>
+        {action && onAction && (
+          <button className="t-label" onClick={onAction} style={{ color: 'var(--ink)', padding: '6px 2px', textTransform: 'uppercase' }}>[ {action} ]</button>
+        )}
+      </div>
+    )
+  }
   if (metro) {
     return (
       <div className="row" style={{ paddingTop: 10, paddingBottom: 10, alignItems: 'flex-end', ...style }}>
@@ -365,6 +435,15 @@ export function RoundIconButton({ icon, onClick, background = 'var(--surfaceHigh
   style?: CSSProperties
 }) {
   const metro = useMetro()
+  if (useNothing()) {
+    const custom = background !== 'var(--surfaceHigh)'
+    return (
+      <Bouncy onClick={onClick} className="center" aria-label={label}
+        style={{ width: size, height: size, borderRadius: '50%', background: custom ? background : 'var(--surface)', border: custom ? 0 : '1px solid var(--line)', flexShrink: 0, ...style }}>
+        <Icon name={icon} size={size * 0.46} color={custom ? tint : 'var(--ink)'} />
+      </Bouncy>
+    )
+  }
   if (metro) {
     // Application bar button: an icon in a thin circle, or a solid disc with a custom background.
     const custom = background !== 'var(--surfaceHigh)'
@@ -414,6 +493,15 @@ export function TopBar({ title, onBack, actions }: { title: string; onBack?: () 
 /** Title of a tab page: in Modern UI the app name in small capitals over a big lowercase title, like a pivot. */
 export function PageTitle({ text, style }: { text: string; style?: CSSProperties }) {
   const metro = useMetro()
+  if (useNothing()) {
+    // Small mono app tag over a dot-matrix headline.
+    return (
+      <div className="col" style={style}>
+        <span className="t-caption" style={{ color: 'var(--inkFaint)', letterSpacing: '0.14em' }}>MONEY</span>
+        <span className="t-hero" style={{ color: 'var(--ink)', fontSize: 40, lineHeight: '46px', letterSpacing: '0.02em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{text}</span>
+      </div>
+    )
+  }
   if (!metro) return <span className="t-display" style={{ color: 'var(--ink)', ...style }}>{text}</span>
   return (
     <div className="col" style={style}>
@@ -433,6 +521,17 @@ export function PrimaryButton({ text, onClick, enabled = true, color = 'var(--ac
 }) {
   const fg = enabled ? Ink : 'var(--inkFaint)'
   const metro = useMetro()
+  if (useNothing()) {
+    // Pill in display ink, Space Mono caps; a coloured [color] (expense, income) keeps its signal.
+    const neutral = color === 'var(--accent)'
+    return (
+      <Bouncy onClick={onClick} disabled={!enabled} className="center"
+        style={{ width: '100%', height: 54, borderRadius: 999, background: enabled ? color : 'transparent', border: enabled ? 0 : nothingBorder, color: !enabled ? 'var(--inkFaint)' : neutral ? Ink : '#FFFFFF', transition: 'background-color 0.2s', flexShrink: 0, ...style }}>
+        {icon && <Icon name={icon} size={18} style={{ marginRight: 8 }} />}
+        <span className="t-label" style={{ fontSize: 14, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{text}</span>
+      </Bouncy>
+    )
+  }
   if (metro) {
     return (
       <Bouncy onClick={onClick} disabled={!enabled} className="center"
@@ -458,6 +557,7 @@ export function MonthSwitcher({ month, onChange, className = 't-titleSmall', sty
   style?: CSSProperties
 }) {
   const metro = useMetro()
+  const nothing = useNothing()
   const previous = useRef(month)
   const dir = month >= previous.current ? 1 : -1
   useEffect(() => { previous.current = month }, [month])
@@ -478,10 +578,10 @@ export function MonthSwitcher({ month, onChange, className = 't-titleSmall', sty
             animate="center"
             exit="exit"
             transition={{ x: spring(1, 400), opacity: tween(220) }}
-            className={className}
-            style={{ position: 'absolute', inset: 0, textAlign: 'center', color: 'var(--ink)', whiteSpace: 'nowrap' }}
+            className={nothing ? 't-label' : className}
+            style={{ position: 'absolute', inset: 0, textAlign: 'center', color: 'var(--ink)', whiteSpace: 'nowrap', ...(nothing ? { lineHeight: '26px', letterSpacing: '0.1em' } : null) }}
           >
-            {metro ? Dates.monthYear(month).toLowerCase() : Dates.monthYear(month)}
+            {metro ? Dates.monthYear(month).toLowerCase() : nothing ? Dates.monthYear(month).toUpperCase() : Dates.monthYear(month)}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -491,6 +591,16 @@ export function MonthSwitcher({ month, onChange, className = 't-titleSmall', sty
 }
 
 export function EmptyState({ title, text, icon = 'savings' }: { title: string; text: string; icon?: string }) {
+  if (useNothing()) {
+    // Lots of room, a grey headline and one line of hint, a small dot-matrix square.
+    return (
+      <div className="col" style={{ alignItems: 'center', padding: '48px 0', width: '100%' }}>
+        <div className="dot-grid" style={{ width: 64, height: 64, backgroundSize: '10px 10px', backgroundImage: 'radial-gradient(circle, var(--inkFaint) 1.5px, transparent 1.7px)' }} />
+        <span className="t-label" style={{ marginTop: 20, textAlign: 'center', color: 'var(--inkSoft)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{title}</span>
+        <span className="t-body" style={{ marginTop: 8, textAlign: 'center', color: 'var(--inkFaint)', padding: '0 24px' }}>{text}</span>
+      </div>
+    )
+  }
   return (
     <div className="col" style={{ alignItems: 'center', padding: '32px 0', width: '100%' }}>
       <CategoryBadge icon={icon} color="var(--accent)" size={96} animated />
@@ -510,6 +620,19 @@ export function SoftProgress({ progress, color, height = 10, track = 'var(--surf
 }) {
   const value = Math.min(1, Math.max(0, progress))
   useMetro()
+  if (useNothing()) {
+    // The signature Nothing bar: discrete square segments with 2px gaps that light up one by one.
+    const n = 32
+    const lit = Math.ceil(value * n - 0.001)
+    return (
+      <div className="row" style={{ width: '100%', height: Math.min(20, Math.max(4, height)), gap: 2, ...style }}>
+        {Array.from({ length: n }, (_, i) => (
+          <motion.div key={i} initial={false} animate={{ backgroundColor: i < lit ? color : 'var(--line)' }}
+            transition={{ ...tween(160, NothingEase), delay: i < lit ? i * 0.008 : 0 }} style={{ flex: 1, height: '100%' }} />
+        ))}
+      </div>
+    )
+  }
   return (
     <div style={{ width: '100%', height, borderRadius: 999, background: track, overflow: 'hidden', ...style }}>
       <motion.div initial={{ width: '0%' }} animate={{ width: `${value * 100}%` }} transition={spring(0.75, 60)}
@@ -527,6 +650,15 @@ export function Staggered({ index, step = 55, children, style, className }: {
   className?: string
 }) {
   const metro = useMetro()
+  if (useNothing()) {
+    // Elements fade, they don't slide.
+    return (
+      <motion.div className={className} style={style} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        transition={{ ...tween(250, NothingEase), delay: (Math.min(index, 12) * step) / 1000 }}>
+        {children}
+      </motion.div>
+    )
+  }
   if (metro) {
     // Items swing in like a turnstile, hinged on their left edge.
     return (
@@ -551,12 +683,28 @@ export function Staggered({ index, step = 55, children, style, className }: {
 // --- forms -----------------------------------------------------------------------------------
 
 export function FormLabel({ text, style }: { text: string; style?: CSSProperties }) {
-  return <div className="t-label" style={{ color: 'var(--inkSoft)', paddingTop: 14, paddingBottom: 8, ...style }}>{text}</div>
+  // Nothing: instrument-panel label in ALL CAPS.
+  const caps = useNothing()
+  return <div className="t-label" style={{ color: 'var(--inkSoft)', paddingTop: 14, paddingBottom: 8, ...(caps ? { textTransform: 'uppercase' } : null), ...style }}>{text}</div>
 }
 
 /** Material 3 switch with the app colors. */
 export function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   const metro = useMetro()
+  if (useNothing()) {
+    // Physical switch: pill track, round thumb; on = display-ink track with a paper thumb.
+    return (
+      <div role="switch" aria-checked={checked} onClick={(e) => { e.stopPropagation(); onChange(!checked) }}
+        style={{
+          width: 52, height: 30, borderRadius: 999, flexShrink: 0, cursor: 'pointer', position: 'relative',
+          background: checked ? 'var(--accent)' : 'transparent', border: `1px solid ${checked ? 'var(--accent)' : 'var(--inkFaint)'}`,
+          transition: 'background-color 0.2s, border-color 0.2s',
+        }}>
+        <motion.div initial={false} animate={{ x: checked ? 22 : 0 }} transition={tween(200, NothingEase)}
+          style={{ position: 'absolute', top: 3, left: 3, width: 22, height: 22, borderRadius: '50%', background: checked ? Ink : 'var(--inkFaint)', transition: 'background-color 0.2s' }} />
+      </div>
+    )
+  }
   if (metro) {
     // Windows Phone toggle: a framed track that fills with the accent, and a solid square thumb.
     return (
@@ -594,9 +742,10 @@ export function SwitchRow({ title, subtitle, checked, onChange, style }: {
   style?: CSSProperties
 }) {
   const metro = useMetro()
+  const nothing = useNothing()
   return (
     <Bouncy pressedScale={0.98} onClick={() => onChange(!checked)} className="row"
-      style={metro ? { padding: '10px 0', ...style } : { borderRadius: 22, background: 'var(--surface)', padding: '14px 18px', ...style }}>
+      style={nothing ? { padding: '14px 0', borderBottom: '1px solid var(--line)', ...style } : metro ? { padding: '10px 0', ...style } : { borderRadius: 22, background: 'var(--surface)', padding: '14px 18px', ...style }}>
       <div className="col flex1">
         <span className={metro ? 't-titleSmall' : 't-bodyStrong'} style={{ color: 'var(--ink)' }}>{title}</span>
         {subtitle && <span className="t-caption" style={{ color: 'var(--inkSoft)' }}>{subtitle}</span>}

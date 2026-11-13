@@ -49,6 +49,8 @@ fun Modifier.staggered(index: Int, step: Long = 55L): Modifier {
             played = true
         }
     }
+    // Nothing: elements fade, they don't slide.
+    if (com.money.app.ui.theme.LocalNothing.current) return graphicsLayer { alpha = anim.value.coerceIn(0f, 1f) }
     // Modern UI: items swing in like a turnstile, hinged on their left edge.
     if (com.money.app.ui.theme.LocalMetro.current) return graphicsLayer {
         val t = anim.value.coerceIn(0f, 1.05f)

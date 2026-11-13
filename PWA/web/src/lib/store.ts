@@ -27,6 +27,8 @@ export type Settings = {
   hideBalances: boolean
   /** Modern UI look (Windows Phone: flat tiles, big lowercase titles) instead of the classic one. */
   metro: boolean
+  /** Nothing look (monochrome, dot-matrix, Space Mono labels), wins over [metro]. */
+  nothing: boolean
 }
 
 // Every account keeps its own settings and data cache, so a shared tablet can switch between them.
@@ -49,7 +51,7 @@ let currentUser = read(LAST_USER_KEY) ?? ''
 
 function loadSettings(user: string): Settings {
   const defaults: Settings = {
-    theme: 'SYSTEM', lockCredential: null, remindersEnabled: false, accent: Palette.LILAC, onboarded: false, recurringSort: 'NEXT', hideAmounts: false, hideBalances: false, metro: false,
+    theme: 'SYSTEM', lockCredential: null, remindersEnabled: false, accent: Palette.LILAC, onboarded: false, recurringSort: 'NEXT', hideAmounts: false, hideBalances: false, metro: false, nothing: false,
   }
   try {
     return { ...defaults, ...JSON.parse(read(settingsKey(user)) ?? '{}') }
@@ -249,4 +251,7 @@ if (typeof window !== 'undefined') {
 }
 
 /** True when the Modern UI (Windows Phone) style is on; re-renders the caller when it changes. */
-export const useMetro = () => useStore((st) => st.settings.metro)
+export const useMetro = () => useStore((st) => st.settings.metro && !st.settings.nothing)
+
+/** True when the Nothing style is on; re-renders the caller when it changes. */
+export const useNothing = () => useStore((st) => st.settings.nothing)

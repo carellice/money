@@ -324,6 +324,7 @@ internal fun SwitchRowMetro(title: String, subtitle: String?, checked: Boolean, 
 @Composable
 fun PageTitle(text: String, modifier: Modifier = Modifier) {
     val c = Ui.colors
+    if (com.money.app.ui.theme.LocalNothing.current) return PageTitleNothing(text, modifier)
     if (!com.money.app.ui.theme.LocalMetro.current) return Text(text, style = Ui.type.display, color = c.ink, modifier = modifier)
     Column(modifier) {
         Text("MONEY", style = Ui.type.label.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em), color = c.ink)

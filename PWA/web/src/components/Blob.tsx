@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { BlobSpec, blobTime, onFrame } from '../lib/blob.ts'
-import { useMetro } from '../lib/store.ts'
+import { useMetro, useNothing } from '../lib/store.ts'
 import { tile } from '../lib/theme.ts'
 
 type Fill = { color: string } | { gradient: string[] }
@@ -36,8 +36,26 @@ function useSize(ref: React.RefObject<Element | null>) {
 
 /** Draws a living blob filling its parent (Modifier.blob). Only the path changes each frame. */
 export function BlobLayer(props: BlobProps) {
-  if (useMetro()) return <MetroTile {...props} />
+  const nothing = useNothing()
+  const metro = useMetro()
+  if (nothing) return <NothingDisc {...props} />
+  if (metro) return <MetroTile {...props} />
   return <LivingBlob {...props} />
+}
+
+/** Nothing: a flat circle, or a thin ring; gradients turn into display ink. */
+function NothingDisc(props: BlobProps) {
+  const fill = 'gradient' in props ? 'var(--accent)' : props.color
+  const ref = useRef<HTMLDivElement>(null)
+  const size = useSize(ref)
+  // Square boxes are circles; wide ones (hero, amount field) a 16px card, never an oval.
+  const round = size.w > 0 && Math.abs(size.w - size.h) < 4
+  return (
+    <div ref={ref} aria-hidden style={{
+      position: 'absolute', inset: 0, pointerEvents: 'none', borderRadius: round ? '50%' : 16,
+      ...(props.stroke ? { border: `${props.stroke}px solid ${fill}` } : { background: fill }),
+    }} />
+  )
 }
 
 /** Modern UI: a flat, solid square tile, or a square outline; gradients turn into the flat accent. */
@@ -133,7 +151,11 @@ export const PX = 1 / 2.75
 
 /** Soft floating blobs used as page backdrop. */
 export function BackdropBlobs(props: { colors: string[]; alpha: number }) {
-  return useMetro() ? null : <LivingBackdrop {...props} />
+  const nothing = useNothing()
+  const metro = useMetro()
+  // Nothing: a faint dot-matrix grid instead of the floating blobs.
+  if (nothing) return <div aria-hidden className="dot-grid" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.9 }} />
+  return metro ? null : <LivingBackdrop {...props} />
 }
 
 function LivingBackdrop({ colors, alpha }: { colors: string[]; alpha: number }) {

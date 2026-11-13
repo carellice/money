@@ -3,6 +3,8 @@ package com.money.app.ui.home
 import com.money.app.ui.theme.blob
 import com.money.app.ui.theme.LocalSkeuo
 import com.money.app.ui.theme.LocalMetro
+import com.money.app.ui.components.dotGrid
+import androidx.compose.ui.draw.clip
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.layout.aspectRatio
@@ -292,6 +294,7 @@ fun HomeScreen(
 
 @Composable
 private fun Hero(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifier = Modifier) {
+    if (com.money.app.ui.theme.LocalNothing.current) return HeroNothing(r = r, onAdd = onAdd, modifier = modifier)
     if (LocalMetro.current) return HeroMetro(r = r, onAdd = onAdd, modifier = modifier)
     if (LocalSkeuo.current) return HeroSkeuo(r = r, onAdd = onAdd, modifier = modifier)
     val c = Ui.colors
@@ -401,6 +404,73 @@ private fun HeroSkeuo(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifie
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             HeroButton("entrate", r.income, c.income, Modifier.weight(1f)) { onAdd(TxType.INCOME) }
             HeroButton("uscite", r.expense, c.expense, Modifier.weight(1f)) { onAdd(TxType.EXPENSE) }
+        }
+    }
+}
+
+/** Nothing hero: the month balance in big dot-matrix figures over a faint dot grid, then two stat rows to add money in or out. */
+@Composable
+private fun HeroNothing(r: MonthReport, onAdd: (TxType) -> Unit, modifier: Modifier = Modifier) {
+    val c = Ui.colors
+    val toggleHidden = rememberHideAmountsToggle()
+    val hidden = LocalHideAmounts.current
+    Column(modifier.fillMaxWidth().padding(top = 4.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(c.surface)
+                .dotGrid(c.line, step = 14.dp)
+                .bouncyClick(onClick = toggleHidden)
+                .padding(20.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("SALDO DEL MESE", style = Ui.type.label.copy(letterSpacing = 0.1.em), color = c.inkSoft, modifier = Modifier.weight(1f))
+                Icon(
+                    if (hidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                    contentDescription = if (hidden) "Mostra importi" else "Nascondi importi",
+                    tint = c.inkSoft,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Spacer(Modifier.height(18.dp))
+            AnimatedAmount(r.balance, Ui.type.hero.copy(fontSize = 60.sp, lineHeight = 64.sp), color = if (r.balance < 0) c.expense else c.ink, decimalsScale = 0.45f)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                when {
+                    r.savingsRate == null -> "NESSUNA ENTRATA"
+                    r.balance >= 0 -> "RISPARMI ${percent(r.savingsRate)}"
+                    else -> "IN ROSSO"
+                },
+                style = Ui.type.label,
+                color = if (r.balance < 0) c.expenseText else c.inkSoft,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            NothingStat("ENTRATE", r.income, c.incomeText, Modifier.weight(1f)) { onAdd(TxType.INCOME) }
+            NothingStat("USCITE", r.expense, c.expenseText, Modifier.weight(1f)) { onAdd(TxType.EXPENSE) }
+        }
+    }
+}
+
+@Composable
+private fun NothingStat(label: String, cents: Long, color: Color, modifier: Modifier, onClick: () -> Unit) {
+    val c = Ui.colors
+    Column(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(c.surface)
+            .bouncyClick(onClick = onClick)
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = Ui.type.caption, color = c.inkSoft, modifier = Modifier.weight(1f))
+            Icon(Icons.Rounded.Add, contentDescription = "Aggiungi ${label.lowercase()}", tint = c.ink, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.height(10.dp))
+        Masked(Ui.type.amount.copy(fontSize = 18.sp), color) {
+            Text(Money.format(cents), style = Ui.type.amount.copy(fontSize = 18.sp), color = color, maxLines = 1)
         }
     }
 }

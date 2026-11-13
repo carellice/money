@@ -105,8 +105,8 @@ export function SettingsScreen() {
             onSelect={(i) => updateSettings({ theme: themeModes[i].id })} />
 
           <FormLabel text="Stile" />
-          <Segmented options={['Classico', 'Modern UI']} selected={settings.metro ? 1 : 0}
-            onSelect={(i) => updateSettings({ metro: i === 1 })} />
+          <Segmented options={['Classico', 'Modern UI', 'Nothing']} selected={settings.nothing ? 2 : settings.metro ? 1 : 0}
+            onSelect={(i) => updateSettings({ metro: i === 1, nothing: i === 2 })} />
 
           <div className="row">
             <FormLabel text="Colore principale" style={{ flex: 1 }} />

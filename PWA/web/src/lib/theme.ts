@@ -10,6 +10,7 @@ export const Ink = 'var(--Ink)'
 export type MoneyColors = {
   isDark: boolean
   metro?: boolean
+  nothing?: boolean
   bg: string
   surface: string
   surfaceHigh: string
@@ -93,6 +94,42 @@ const MetroLight: MoneyColors = {
   incomeText: '#3F7A0B',
   expenseText: '#C21100',
   accentText: '#0A7FBF',
+}
+
+// Nothing palette: OLED black and white data by night, printed manual (off-white paper, black ink) by day.
+// The accent is the display ink itself; red and green only encode money going out and in.
+const NothingDark: MoneyColors = {
+  isDark: true,
+  bg: '#000000',
+  surface: '#111111',
+  surfaceHigh: '#1A1A1A',
+  ink: '#E8E8E8',
+  inkSoft: '#999999',
+  inkFaint: '#666666',
+  line: '#222222',
+  income: '#4A9E5C',
+  expense: '#D71921',
+  accent: '#FFFFFF',
+  incomeText: '#5DB870',
+  expenseText: '#E5343C',
+  accentText: '#FFFFFF',
+}
+
+const NothingLight: MoneyColors = {
+  isDark: false,
+  bg: '#F5F5F5',
+  surface: '#FFFFFF',
+  surfaceHigh: '#F0F0F0',
+  ink: '#1A1A1A',
+  inkSoft: '#666666',
+  inkFaint: '#999999',
+  line: '#E8E8E8',
+  income: '#4A9E5C',
+  expense: '#D71921',
+  accent: '#000000',
+  incomeText: '#3A7F49',
+  expenseText: '#D71921',
+  accentText: '#000000',
 }
 
 /** The default lilac stands in for Windows Phone cyan in the Modern UI style. */
@@ -183,7 +220,9 @@ export function accentShown(c: number): number {
   return c === Palette.LILAC ? METRO_CYAN : solidArgb(c)
 }
 
-export function themeColors(dark: boolean, accent: number, metro = false): MoneyColors {
+export function themeColors(dark: boolean, accent: number, metro = false, nothing = false): MoneyColors {
+  // Nothing is monochrome: the chosen colour does not tint it.
+  if (nothing) return { ...(dark ? NothingDark : NothingLight), nothing: true }
   const base = metro ? (dark ? MetroDark : MetroLight) : dark ? Dark : Light
   // The default lilac keeps its hand-tuned text shade.
   if (accent === Palette.LILAC) return { ...base, metro } as MoneyColors
@@ -199,15 +238,18 @@ export function themeColors(dark: boolean, accent: number, metro = false): Money
 export function applyTheme(colors: MoneyColors) {
   metroOn = !!colors.metro
   document.documentElement.classList.toggle('metro', metroOn)
+  document.documentElement.classList.toggle('nothing', !!colors.nothing)
   const root = document.documentElement.style
-  root.setProperty('--Ink', metroOn ? '#FFFFFF' : DarkInk)
+  // Pastel category icons need more ink on the light paper.
+  root.setProperty('--iconMix', colors.isDark ? '100%' : '65%')
+  root.setProperty('--Ink', colors.nothing ? colors.bg : metroOn ? '#FFFFFF' : DarkInk)
   root.setProperty('--metroBar', colors.isDark ? '#1F1F1F' : '#DDDDDD')
   for (const [key, value] of Object.entries(colors)) {
     if (typeof value === 'string') root.setProperty(`--${key}`, value)
   }
   // Material colors derived like the Compose color scheme (primary is the deep accent in light mode).
   root.setProperty('--pickerPrimary', colors.isDark ? colors.accent : colors.accentText)
-  root.setProperty('--pickerOnPrimary', colors.isDark && !metroOn ? DarkInk : '#FFFFFF')
+  root.setProperty('--pickerOnPrimary', colors.nothing ? colors.bg : colors.isDark && !metroOn ? DarkInk : '#FFFFFF')
   root.setProperty('--snackAction', colors.isDark ? '#6750A4' : '#D0BCFF')
   document.documentElement.style.colorScheme = colors.isDark ? 'dark' : 'light'
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', colors.bg))

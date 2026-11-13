@@ -1,3 +1,8 @@
+@font-face { font-family: 'Space Grotesk'; src: url('/space_grotesk.ttf') format('truetype'); font-weight: 300 700; font-display: swap; }
+@font-face { font-family: 'Space Mono'; src: url('/space_mono.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Space Mono'; src: url('/space_mono_bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Doto'; src: url('/doto.ttf') format('truetype'); font-weight: 100 900; font-display: swap; }
+
 @font-face {
   font-family: 'Bricolage';
   src: url('/bricolage.ttf') format('truetype');
@@ -166,3 +171,25 @@ html.metro .dialog { background: var(--surfaceHigh); border-top: 0; width: calc(
 html.metro .dialog h2 { font-weight: 300; text-transform: lowercase; }
 html.metro .text-button { border: 2px solid var(--ink); color: var(--ink); text-transform: lowercase; padding: 8px 18px; font-weight: 400; }
 html.metro .toast { background: var(--accent); }
+
+/* --- Nothing style: html.nothing, set by applyTheme ------------------------------------------ */
+html.nothing body, html.nothing input, html.nothing textarea, html.nothing button {
+  font-family: 'Space Grotesk', 'DM Sans', system-ui, sans-serif;
+  font-variation-settings: normal;
+}
+html.nothing .t-hero { font-family: 'Doto', 'Space Mono', monospace; font-weight: 700; font-size: 64px; line-height: 64px; letter-spacing: -0.02em; }
+html.nothing .t-display { font-weight: 300; font-size: 37.4px; line-height: 42px; letter-spacing: -0.02em; }
+html.nothing .t-title { font-weight: 400; font-size: 24.2px; line-height: 29.7px; letter-spacing: -0.01em; }
+html.nothing .t-titleSmall { font-weight: 500; font-size: 18.7px; line-height: 24.2px; letter-spacing: 0; }
+html.nothing .t-body { font-weight: 400; font-size: 16.5px; line-height: 24.2px; }
+html.nothing .t-bodyStrong { font-weight: 500; font-size: 16.5px; line-height: 24.2px; }
+html.nothing .t-label { font-family: 'Space Mono', monospace; font-weight: 400; font-size: 13.2px; line-height: 17.6px; letter-spacing: 0.06em; }
+html.nothing .t-caption { font-family: 'Space Mono', monospace; font-weight: 400; font-size: 12.1px; line-height: 16.5px; letter-spacing: 0.06em; }
+html.nothing .t-amount { font-family: 'Space Mono', monospace; font-weight: 400; font-size: 16.5px; line-height: 22px; }
+html.nothing .dot-grid { background-image: radial-gradient(circle, var(--line) 1px, transparent 1.2px); background-size: 18px 18px; }
+html.nothing .dialog { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+html.nothing .scrim { background: rgba(0, 0, 0, 0.8); }
+html.nothing .text-button { font-family: 'Space Mono', monospace; font-weight: 400; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink); }
+html.nothing .toast { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; font-family: 'Space Mono', monospace; text-transform: uppercase; font-size: 12.5px; letter-spacing: 0.06em; }
+html.nothing .snackbar { border-radius: 8px; box-shadow: none; }
+html.nothing *, html.nothing *::before, html.nothing *::after { box-shadow: none !important; }

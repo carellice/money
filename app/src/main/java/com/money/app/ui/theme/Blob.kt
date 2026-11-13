@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
+import com.money.app.ui.components.dotGrid
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -84,6 +85,7 @@ val IconShape = RoundedCornerShape(26)
 @Composable
 fun blobShape(seed: Int): Shape = when {
     LocalMetro.current -> RectangleShape
+    LocalNothing.current -> androidx.compose.foundation.shape.CircleShape
     LocalSkeuo.current -> IconShape
     else -> remember(seed) { BlobShape(seed) }
 }
@@ -98,6 +100,19 @@ fun Modifier.blob(
     speed: Float = 1f,
     stroke: Dp? = null,
 ): Modifier {
+    // Nothing: a flat circle, or a thin ring with [stroke].
+    if (LocalNothing.current) return drawBehind {
+        // Wide boxes (amount field, hero) get a 16dp card, never a squashed circle.
+        if (kotlin.math.abs(size.width - size.height) > 4.dp.toPx()) {
+            val cr = androidx.compose.ui.geometry.CornerRadius(16.dp.toPx())
+            if (stroke == null) drawRoundRect(color, cornerRadius = cr)
+            else stroke.toPx().let { w -> drawRoundRect(color, Offset(w / 2, w / 2), Size(size.width - w, size.height - w), cr, style = Stroke(w)) }
+            return@drawBehind
+        }
+        val r = size.minDimension / 2
+        if (stroke == null) drawCircle(color, r)
+        else stroke.toPx().let { w -> drawCircle(color, r - w / 2, style = Stroke(w)) }
+    }
     // Modern UI: a flat, solid square tile, or a square outline with [stroke].
     if (LocalMetro.current) {
         val solid = color.solid()
@@ -132,6 +147,11 @@ fun Modifier.blob(
     amplitude: Float = 0.07f,
     speed: Float = 1f,
 ): Modifier {
+    // Nothing has no gradients either: the big hero shapes become an inverted 16dp card in display ink.
+    if (LocalNothing.current) {
+        val accent = Ui.colors.accent
+        return drawBehind { drawRoundRect(accent, cornerRadius = androidx.compose.ui.geometry.CornerRadius(16.dp.toPx())) }
+    }
     // Modern UI has no gradients: every gradient blob here starts from the accent, so it turns into a flat accent tile.
     if (LocalMetro.current) {
         val accent = Ui.colors.accent
@@ -158,6 +178,8 @@ fun Modifier.blob(
 @Composable
 fun Modifier.backdropBlobs(colors: List<Color>, alpha: Float = 0.16f): Modifier {
     // The skeuomorphic pages already sit on linen.
+    // Nothing: a faint dot-matrix grid instead of the floating blobs.
+    if (LocalNothing.current) return dotGrid(Ui.colors.line, step = 18.dp)
     if (LocalSkeuo.current || LocalMetro.current) return this
     val time = LocalBlobTime.current
     val specs = remember(colors.size) { List(colors.size) { BlobSpec(100 + it * 7, amplitude = 0.12f) } }

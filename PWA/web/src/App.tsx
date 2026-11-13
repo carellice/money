@@ -4,7 +4,7 @@ import { parseMonthKey } from '../../shared/date.ts'
 import { api, authEvents } from './lib/api.ts'
 import { BlobSpec, blobTime, onFrame } from './lib/blob.ts'
 import { navigate, openDeepLink, sheetRoutes, switchTab, topLevel, useNav, type Entry, type Route } from './lib/nav.ts'
-import { getStore, loggedUser, refresh, setMonth, setUser, updateSettings, useMetro, useStore } from './lib/store.ts'
+import { getStore, loggedUser, refresh, setMonth, setUser, updateSettings, useMetro, useNothing, useStore } from './lib/store.ts'
 import { applyTheme, Ink, setMetro, themeColors } from './lib/theme.ts'
 import { BlobLayer } from './components/Blob.tsx'
 import { MessagesHost } from './components/overlays.tsx'
@@ -51,8 +51,8 @@ export function App() {
   const onboarding = !settings.onboarded
   const hiddenAt = useRef(0)
 
-  setMetro(settings.metro)
-  useEffect(() => applyTheme(themeColors(dark, settings.accent, settings.metro)), [dark, settings.accent, settings.metro])
+  setMetro(settings.metro && !settings.nothing)
+  useEffect(() => applyTheme(themeColors(dark, settings.accent, settings.metro && !settings.nothing, settings.nothing)), [dark, settings.accent, settings.metro, settings.nothing])
 
   useEffect(() => {
     const check = () => api<{ loggedIn: boolean; username: string | null }>('/api/session')
@@ -164,8 +164,10 @@ function Navigator() {
     previous.current = topEntry
   }
   const metro = useMetro()
+  // Nothing: pages fade, they don't slide.
+  const fadeOnly = useNothing()
   // Modern UI pages always glide in sideways: fast start, long settle, like Windows Phone.
-  const sliding = dir.current !== 0 || metro
+  const sliding = (dir.current !== 0 || metro) && !fadeOnly
   const d0 = dir.current || 1
   const slide = metro
     ? { x: { ...tween(420, [0.1, 0.9, 0.2, 1]), delay: 0.08 }, opacity: { ...tween(200), delay: 0.08 } }
@@ -251,7 +253,10 @@ function BottomBar({ route }: { route: Route }) {
   // Stable refs: a new callback each render would detach the tabs right when the capsule measures them.
   const slotRefs = useMemo(() => tabs.map((_, i) => (el: HTMLDivElement | null) => { slots.current[i] = el }), [])
   const selected = tabs.findIndex((t) => t.route === route)
-  if (useMetro()) return <MetroBar route={route} />
+  const nothing = useNothing()
+  const metro = useMetro()
+  if (nothing) return <NothingBar route={route} />
+  if (metro) return <MetroBar route={route} />
   return (
     <div className="center nav-pad" style={{ position: 'relative' }}>
       <div className="bottombar" style={{ position: 'relative', width: '100%', padding: '12px 16px' }}>
@@ -270,6 +275,39 @@ function BottomBar({ route }: { route: Route }) {
         <div className="center" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
           <AddButton />
         </div>
+      </div>
+    </div>
+  )
+}
+
+/** Nothing bar: flat strip under a hairline, mono caps labels, a red dot on the open tab and a round ink add key. */
+function NothingBar({ route }: { route: Route }) {
+  const items = [...tabs.slice(0, 2).map((t) => ({ ...t, add: false })), { route: 'add' as Route, label: 'Aggiungi', icon: 'add' as UiIcon, add: true }, ...tabs.slice(2).map((t) => ({ ...t, add: false }))]
+  return (
+    <div className="nav-pad" style={{ background: 'var(--bg)', borderTop: '1px solid var(--line)' }}>
+      <div className="row bottombar" style={{ height: 72, padding: '0 8px' }}>
+        {items.map((t) => {
+          const selected = t.route === route
+          if (t.add) {
+            return (
+              <div key="add" className="center flex1">
+                <Bouncy onClick={() => navigate('add')} aria-label="Aggiungi" className="center round"
+                  style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)' }}>
+                  <Icon name="add" size={26} color="var(--Ink)" />
+                </Bouncy>
+              </div>
+            )
+          }
+          const fg = selected ? 'var(--ink)' : 'var(--inkFaint)'
+          return (
+            <Bouncy key={t.route} onClick={() => switchTab(t.route)} aria-label={t.label}
+              className="col flex1" style={{ height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name={t.icon} size={22} color={fg} />
+              <span className="t-caption" style={{ marginTop: 5, fontSize: 10, whiteSpace: 'nowrap', textTransform: 'uppercase', color: fg, transition: 'color 0.2s' }}>{t.label}</span>
+              <span style={{ marginTop: 4, width: 4, height: 4, borderRadius: '50%', background: selected ? 'var(--expense)' : 'transparent' }} />
+            </Bouncy>
+          )
+        })}
       </div>
     </div>
   )

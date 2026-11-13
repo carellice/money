@@ -13,7 +13,10 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun RoundedCornerShape(size: Dp): Shape =
-    if (LocalMetro.current) RectangleShape else androidx.compose.foundation.shape.RoundedCornerShape(size)
+    if (LocalMetro.current) RectangleShape
+    // Nothing: cards never rounder than 16dp.
+    else if (LocalNothing.current) androidx.compose.foundation.shape.RoundedCornerShape(minOf(size, 16.dp))
+    else androidx.compose.foundation.shape.RoundedCornerShape(size)
 
 @Composable
 fun RoundedCornerShape(percent: Int): Shape =

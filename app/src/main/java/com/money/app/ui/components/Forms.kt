@@ -51,7 +51,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 
 @Composable
 fun FormLabel(text: String, modifier: Modifier = Modifier) {
-    Text(text, style = Ui.type.label, color = Ui.colors.inkSoft, modifier = modifier.padding(top = 14.dp, bottom = 8.dp))
+    // Nothing: instrument-panel label in ALL CAPS.
+    val caps = com.money.app.ui.theme.LocalNothing.current
+    Text(if (caps) text.uppercase() else text, style = Ui.type.label, color = Ui.colors.inkSoft, modifier = modifier.padding(top = 14.dp, bottom = 8.dp))
 }
 
 @Composable
@@ -62,6 +64,7 @@ fun SwitchRow(
     onChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (com.money.app.ui.theme.LocalNothing.current) return SwitchRowNothing(title, subtitle, checked, onChange, modifier)
     if (LocalMetro.current) return SwitchRowMetro(title, subtitle, checked, onChange, modifier)
     if (LocalSkeuo.current) return SwitchRowSkeuo(title = title, subtitle = subtitle, checked = checked, onChange = onChange, modifier = modifier)
     val c = Ui.colors
