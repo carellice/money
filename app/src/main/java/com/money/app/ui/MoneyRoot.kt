@@ -149,6 +149,8 @@ object Routes {
     private const val RECURRING_REGISTER = "recurring_register"
     private const val ACCOUNT = "account"
     const val RECURRING_PAYMENTS = "recurring_payments"
+    /** Rotta accettata da fuori (extra "route" di MainActivity) per inserire una nuova spesa. */
+    const val ADD_EXPENSE = "add"
 
     const val ADD_PATTERN = "$ADD?type={type}&id={id}"
     const val RECURRING_EDIT_PATTERN = "$RECURRING_EDIT?id={id}&kind={kind}"
@@ -185,6 +187,8 @@ fun MoneyRoot(deepLinkRoute: String?, onDeepLinkHandled: () -> Unit) {
         if (deepLinkRoute != null && deepLinkRoute in Routes.topLevel) {
             nav.navigate(deepLinkRoute) { launchSingleTop = true }
         }
+        // "add" (dai launcher, per esempio Kanso): si apre subito il tastierino di una nuova spesa.
+        if (deepLinkRoute == Routes.ADD_EXPENSE) nav.navigate(Routes.add()) { launchSingleTop = true }
         if (deepLinkRoute != null) onDeepLinkHandled()
     }
 
