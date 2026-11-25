@@ -50,6 +50,7 @@ import androidx.compose.foundation.rememberScrollState
 import com.money.app.ui.theme.CircleShape
 import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -85,8 +86,15 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -374,6 +382,7 @@ private fun CategoryStep(vm: AddViewModel, categories: List<CategoryEntity>) {
                 { vm.note = it },
                 if (vm.type == TxType.EXPENSE) "Cosa hai comprato? Es. Esselunga" else "Da dove arriva? Es. stipendio",
                 Modifier.weight(1f),
+                completion = vm.noteCompletion,
             )
             Spacer(Modifier.size(8.dp))
             Box(
@@ -545,6 +554,7 @@ private fun DetailsStep(vm: AddViewModel, accent: Color, onDeleted: () -> Unit) 
             vm.note,
             { vm.note = it },
             if (vm.type == TxType.EXPENSE) "Es. pizza con gli amici" else "Es. stipendio di ottobre",
+            completion = vm.noteCompletion,
         )
 
         Label(if (vm.type == TxType.EXPENSE) "Scontrino" else "Ricevuta")
@@ -616,15 +626,32 @@ private fun Label(text: String) {
 }
 
 @Composable
-fun NoteField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier) {
+fun NoteField(
+    value: String,
+    onChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    /** Rest of a past note matching what is typed: shown faint after the text, the keyboard's action key or a tap on it fills it in. */
+    completion: String? = null,
+) {
     val c = Ui.colors
+    // Own the cursor, so a filled-in completion leaves it at the end.
+    var field by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    if (field.text != value) field = TextFieldValue(value, TextRange(value.length))
+    var focused by remember { mutableStateOf(false) }
+    val ghost = completion?.takeIf { focused }
+    val complete = { if (ghost != null) onChange(value + ghost) }
     BasicTextField(
-        value = value,
-        onValueChange = onChange,
+        value = field,
+        onValueChange = {
+            field = it
+            if (it.text != value) onChange(it.text)
+        },
         textStyle = Ui.type.body.copy(color = c.ink),
         cursorBrush = SolidColor(c.accentText),
-        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-        modifier = modifier.fillMaxWidth(),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = if (ghost != null) ImeAction.Done else ImeAction.Default),
+        keyboardActions = KeyboardActions(onDone = { if (ghost != null) complete() else defaultKeyboardAction(ImeAction.Done) }),
+        modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
         decorationBox = { inner ->
             Box(
                 Modifier
@@ -634,6 +661,14 @@ fun NoteField(value: String, onChange: (String) -> Unit, placeholder: String, mo
             ) {
                 if (value.isEmpty()) Text(placeholder, style = Ui.type.body, color = c.inkFaint)
                 inner()
+                if (ghost != null) Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = Color.Transparent)) { append(value) }
+                        withStyle(SpanStyle(color = c.inkFaint)) { append(ghost) }
+                    },
+                    style = Ui.type.body,
+                    modifier = Modifier.clickable(interactionSource = null, indication = null, onClick = complete),
+                )
             }
         },
     )

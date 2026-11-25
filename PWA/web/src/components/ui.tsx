@@ -822,25 +822,44 @@ export function AmountField({ value, onChange, placeholder = '0,00', operations 
 }
 
 /** Multi line text field that grows with its content (BasicTextField). */
-export function NoteField({ value, onChange, placeholder, style, onFocus, onBlur }: {
+export function NoteField({ value, onChange, placeholder, style, onFocus, onBlur, completion }: {
   value: string
   onChange: (v: string) => void
   placeholder: string
   style?: CSSProperties
   onFocus?: () => void
   onBlur?: () => void
+  /** Rest of a past note matching what is typed: shown faint after the text, Enter, Tab or a tap on it fills it in. */
+  completion?: string | null
 }) {
   const ref = useRef<HTMLTextAreaElement>(null)
+  const [focused, setFocused] = useState(false)
+  const ghost = focused ? completion : null
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
     el.style.height = '0px'
     el.style.height = el.scrollHeight + 'px'
   }, [value])
+  const complete = () => {
+    if (!ghost) return
+    const next = value + ghost
+    onChange(next)
+    requestAnimationFrame(() => ref.current?.setSelectionRange(next.length, next.length))
+  }
   return (
-    <label style={{ display: 'block', borderRadius: 20, background: 'var(--surface)', padding: '16px 18px', cursor: 'text', width: '100%', ...style }}>
+    <label style={{ display: 'block', position: 'relative', borderRadius: 20, background: 'var(--surface)', padding: '16px 18px', cursor: 'text', width: '100%', ...style }}>
       <textarea ref={ref} rows={1} className="field t-body" value={value} placeholder={placeholder} autoCapitalize="sentences"
-        onChange={(e) => onChange(e.target.value)} onFocus={onFocus} onBlur={onBlur} style={{ display: 'block' }} />
+        enterKeyHint={ghost ? 'done' : undefined}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => { if (ghost && (e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); complete() } }}
+        onFocus={() => { setFocused(true); onFocus?.() }} onBlur={() => { setFocused(false); onBlur?.() }} style={{ display: 'block' }} />
+      {ghost && (
+        <div className="t-body" aria-hidden onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.preventDefault(); complete() }}
+          style={{ position: 'absolute', inset: '16px 18px', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>
+          <span style={{ color: 'transparent' }}>{value}</span><span style={{ color: 'var(--inkFaint)' }}>{ghost}</span>
+        </div>
+      )}
     </label>
   )
 }

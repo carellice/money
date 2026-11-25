@@ -38,6 +38,18 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
     original ? { method: original.payment, customId: original.paymentId } : { method: initialType === 'INCOME' ? 'TRANSFER' : 'CARD', customId: null },
   )
   const [note, setNote] = useState(original?.note ?? '')
+  /** Notes of past movements, newest first, to complete the one being typed. */
+  const allTransactions = useStore((st) => st.data?.transactions)
+  const pastNotes = useMemo(() => {
+    const seen = new Set<string>()
+    return [...(allTransactions ?? [])].sort((a, b) => b.date - a.date).flatMap((t) => {
+      const n = t.note.trim()
+      const key = t.type + n.toLowerCase()
+      if (!n || seen.has(key)) return []
+      seen.add(key)
+      return [{ type: t.type, note: n }]
+    })
+  }, [allTransactions])
   const [receiptPath, setReceiptPath] = useState<string | null>(original?.receiptPath ?? null)
   const [memberId, setMemberId] = useState<number | null>(original ? original.memberId : getStore().data?.members[0]?.id ?? null)
   /** The payer keeps this expense for themselves: it doesn't count when settling up. */
@@ -50,6 +62,11 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
   /** Pictures taken in this session, deleted if the movement is not saved. */
   const createdReceipts = useRef<string[]>([])
   const savedRef = useRef(false)
+
+  /** The rest of the newest past note of this type that starts with what is typed, or null. */
+  const noteCompletion = note.trim()
+    ? pastNotes.find((p) => p.type === type && p.note.length > note.length && p.note.toLowerCase().startsWith(note.toLowerCase()))?.note.slice(note.length) ?? null
+    : null
 
   const setStep = useCallback((next: number) => {
     setStepRaw((current) => {
@@ -213,7 +230,7 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
               )}
               {step === 1 && (
                 <CategoryStep type={type} categories={categories} categoryId={categoryId} subcategoryId={subcategoryId}
-                  note={note} setNote={setNote} suggesting={suggesting} suggestion={suggestion} onSuggest={suggestCategory}
+                  note={note} setNote={setNote} noteCompletion={noteCompletion} suggesting={suggesting} suggestion={suggestion} onSuggest={suggestCategory}
                   onSelect={(cid) => {
                     selectCategory(cid)
                     if (!categories.some((c) => c.parentId === cid)) setTimeout(() => setStep(2), 260)
@@ -223,7 +240,7 @@ export function AddTransactionScreen({ type: initialType, id }: { type: TxType; 
               )}
               {step === 2 && (
                 <DetailsStep type={type} accent={accent} isEdit={isEdit} date={date} setDate={setDate} method={method} setMethod={setMethod}
-                  note={note} setNote={setNote} receiptPath={receiptPath} onCamera={() => addReceipt(true)} onGallery={() => addReceipt(false)}
+                  note={note} setNote={setNote} noteCompletion={noteCompletion} receiptPath={receiptPath} onCamera={() => addReceipt(true)} onGallery={() => addReceipt(false)}
                   onRemoveReceipt={() => setReceipt(null)} memberId={memberId} setMemberId={setMemberId}
                   excluded={excluded} setExcluded={setExcluded}
                   canSave={amountCents > 0 && categoryId != null && memberChosen} onSave={save} onDelete={remove} />
@@ -374,6 +391,7 @@ function CategoryStep(p: {
   subcategoryId: number | null
   note: string
   setNote: (v: string) => void
+  noteCompletion: string | null
   suggesting: boolean
   suggestion: string | null
   onSuggest: () => void
@@ -390,7 +408,7 @@ function CategoryStep(p: {
     <div className="col" style={{ height: '100%' }}>
       <span className="t-title" style={{ color: 'var(--ink)', padding: '8px 20px' }}>In che categoria?</span>
       <div className="row" style={{ padding: '0 20px' }}>
-        <NoteField value={p.note} onChange={p.setNote} style={{ flex: 1 }}
+        <NoteField value={p.note} onChange={p.setNote} completion={p.noteCompletion} style={{ flex: 1 }}
           placeholder={p.type === 'EXPENSE' ? 'Cosa hai comprato? Es. Esselunga' : 'Da dove arriva? Es. stipendio'} />
         <div style={{ width: 8 }} />
         <Bouncy onClick={p.onSuggest} disabled={!hasNote} className="center blob-box" style={{ width: 54, height: 54, flexShrink: 0 }} aria-label="Suggerisci categoria">
@@ -456,6 +474,7 @@ function DetailsStep(p: {
   setMethod: (m: PaymentChoice) => void
   note: string
   setNote: (v: string) => void
+  noteCompletion: string | null
   receiptPath: string | null
   onCamera: () => void
   onGallery: () => void
@@ -507,7 +526,7 @@ function DetailsStep(p: {
         <PaymentPicker selected={p.method} onSelect={p.setMethod} color={p.accent} />
 
         {label('Nota')}
-        <NoteField value={p.note} onChange={p.setNote} placeholder={p.type === 'EXPENSE' ? 'Es. pizza con gli amici' : 'Es. stipendio di ottobre'} />
+        <NoteField value={p.note} onChange={p.setNote} completion={p.noteCompletion} placeholder={p.type === 'EXPENSE' ? 'Es. pizza con gli amici' : 'Es. stipendio di ottobre'} />
 
         {label(p.type === 'EXPENSE' ? 'Scontrino' : 'Ricevuta')}
         <ReceiptPicker path={p.receiptPath} onCamera={p.onCamera} onGallery={p.onGallery} onRemove={p.onRemoveReceipt} />

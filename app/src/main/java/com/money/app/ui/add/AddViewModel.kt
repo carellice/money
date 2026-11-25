@@ -72,7 +72,25 @@ class AddViewModel(container: AppContainer, handle: SavedStateHandle) : ViewMode
     /** With people set up, every movement must say whose it is. */
     val memberChosen: Boolean get() = members.value.isEmpty() || members.value.any { it.id == memberId }
 
+    /** Notes of past movements, newest first, to complete the one being typed. */
+    private var pastNotes by mutableStateOf<List<Pair<TxType, String>>>(emptyList())
+
+    /** The rest of the newest past note of this type that starts with what is typed, or null. */
+    val noteCompletion: String?
+        get() {
+            val typed = note
+            if (typed.isBlank()) return null
+            return pastNotes.firstOrNull { (t, past) -> t == type && past.length > typed.length && past.startsWith(typed, ignoreCase = true) }
+                ?.second?.substring(typed.length)
+        }
+
     init {
+        viewModelScope.launch {
+            pastNotes = repo.transactionsBetweenOnce(LocalDate.now().minusYears(2), LocalDate.now().plusYears(1))
+                .sortedByDescending { it.date }
+                .mapNotNull { tx -> tx.note.trim().takeIf { it.isNotEmpty() }?.let { tx.type to it } }
+                .distinctBy { (t, n) -> t to n.lowercase() }
+        }
         if (!isEdit) viewModelScope.launch { memberId = repo.members.first().firstOrNull()?.id }
         if (isEdit) viewModelScope.launch {
             repo.transaction(editId)?.let { tx ->
