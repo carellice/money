@@ -2,8 +2,13 @@ package com.money.app
 
 import android.content.Intent
 import android.graphics.Color
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -40,8 +45,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.time.YearMonth
+import kotlin.math.sqrt
 
-class MainActivity : FragmentActivity() {
+class MainActivity : FragmentActivity(), SensorEventListener {
     private val container get() = (application as MoneyApp).container
 
     private var locked by mutableStateOf(false)
@@ -50,6 +56,10 @@ class MainActivity : FragmentActivity() {
     private var lockEnabled = false
     private var stoppedAt = 0L
     private var authenticating = false
+    private val sensors by lazy { getSystemService(SENSOR_SERVICE) as SensorManager }
+    private var lastJolt = 0L
+    private var jolts = 0
+    private var lastShake = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -130,6 +140,34 @@ class MainActivity : FragmentActivity() {
         intent.getStringExtra(EXTRA_ROUTE)?.let { deepLink = it }
     }
 
+    override fun onResume() {
+        super.onResume()
+        sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let { sensors.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        sensors.unregisterListener(this)
+    }
+
+    /** Shaking the phone hides the amounts, or shows them again: two strong jolts close together. */
+    override fun onSensorChanged(event: SensorEvent) {
+        val (x, y, z) = event.values
+        val g = sqrt(x * x + y * y + z * z) / SensorManager.GRAVITY_EARTH
+        if (g < SHAKE_G) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastShake < SHAKE_COOLDOWN_MS) return
+        jolts = if (now - lastJolt < JOLT_GAP_MS) jolts + 1 else 1
+        lastJolt = now
+        if (jolts < 2) return
+        jolts = 0
+        lastShake = now
+        window.decorView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        lifecycleScope.launch { container.settings.run { setHideAmounts(!current().hideAmounts) } }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+
     override fun onStop() {
         super.onStop()
         if (!authenticating) stoppedAt = SystemClock.elapsedRealtime()
@@ -165,5 +203,8 @@ class MainActivity : FragmentActivity() {
         const val EXTRA_MONTH = "month"
         private const val LOCK_AFTER_MS = 30_000L
         private const val REFRESH_MS = 30_000L
+        private const val SHAKE_G = 2.5f
+        private const val JOLT_GAP_MS = 500L
+        private const val SHAKE_COOLDOWN_MS = 1_000L
     }
 }

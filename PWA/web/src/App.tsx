@@ -8,7 +8,7 @@ import { getStore, loggedUser, refresh, setMonth, setUser, updateSettings, useMe
 import { applyTheme, Ink, setMetro, themeColors } from './lib/theme.ts'
 import { BlobLayer } from './components/Blob.tsx'
 import { MessagesHost } from './components/overlays.tsx'
-import { Bouncy, Icon } from './components/ui.tsx'
+import { Bouncy, Icon, toggleHideAmounts } from './components/ui.tsx'
 import { spring, tween } from './components/motion.ts'
 import type { UiIcon } from './lib/icons.gen.ts'
 import { HomeScreen } from './screens/Home.tsx'
@@ -53,6 +53,34 @@ export function App() {
 
   setMetro(settings.metro && !settings.nothing && !settings.dueffe)
   useEffect(() => applyTheme(themeColors(dark, settings.accent, settings.metro && !settings.nothing && !settings.dueffe, settings.nothing && !settings.dueffe, settings.dueffe)), [dark, settings.accent, settings.metro, settings.nothing, settings.dueffe])
+
+  // Shaking the phone hides the amounts, or shows them again: two strong jolts close together.
+  useEffect(() => {
+    let lastJolt = 0, jolts = 0, lastShake = 0
+    const onMotion = (e: DeviceMotionEvent) => {
+      const a = e.accelerationIncludingGravity
+      if (a?.x == null || a.y == null || a.z == null) return
+      if (Math.hypot(a.x, a.y, a.z) / 9.81 < 2.5) return
+      const now = Date.now()
+      if (now - lastShake < 1000) return
+      jolts = now - lastJolt < 500 ? jolts + 1 : 1
+      lastJolt = now
+      if (jolts < 2) return
+      jolts = 0
+      lastShake = now
+      navigator.vibrate?.(30)
+      toggleHideAmounts()
+    }
+    window.addEventListener('devicemotion', onMotion)
+    // iPhone asks for motion access, only after a tap.
+    const motion = (typeof DeviceMotionEvent === 'undefined' ? {} : DeviceMotionEvent) as { requestPermission?: () => Promise<string> }
+    const ask = () => { motion.requestPermission?.().catch(() => {}) }
+    if (motion.requestPermission) window.addEventListener('pointerup', ask, { once: true })
+    return () => {
+      window.removeEventListener('devicemotion', onMotion)
+      window.removeEventListener('pointerup', ask)
+    }
+  }, [])
 
   useEffect(() => {
     const check = () => api<{ loggedIn: boolean; username: string | null }>('/api/session')
