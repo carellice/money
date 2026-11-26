@@ -607,10 +607,29 @@ export function MonthSwitcher({ month, onChange, className = 't-titleSmall', sty
   const previous = useRef(month)
   const dir = month >= previous.current ? 1 : -1
   useEffect(() => { previous.current = month }, [month])
+  const swipeX = useRef<number | null>(null)
+  const label = metro ? Dates.monthYear(month).toLowerCase() : nothing ? Dates.monthYear(month).toUpperCase() : Dates.monthYear(month)
+  const labelClass = nothing ? 't-label' : className
+  const labelStyle: CSSProperties = { textAlign: 'center', color: 'var(--ink)', whiteSpace: 'nowrap', ...(nothing ? { lineHeight: '26px', letterSpacing: '0.1em' } : null) }
   return (
-    <div className="row" style={style}>
+    <div
+      className="row"
+      style={{ touchAction: 'pan-y', ...style }}
+      // Swipe right for the previous month, left for the next one.
+      onPointerDown={(e) => { swipeX.current = e.clientX }}
+      onPointerCancel={() => { swipeX.current = null }}
+      onPointerUp={(e) => {
+        if (swipeX.current === null) return
+        const dx = e.clientX - swipeX.current
+        swipeX.current = null
+        if (dx > 48) onChange(month - 1)
+        else if (dx < -48) onChange(month + 1)
+      }}
+    >
       <RoundIconButton icon="chevron_left" onClick={() => onChange(month - 1)} size={36} label="Mese precedente" />
-      <div style={{ width: metro ? 172 : 150, position: 'relative', height: metro ? 30 : 26, overflow: 'hidden' }}>
+      <div style={{ minWidth: metro ? 172 : 150, position: 'relative', height: metro ? 30 : 26, overflow: 'hidden' }}>
+        {/* Invisible copy that sizes the box to the month name, so the arrows never cover it. */}
+        <div aria-hidden className={labelClass} style={{ ...labelStyle, visibility: 'hidden', padding: '0 4px' }}>{label}</div>
         <AnimatePresence initial={false} custom={dir}>
           <motion.div
             key={month}
@@ -624,10 +643,10 @@ export function MonthSwitcher({ month, onChange, className = 't-titleSmall', sty
             animate="center"
             exit="exit"
             transition={{ x: spring(1, 400), opacity: tween(220) }}
-            className={nothing ? 't-label' : className}
-            style={{ position: 'absolute', inset: 0, textAlign: 'center', color: 'var(--ink)', whiteSpace: 'nowrap', ...(nothing ? { lineHeight: '26px', letterSpacing: '0.1em' } : null) }}
+            className={labelClass}
+            style={{ position: 'absolute', inset: 0, ...labelStyle }}
           >
-            {metro ? Dates.monthYear(month).toLowerCase() : nothing ? Dates.monthYear(month).toUpperCase() : Dates.monthYear(month)}
+            {label}
           </motion.div>
         </AnimatePresence>
       </div>

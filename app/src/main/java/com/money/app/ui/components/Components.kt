@@ -40,6 +40,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import com.money.app.ui.theme.CircleShape
 import com.money.app.ui.theme.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -819,7 +822,7 @@ fun MonthSwitcher(
     style: TextStyle = Ui.type.titleSmall,
 ) {
     if (LocalSkeuo.current) return MonthSwitcherSkeuo(month = month, onChange = onChange, modifier = modifier, style = style)
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.monthSwipe(month, onChange), verticalAlignment = Alignment.CenterVertically) {
         RoundIconButton(Icons.Rounded.ChevronLeft, { onChange(month.minusMonths(1)) }, size = 36.dp, contentDescription = "Mese precedente")
         AnimatedContent(
             targetState = month,
@@ -828,12 +831,26 @@ fun MonthSwitcher(
                 (slideInHorizontally { it * dir / 2 } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir / 2 } + fadeOut())
             },
             label = "month",
-            modifier = Modifier.width(150.dp),
+            contentAlignment = Alignment.Center,
+            // Grows with the month name so the arrows never cover it.
+            modifier = Modifier.weight(1f, fill = false).widthIn(min = 150.dp),
         ) {
-            Text(if (LocalMetro.current) Dates.monthYear(it).lowercase() else if (com.money.app.ui.theme.LocalNothing.current) Dates.monthYear(it).uppercase() else Dates.monthYear(it), style = if (com.money.app.ui.theme.LocalNothing.current) Ui.type.label.copy(fontSize = 14.sp, letterSpacing = 0.1.em) else style, color = Ui.colors.ink, textAlign = TextAlign.Center, maxLines = 1, softWrap = false, modifier = Modifier.fillMaxWidth())
+            Text(if (LocalMetro.current) Dates.monthYear(it).lowercase() else if (com.money.app.ui.theme.LocalNothing.current) Dates.monthYear(it).uppercase() else Dates.monthYear(it), style = if (com.money.app.ui.theme.LocalNothing.current) Ui.type.label.copy(fontSize = 14.sp, letterSpacing = 0.1.em) else style, color = Ui.colors.ink, textAlign = TextAlign.Center, maxLines = 1, softWrap = false)
         }
         RoundIconButton(Icons.Rounded.ChevronRight, { onChange(month.plusMonths(1)) }, size = 36.dp, contentDescription = "Mese successivo")
     }
+}
+
+/** Swipe right for the previous month, left for the next one. */
+private fun Modifier.monthSwipe(month: YearMonth, onChange: (YearMonth) -> Unit) = pointerInput(month) {
+    var total = 0f
+    detectHorizontalDragGestures(
+        onDragStart = { total = 0f },
+        onDragEnd = {
+            if (total > 48.dp.toPx()) onChange(month.minusMonths(1))
+            else if (total < -48.dp.toPx()) onChange(month.plusMonths(1))
+        },
+    ) { _, dx -> total += dx }
 }
 
 @Composable
@@ -843,7 +860,7 @@ private fun MonthSwitcherSkeuo(
     modifier: Modifier = Modifier,
     style: TextStyle = Ui.type.titleSmall,
 ) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.monthSwipe(month, onChange), verticalAlignment = Alignment.CenterVertically) {
         RoundIconButton(Icons.Rounded.ChevronLeft, { onChange(month.minusMonths(1)) }, size = 36.dp, contentDescription = "Mese precedente")
         AnimatedContent(
             targetState = month,
@@ -852,9 +869,11 @@ private fun MonthSwitcherSkeuo(
                 (slideInHorizontally { it * dir / 2 } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir / 2 } + fadeOut())
             },
             label = "month",
-            modifier = Modifier.width(176.dp),
+            contentAlignment = Alignment.Center,
+            // Grows with the month name so the arrows never cover it.
+            modifier = Modifier.weight(1f, fill = false).widthIn(min = 176.dp),
         ) {
-            Text(Dates.monthYear(it), style = style, color = Ui.colors.ink, textAlign = TextAlign.Center, maxLines = 1, softWrap = false, modifier = Modifier.fillMaxWidth())
+            Text(Dates.monthYear(it), style = style, color = Ui.colors.ink, textAlign = TextAlign.Center, maxLines = 1, softWrap = false)
         }
         RoundIconButton(Icons.Rounded.ChevronRight, { onChange(month.plusMonths(1)) }, size = 36.dp, contentDescription = "Mese successivo")
     }
