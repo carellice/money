@@ -1,7 +1,7 @@
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { dayOfWeek, epochOf, monthDays, monthOf, monthStart, monthYear, today, ymd } from '../../../shared/date.ts'
+import { dayOfWeek, epochOf, monthDays, monthOf, monthStart, monthYear, today, ymd, type Month } from '../../../shared/date.ts'
 import { Dates } from '../../../shared/format.ts'
 import { useBackHandler } from '../lib/nav.ts'
 import { Icon, TopBar } from './ui.tsx'
@@ -132,6 +132,51 @@ export function DatePickerDialog({ value, onPick, onDismiss }: { value: number; 
         <div className="dialog-actions" style={{ margin: 0, padding: '8px 12px 12px' }}>
           <button className="text-button" style={{ color: 'var(--pickerPrimary)' }} onClick={onDismiss}>Annulla</button>
           <button className="text-button" style={{ color: 'var(--pickerPrimary)' }} onClick={() => onPick(selected)}>OK</button>
+        </div>
+      </motion.div>
+    </Portal>
+  )
+}
+
+/** Year with arrows and the 12 months: a tap on a month picks it. */
+export function MonthPickerDialog({ value, onPick, onDismiss }: { value: Month; onPick: (month: Month) => void; onDismiss: () => void }) {
+  const [year, setYear] = useState(monthYear(value).y)
+  const now = monthOf(today())
+  useBackHandler(true, onDismiss)
+  return (
+    <Portal>
+      <motion.div className="scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={onDismiss} />
+      <motion.div className="dialog" initial={{ opacity: 0, scale: 0.9, x: '-50%', y: '-50%' }} animate={{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }}
+        transition={spring(0.9, 700)} style={{ width: 'min(360px, calc(100% - 32px))', padding: 0, transform: undefined }}>
+        <div className="row" style={{ padding: '16px 12px 8px 24px' }}>
+          <span className="t-label flex1" style={{ color: 'var(--inkSoft)', fontWeight: 500 }}>Seleziona mese</span>
+          <button className="center" style={{ width: 40, height: 40, borderRadius: '50%' }} onClick={() => setYear(year - 1)} aria-label="Anno precedente">
+            <Icon name="chevron_left" size={24} color="var(--inkSoft)" />
+          </button>
+          <span className="t-label" style={{ minWidth: 44, textAlign: 'center', color: 'var(--ink)' }}>{year}</span>
+          <button className="center" style={{ width: 40, height: 40, borderRadius: '50%' }} onClick={() => setYear(year + 1)} aria-label="Anno successivo">
+            <Icon name="chevron_right" size={24} color="var(--inkSoft)" />
+          </button>
+        </div>
+        <div style={{ padding: '0 12px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', rowGap: 4 }}>
+          {Array.from({ length: 12 }, (_, i) => {
+            const month = year * 12 + i
+            const isSelected = month === value
+            const isNow = month === now
+            return (
+              <div key={i} className="center" style={{ height: 52 }}>
+                <button onClick={() => onPick(month)} className="center" style={{
+                  width: '88%', height: 40, borderRadius: 999, fontSize: 15,
+                  background: isSelected ? 'var(--pickerPrimary)' : 'transparent',
+                  color: isSelected ? 'var(--pickerOnPrimary)' : isNow ? 'var(--pickerPrimary)' : 'var(--ink)',
+                  boxShadow: isNow && !isSelected ? 'inset 0 0 0 1px var(--pickerPrimary)' : 'none',
+                }}>{Dates.monthShort(month)}</button>
+              </div>
+            )
+          })}
+        </div>
+        <div className="dialog-actions" style={{ margin: 0, padding: '8px 12px 12px' }}>
+          <button className="text-button" style={{ color: 'var(--pickerPrimary)' }} onClick={onDismiss}>Annulla</button>
         </div>
       </motion.div>
     </Portal>

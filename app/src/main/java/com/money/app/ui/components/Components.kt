@@ -51,12 +51,17 @@ import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -822,6 +827,7 @@ fun MonthSwitcher(
     style: TextStyle = Ui.type.titleSmall,
 ) {
     if (LocalSkeuo.current) return MonthSwitcherSkeuo(month = month, onChange = onChange, modifier = modifier, style = style)
+    var picking by remember { mutableStateOf(false) }
     Row(modifier.monthSwipe(month, onChange), verticalAlignment = Alignment.CenterVertically) {
         RoundIconButton(Icons.Rounded.ChevronLeft, { onChange(month.minusMonths(1)) }, size = 36.dp, contentDescription = "Mese precedente")
         AnimatedContent(
@@ -833,12 +839,56 @@ fun MonthSwitcher(
             label = "month",
             contentAlignment = Alignment.Center,
             // Grows with the month name so the arrows never cover it.
-            modifier = Modifier.weight(1f, fill = false).widthIn(min = 150.dp),
+            modifier = Modifier.weight(1f, fill = false).widthIn(min = 150.dp).clickable(onClickLabel = "Scegli il mese") { picking = true },
         ) {
             Text(if (LocalMetro.current) Dates.monthYear(it).lowercase() else if (com.money.app.ui.theme.LocalNothing.current) Dates.monthYear(it).uppercase() else Dates.monthYear(it), style = if (com.money.app.ui.theme.LocalNothing.current) Ui.type.label.copy(fontSize = 14.sp, letterSpacing = 0.1.em) else style, color = Ui.colors.ink, textAlign = TextAlign.Center, maxLines = 1, softWrap = false)
         }
         RoundIconButton(Icons.Rounded.ChevronRight, { onChange(month.plusMonths(1)) }, size = 36.dp, contentDescription = "Mese successivo")
     }
+    if (picking) MonthPickerDialog(month, { picking = false; onChange(it) }, { picking = false })
+}
+
+/** Year with arrows and the 12 months: a tap on a month picks it. */
+@Composable
+private fun MonthPickerDialog(value: YearMonth, onPick: (YearMonth) -> Unit, onDismiss: () -> Unit) {
+    var year by remember { mutableStateOf(value.year) }
+    val now = remember { YearMonth.now() }
+    val primary = MaterialTheme.colorScheme.primary
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Seleziona mese", Modifier.weight(1f))
+                RoundIconButton(Icons.Rounded.ChevronLeft, { year-- }, size = 36.dp, contentDescription = "Anno precedente")
+                Text("$year", Modifier.widthIn(min = 56.dp), textAlign = TextAlign.Center)
+                RoundIconButton(Icons.Rounded.ChevronRight, { year++ }, size = 36.dp, contentDescription = "Anno successivo")
+            }
+        },
+        text = {
+            Column {
+                for (row in 0 until 4) Row {
+                    for (col in 0 until 3) {
+                        val m = YearMonth.of(year, row * 3 + col + 1)
+                        val selected = m == value
+                        Box(
+                            Modifier.weight(1f).padding(4.dp).height(40.dp).clip(CircleShape)
+                                .background(if (selected) primary else Color.Transparent)
+                                .clickable { onPick(m) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                Dates.monthShort(m),
+                                color = if (selected) MaterialTheme.colorScheme.onPrimary else if (m == now) primary else Ui.colors.ink,
+                                fontWeight = if (m == now) FontWeight.Bold else null,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onDismiss) { Text("Annulla") } },
+    )
 }
 
 /** Swipe right for the previous month, left for the next one. */
@@ -860,6 +910,7 @@ private fun MonthSwitcherSkeuo(
     modifier: Modifier = Modifier,
     style: TextStyle = Ui.type.titleSmall,
 ) {
+    var picking by remember { mutableStateOf(false) }
     Row(modifier.monthSwipe(month, onChange), verticalAlignment = Alignment.CenterVertically) {
         RoundIconButton(Icons.Rounded.ChevronLeft, { onChange(month.minusMonths(1)) }, size = 36.dp, contentDescription = "Mese precedente")
         AnimatedContent(
@@ -871,12 +922,13 @@ private fun MonthSwitcherSkeuo(
             label = "month",
             contentAlignment = Alignment.Center,
             // Grows with the month name so the arrows never cover it.
-            modifier = Modifier.weight(1f, fill = false).widthIn(min = 176.dp),
+            modifier = Modifier.weight(1f, fill = false).widthIn(min = 176.dp).clickable(onClickLabel = "Scegli il mese") { picking = true },
         ) {
             Text(Dates.monthYear(it), style = style, color = Ui.colors.ink, textAlign = TextAlign.Center, maxLines = 1, softWrap = false)
         }
         RoundIconButton(Icons.Rounded.ChevronRight, { onChange(month.plusMonths(1)) }, size = 36.dp, contentDescription = "Mese successivo")
     }
+    if (picking) MonthPickerDialog(month, { picking = false; onChange(it) }, { picking = false })
 }
 
 @Composable

@@ -10,6 +10,7 @@ import { getStore, updateSettings, useDueffe, useMetro, useNothing, useStore } f
 import { accentShown, DarkInk, Ink, tile } from '../lib/theme.ts'
 import { BlobBox, useBlobClip } from './Blob.tsx'
 import { fastOutSlowIn, haptic, spring, tween } from './motion.ts'
+import { MonthPickerDialog } from './overlays.tsx'
 
 /** The one easing of the Nothing style: subtle ease-out, no spring. */
 export const NothingEase: [number, number, number, number] = [0.25, 0.1, 0.25, 1]
@@ -608,6 +609,8 @@ export function MonthSwitcher({ month, onChange, className = 't-titleSmall', sty
   const dir = month >= previous.current ? 1 : -1
   useEffect(() => { previous.current = month }, [month])
   const swipeX = useRef<number | null>(null)
+  const swiped = useRef(false)
+  const [picking, setPicking] = useState(false)
   const label = metro ? Dates.monthYear(month).toLowerCase() : nothing ? Dates.monthYear(month).toUpperCase() : Dates.monthYear(month)
   const labelClass = nothing ? 't-label' : className
   const labelStyle: CSSProperties = { textAlign: 'center', color: 'var(--ink)', whiteSpace: 'nowrap', ...(nothing ? { lineHeight: '26px', letterSpacing: '0.1em' } : null) }
@@ -616,18 +619,20 @@ export function MonthSwitcher({ month, onChange, className = 't-titleSmall', sty
       className="row"
       style={{ touchAction: 'pan-y', ...style }}
       // Swipe right for the previous month, left for the next one.
-      onPointerDown={(e) => { swipeX.current = e.clientX }}
+      onPointerDown={(e) => { swipeX.current = e.clientX; swiped.current = false }}
       onPointerCancel={() => { swipeX.current = null }}
       onPointerUp={(e) => {
         if (swipeX.current === null) return
         const dx = e.clientX - swipeX.current
         swipeX.current = null
+        swiped.current = Math.abs(dx) > 48
         if (dx > 48) onChange(month - 1)
         else if (dx < -48) onChange(month + 1)
       }}
     >
       <RoundIconButton icon="chevron_left" onClick={() => onChange(month - 1)} size={36} label="Mese precedente" />
-      <div style={{ minWidth: metro ? 172 : 150, position: 'relative', height: metro ? 30 : 26, overflow: 'hidden' }}>
+      <div role="button" aria-label="Scegli il mese" onClick={() => { if (!swiped.current) setPicking(true) }}
+        style={{ minWidth: metro ? 172 : 150, position: 'relative', height: metro ? 30 : 26, overflow: 'hidden', cursor: 'pointer' }}>
         {/* Invisible copy that sizes the box to the month name, so the arrows never cover it. */}
         <div aria-hidden className={labelClass} style={{ ...labelStyle, visibility: 'hidden', padding: '0 4px' }}>{label}</div>
         <AnimatePresence initial={false} custom={dir}>
@@ -651,6 +656,7 @@ export function MonthSwitcher({ month, onChange, className = 't-titleSmall', sty
         </AnimatePresence>
       </div>
       <RoundIconButton icon="chevron_right" onClick={() => onChange(month + 1)} size={36} label="Mese successivo" />
+      {picking && <MonthPickerDialog value={month} onPick={(m) => { setPicking(false); onChange(m) }} onDismiss={() => setPicking(false)} />}
     </div>
   )
 }
