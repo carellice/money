@@ -199,6 +199,8 @@ export type Account = {
   /** Epoch millis. */
   balanceAt: number
   sortOrder: number
+  /** Whose account it is, among the people of the household; null when it's everyone's. Apps from before it don't send it. */
+  memberId?: number | null
 }
 
 /** Money moved from one account to another: neither an expense nor an income. */

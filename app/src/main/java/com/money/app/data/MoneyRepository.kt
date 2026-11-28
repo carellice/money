@@ -211,6 +211,7 @@ class MoneyRepository(
     suspend fun deleteMember(member: MemberEntity) {
         suspend fun local() = db.withTransaction {
             txDao.clearMember(member.id)
+            accountDao.clearMember(member.id)
             memberDao.delete(member)
         }
         either(Unit, { submit(Change.DeleteMember(member.id)) }, offline = {

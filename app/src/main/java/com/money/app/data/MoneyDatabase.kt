@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [CategoryEntity::class, TransactionEntity::class, RecurringEntity::class, MemberEntity::class, CustomPaymentEntity::class,
         AccountEntity::class, TransferEntity::class, HiddenPaymentEntity::class],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class MoneyDatabase : RoomDatabase() {
@@ -86,9 +86,16 @@ abstract class MoneyDatabase : RoomDatabase() {
             }
         }
 
+        /** Whose each account is. */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `accounts` ADD COLUMN `memberId` INTEGER")
+            }
+        }
+
         fun build(context: Context): MoneyDatabase =
             Room.databaseBuilder(context, MoneyDatabase::class.java, "money.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .build()
     }
 }

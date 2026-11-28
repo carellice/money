@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS payment_methods (
   sortOrder INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS accounts (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, icon TEXT NOT NULL, color INTEGER NOT NULL,
-  methods TEXT NOT NULL, balanceCents INTEGER NOT NULL, balanceAt INTEGER NOT NULL, sortOrder INTEGER NOT NULL);
+  methods TEXT NOT NULL, balanceCents INTEGER NOT NULL, balanceAt INTEGER NOT NULL, sortOrder INTEGER NOT NULL, memberId INTEGER);
 CREATE TABLE IF NOT EXISTS transfers (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, fromId INTEGER NOT NULL, toId INTEGER NOT NULL,
   amountCents INTEGER NOT NULL, date INTEGER NOT NULL, note TEXT NOT NULL, createdAt INTEGER NOT NULL);
@@ -97,6 +97,8 @@ function migrate(db: DatabaseSync) {
       db.exec('ALTER TABLE recurring ADD COLUMN installmentsPaid INTEGER NOT NULL DEFAULT 0')
     }
   }
+  const accountColumns = (db.prepare('PRAGMA table_info(accounts)').all() as { name: string }[]).map((c) => c.name)
+  if (!accountColumns.includes('memberId')) db.exec('ALTER TABLE accounts ADD COLUMN memberId INTEGER')
 }
 
 /** Runs [work] on the data of [userId]: every function of this module then reads and writes there. */
@@ -198,6 +200,7 @@ export function paymentMethods(): CustomPayment[] {
 const toAccount = (r: Row): Account => ({
   id: num(r.id), name: String(r.name), icon: String(r.icon), color: num(r.color), methods: String(r.methods),
   balanceCents: num(r.balanceCents), balanceAt: num(r.balanceAt), sortOrder: num(r.sortOrder),
+  memberId: r.memberId == null ? null : num(r.memberId),
 })
 
 const toTransfer = (r: Row): Transfer => ({
@@ -257,7 +260,7 @@ const recurringColumns = ['kind', 'name', 'amountCents', 'categoryId', 'subcateg
 const categoryColumns = ['name', 'icon', 'color', 'type', 'parentId', 'budgetCents', 'sortOrder'] as const
 const memberColumns = ['name', 'color', 'sortOrder'] as const
 const paymentColumns = ['name', 'icon', 'color', 'sortOrder'] as const
-const accountColumns = ['name', 'icon', 'color', 'methods', 'balanceCents', 'balanceAt', 'sortOrder'] as const
+const accountColumns = ['name', 'icon', 'color', 'methods', 'balanceCents', 'balanceAt', 'sortOrder', 'memberId'] as const
 const transferColumns = ['fromId', 'toId', 'amountCents', 'date', 'note', 'createdAt'] as const
 
 type Sql = string | number | null
@@ -324,6 +327,7 @@ export function saveMember(member: Member): number {
 export function deleteMember(id: number) {
   transaction(() => {
     db.prepare('UPDATE transactions SET memberId = NULL WHERE memberId = ?').run(id)
+    db.prepare('UPDATE accounts SET memberId = NULL WHERE memberId = ?').run(id)
     db.prepare('DELETE FROM members WHERE id = ?').run(id)
   })
 }
@@ -377,7 +381,9 @@ export function removePaymentMethod(from: PaymentChoice, to: PaymentChoice | nul
 export function saveAccount(account: Account): number {
   return transaction(() => {
     const sortOrder = account.id === 0 ? moneyAccounts().length : account.sortOrder
-    return upsert('accounts', accountColumns, { ...account, sortOrder })
+    // Apps from before owners don't send it: the account keeps whose it was.
+    const memberId = account.memberId !== undefined ? account.memberId : moneyAccounts().find((a) => a.id === account.id)?.memberId ?? null
+    return upsert('accounts', accountColumns, { ...account, sortOrder, memberId })
   })
 }
 

@@ -290,6 +290,7 @@ class ServerSync(
         is Change.SaveAccount -> {
             val account = change.account.copy(
                 id = if (change.created) 0 else outbox.id(ACCOUNTS, change.account.id),
+                memberId = change.account.memberId?.let { outbox.id(MEMBERS, it) },
                 // Methods created offline are named by the id the server gave them.
                 methods = change.account.methodKeys.joinToString(",") { key ->
                     key.removePrefix("c").toLongOrNull()?.takeIf { key.startsWith("c") }?.let { "c${outbox.id(PAYMENTS, it)}" } ?: key

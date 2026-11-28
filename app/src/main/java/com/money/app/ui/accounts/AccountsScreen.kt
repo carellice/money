@@ -92,6 +92,8 @@ import com.money.app.ui.components.LocalClosePage
 import com.money.app.ui.components.LocalPayments
 import com.money.app.ui.components.Masked
 import com.money.app.ui.components.Pill
+import com.money.app.ui.components.LocalMembers
+import com.money.app.ui.settings.MemberAvatar
 import com.money.app.ui.components.PrimaryButton
 import com.money.app.ui.components.SectionTitle
 import com.money.app.ui.components.SoftCard
@@ -452,6 +454,9 @@ private fun AccountEditor(
     var icon by remember { mutableStateOf(original.icon) }
     var color by remember { mutableLongStateOf(original.color) }
     var methods by remember { mutableStateOf(original.methodKeys) }
+    val known = LocalMembers.current
+    val members = known.values.sortedWith(compareBy({ it.sortOrder }, { it.id }))
+    var memberId by remember { mutableStateOf(original.memberId?.takeIf { it in known }) }
     var balance by remember { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
     // A method moves one account only: the ones already taken by another account can't be picked here.
@@ -473,6 +478,27 @@ private fun AccountEditor(
             }
             FormLabel("Nome")
             NoteField(name, { name = it }, "Es. Conto Intesa")
+            if (members.size >= 2) {
+                FormLabel("Di chi è")
+                Text(
+                    "Quando parate i conti, i soldi partono e arrivano sui conti di chi deve darli e di chi li riceve.",
+                    style = Ui.type.caption,
+                    color = c.inkSoft,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Pill("Di tutti", memberId == null, { memberId = null }, color = Color(color))
+                    members.forEach { member ->
+                        Pill(
+                            member.name,
+                            memberId == member.id,
+                            { memberId = member.id },
+                            color = Color(member.color),
+                            leading = { MemberAvatar(member, size = 24.dp) },
+                        )
+                    }
+                }
+            }
             if (isNew) {
                 FormLabel("Quanto c'è adesso")
                 AmountField(balance, { balance = it })
@@ -511,7 +537,7 @@ private fun AccountEditor(
             PrimaryButton(
                 "Salva",
                 {
-                    var saved = preview.copy(name = name.trim(), methods = methods.joinToString(","))
+                    var saved = preview.copy(name = name.trim(), methods = methods.joinToString(","), memberId = memberId)
                     if (isNew) saved = saved.copy(balanceCents = Money.parse(balance) ?: 0L, balanceAt = System.currentTimeMillis())
                     closePage { onSave(saved) }
                 },

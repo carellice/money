@@ -37,7 +37,7 @@ export function exportBackup(): string {
     paymentMethods: paymentMethods.map((p) => ({ id: p.id, name: p.name, icon: p.icon, color: p.color, sortOrder: p.sortOrder })),
     accounts: accounts.map((a) => ({
       id: a.id, name: a.name, icon: a.icon, color: a.color, methods: a.methods, balanceCents: a.balanceCents,
-      balanceAt: a.balanceAt, sortOrder: a.sortOrder,
+      balanceAt: a.balanceAt, sortOrder: a.sortOrder, memberId: a.memberId ?? null,
     })),
     transfers: transfers.map((t) => ({
       id: t.id, fromId: t.fromId, toId: t.toId, amountCents: t.amountCents, date: t.date, note: t.note, createdAt: t.createdAt,
@@ -96,6 +96,7 @@ export function importBackup(text: string): number {
   const accounts: Account[] | undefined = Array.isArray(root.accounts) ? list('accounts').map((o) => ({
     id: Number(o.id), name: str(o, 'name'), icon: str(o, 'icon', 'bank'), color: Number(o.color), methods: str(o, 'methods'),
     balanceCents: Number(o.balanceCents ?? 0), balanceAt: Number(o.balanceAt ?? 0), sortOrder: Number(o.sortOrder ?? 0),
+    memberId: o.memberId == null ? null : Number(o.memberId),
   })) : undefined
   const knownAccounts = new Set(accounts?.map((a) => a.id))
   const transfers: Transfer[] = list('transfers').map((o) => ({

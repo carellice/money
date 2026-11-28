@@ -128,7 +128,10 @@ class ReportViewModel(private val container: AppContainer) : ViewModel() {
     val members: StateFlow<List<MemberEntity>> = container.repository.members
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun markSettled(ids: List<Long>) = viewModelScope.launch { container.repository.markSettled(ids) }
+    fun markSettled(ids: List<Long>, transfers: List<com.money.app.data.TransferEntity>) = viewModelScope.launch {
+        container.repository.markSettled(ids)
+        transfers.forEach { container.repository.saveTransfer(it) }
+    }
 
     private val ai = container.ai
     val aiReady: StateFlow<Boolean> = ai.store.config.map { it != null }

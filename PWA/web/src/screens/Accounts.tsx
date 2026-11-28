@@ -15,6 +15,7 @@ import {
 import { AlertDialog, DatePickerDialog, FullPage, toast } from '../components/overlays.tsx'
 import { allChoices } from '../components/Payments.tsx'
 import { TransactionRow } from '../components/TransactionRow.tsx'
+import { MemberAvatar } from './Settings.tsx'
 
 const newAccount = (count: number): Account => ({
   id: 0, name: '', icon: 'bank', color: paletteAll[(count + 5) % paletteAll.length], methods: '', balanceCents: 0, balanceAt: 0, sortOrder: 0,
@@ -228,6 +229,8 @@ function AccountEditor({ original, onDismiss }: { original: Account; onDismiss: 
   const [icon, setIcon] = useState(original.icon)
   const [color, setColor] = useState(original.color)
   const [methods, setMethods] = useState(accountMethods(original))
+  const members = useStore((s) => s.data?.members ?? [])
+  const [memberId, setMemberId] = useState(members.some((m) => m.id === original.memberId) ? original.memberId! : null)
   const [balance, setBalance] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const isNew = original.id === 0
@@ -236,7 +239,7 @@ function AccountEditor({ original, onDismiss }: { original: Account; onDismiss: 
   const preview = { ...original, name, icon, color }
 
   const save = () => {
-    const account = { ...preview, name: name.trim(), methods: methods.join(',') }
+    const account = { ...preview, name: name.trim(), methods: methods.join(','), memberId }
     if (isNew) Object.assign(account, { balanceCents: Money.parse(balance) ?? 0, balanceAt: Date.now() })
     onDismiss()
     actions.saveAccount(account).catch(failed)
@@ -250,6 +253,21 @@ function AccountEditor({ original, onDismiss }: { original: Account; onDismiss: 
         </div>
         <FormLabel text="Nome" />
         <NoteField value={name} onChange={setName} placeholder="Es. Conto Intesa" />
+        {members.length >= 2 && (
+          <>
+            <FormLabel text="Di chi è" />
+            <span className="t-caption" style={{ color: 'var(--inkSoft)', paddingBottom: 8 }}>
+              Quando parate i conti, i soldi partono e arrivano sui conti di chi deve darli e di chi li riceve.
+            </span>
+            <div className="flow">
+              <Pill text="Di tutti" selected={memberId === null} onClick={() => setMemberId(null)} color={argb(color)} />
+              {members.map((m) => (
+                <Pill key={m.id} text={m.name} selected={memberId === m.id} onClick={() => setMemberId(m.id)} color={argb(m.color)}
+                  leading={<MemberAvatar member={m} size={24} />} />
+              ))}
+            </div>
+          </>
+        )}
         {isNew && (
           <>
             <FormLabel text="Quanto c'è adesso" />

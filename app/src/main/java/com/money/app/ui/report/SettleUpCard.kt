@@ -1,6 +1,18 @@
 package com.money.app.ui.report
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.graphics.Color
+import com.money.app.data.AccountEntity
+import com.money.app.data.TransferEntity
+import com.money.app.ui.components.AppIcons
+import com.money.app.ui.components.LocalAccounts
+import com.money.app.ui.components.Pill
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -40,11 +52,13 @@ import java.time.YearMonth
 /**
  * Who owes whom to even out the month: the people split the expenses
  * equally, and once the money has been given the expenses counted so far are marked as settled.
+ * Settling up can also register each payment as a transfer between the accounts of the two people.
  */
 @Composable
-fun SettleUpCard(settle: SettleUp, month: YearMonth, onSettled: (List<Long>) -> Unit, modifier: Modifier = Modifier) {
+fun SettleUpCard(settle: SettleUp, month: YearMonth, onSettled: (List<Long>, List<TransferEntity>) -> Unit, modifier: Modifier = Modifier) {
     val c = Ui.colors
     var confirm by remember { mutableStateOf(false) }
+    val accounts = LocalAccounts.current
     Column(modifier) {
         SectionTitle("Para i conti")
         SoftCard {
@@ -115,22 +129,67 @@ fun SettleUpCard(settle: SettleUp, month: YearMonth, onSettled: (List<Long>) -> 
     }
 
     if (confirm) {
+        // Each payment leaves an account of who gives and lands on one of who receives: theirs if they have any, otherwise any.
+        fun choicesFor(memberId: Long) = accounts.filter { it.memberId == memberId }.ifEmpty { accounts }
+        val from = remember { mutableStateListOf(*settle.transfers.map { t -> accounts.firstOrNull { it.memberId == t.from.id }?.id }.toTypedArray()) }
+        val to = remember { mutableStateListOf(*settle.transfers.map { t -> accounts.firstOrNull { it.memberId == t.to.id }?.id }.toTypedArray()) }
         AlertDialog(
             onDismissRequest = { confirm = false },
             title = { Text("Conti parati?") },
             text = {
-                Text(
-                    "Le ${settle.ids.size} spese contate finora non verranno più considerate. " +
-                        "Se aggiungi altre spese a ${Dates.monthName(month).lowercase()}, conteranno solo quelle."
-                )
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        "Le ${settle.ids.size} spese contate finora non verranno più considerate. " +
+                            "Se aggiungi altre spese a ${Dates.monthName(month).lowercase()}, conteranno solo quelle."
+                    )
+                    if (accounts.size >= 2 && settle.transfers.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "Scegli da quale conto partono i soldi e su quale arrivano: il trasferimento si registra da solo. " +
+                                "Senza conti, si segnano solo come parati.",
+                            style = Ui.type.caption,
+                            color = c.inkSoft,
+                        )
+                        settle.transfers.forEachIndexed { i, t ->
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                "${t.from.name} dà ${hideable(Money.format(t.cents))} a ${t.to.name}",
+                                style = Ui.type.bodyStrong,
+                                color = c.ink,
+                            )
+                            AccountChoice("Da", choicesFor(t.from.id), from[i]) { from[i] = it }
+                            AccountChoice("A", choicesFor(t.to.id), to[i]) { to[i] = it }
+                        }
+                    }
+                }
             },
             confirmButton = {
                 TextButton({
                     confirm = false
-                    onSettled(settle.ids)
+                    val note = "Para i conti · ${Dates.monthName(month).lowercase()}"
+                    val transfers = settle.transfers.indices.mapNotNull { i ->
+                        val a = from[i] ?: return@mapNotNull null
+                        val b = to[i]?.takeIf { it != a } ?: return@mapNotNull null
+                        TransferEntity(fromId = a, toId = b, amountCents = settle.transfers[i].cents, date = java.time.LocalDate.now().toEpochDay(), note = note)
+                    }
+                    onSettled(settle.ids, transfers)
                 }) { Text("Sì, parati") }
             },
             dismissButton = { TextButton({ confirm = false }) { Text("Annulla") } },
         )
+    }
+}
+
+/** Accounts to pick for one side of a payment; touching the picked one again leaves it out. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AccountChoice(label: String, accounts: List<AccountEntity>, selected: Long?, onSelect: (Long?) -> Unit) {
+    Spacer(Modifier.height(8.dp))
+    Text(label, style = Ui.type.caption, color = Ui.colors.inkSoft)
+    Spacer(Modifier.height(4.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        accounts.forEach { a ->
+            Pill(a.name, selected == a.id, { onSelect(if (selected == a.id) null else a.id) }, color = Color(a.color), icon = AppIcons[a.icon])
+        }
     }
 }

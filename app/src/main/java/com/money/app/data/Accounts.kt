@@ -25,6 +25,8 @@ data class AccountEntity(
     /** Epoch millis. */
     val balanceAt: Long = 0,
     val sortOrder: Int = 0,
+    /** Whose account it is, among the people of the household; null when it's everyone's. */
+    val memberId: Long? = null,
 ) {
     val methodKeys: List<String> get() = if (methods.isEmpty()) emptyList() else methods.split(',')
 }
@@ -81,6 +83,9 @@ interface AccountDao {
 
     @Query("DELETE FROM accounts")
     suspend fun clear()
+
+    @Query("UPDATE accounts SET memberId = NULL WHERE memberId = :memberId")
+    suspend fun clearMember(memberId: Long)
 }
 
 @Dao
@@ -112,11 +117,12 @@ interface TransferDao {
 fun AccountEntity.toJson(): JSONObject = JSONObject()
     .put("id", id).put("name", name).put("icon", icon).put("color", color).put("methods", methods)
     .put("balanceCents", balanceCents).put("balanceAt", balanceAt).put("sortOrder", sortOrder)
+    .put("memberId", memberId ?: JSONObject.NULL)
 
 fun JSONObject.toAccount() = AccountEntity(
     id = getLong("id"), name = getString("name"), icon = optString("icon", "bank"), color = getLong("color"),
     methods = optString("methods"), balanceCents = optLong("balanceCents"), balanceAt = optLong("balanceAt"),
-    sortOrder = optInt("sortOrder"),
+    sortOrder = optInt("sortOrder"), memberId = if (isNull("memberId")) null else getLong("memberId"),
 )
 
 fun TransferEntity.toJson(): JSONObject = JSONObject()

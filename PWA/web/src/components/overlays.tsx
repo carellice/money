@@ -47,9 +47,11 @@ export function FullPage({ title, onDismiss, actions, children }: { title: strin
 
 // --- dialogs ---------------------------------------------------------------------------------
 
-export function AlertDialog({ title, text, confirm, confirmColor, onConfirm, onDismiss, dismissText = 'Annulla' }: {
+export function AlertDialog({ title, text, confirm, confirmColor, onConfirm, onDismiss, dismissText = 'Annulla', children }: {
   title: string
   text: string
+  /** More content under the text; it scrolls when it's long. */
+  children?: ReactNode
   confirm: string
   confirmColor?: string
   onConfirm: () => void
@@ -64,6 +66,7 @@ export function AlertDialog({ title, text, confirm, confirmColor, onConfirm, onD
         transition={spring(0.9, 700)} style={{ transform: undefined, left: '50%', top: '50%' }}>
         <h2>{title}</h2>
         <p>{text}</p>
+        {children && <div style={{ maxHeight: '50vh', overflowY: 'auto' }}>{children}</div>}
         <div className="dialog-actions">
           <button className="text-button" onClick={onDismiss}>{dismissText}</button>
           <button className="text-button" style={{ color: confirmColor }} onClick={onConfirm}>{confirm}</button>
